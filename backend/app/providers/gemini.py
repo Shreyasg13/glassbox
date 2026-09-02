@@ -18,12 +18,22 @@ code, never the exception's own string form.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Optional
 
 import httpx
 
 from .base import BaseProvider, NotConfiguredError, OnToken
+
+# 429 (rate limit) and 503 (transient overload) are the only Gemini errors
+# worth retrying here -- both observed live: a fresh free-tier key firing
+# several parallel calls trips 429s, and 503 "high demand" is Google-side
+# and self-resolves within seconds. Anything else (400/404/auth) retrying
+# would never fix.
+_RETRYABLE_STATUS = {429, 503}
+_MAX_ATTEMPTS = 3
+_BACKOFF_BASE_S = 1.5
 
 
 class GeminiProvider(BaseProvider):
@@ -57,25 +67,49 @@ class GeminiProvider(BaseProvider):
                 "temperature": temperature,
                 "topP": top_p,
                 "maxOutputTokens": max_tokens,
+                # Gemini 2.5+/3.x models spend part of maxOutputTokens on
+                # invisible "thinking" tokens before the visible answer --
+                # observed live consuming 517 of a 600-token budget, leaving
+                # too little room for the actual answer and truncating it
+                # mid-sentence. These agent prompts want a direct analytical
+                # answer, not a reasoning chain, so thinking is disabled.
+                "thinkingConfig": {"thinkingBudget": 0},
             },
         }
         url = f"{self.BASE_URL}/models/{model}:generateContent"
+        last_exc: Optional[Exception] = None
         async with httpx.AsyncClient(timeout=None) as client:
-            try:
-                resp = await client.post(url, params={"key": self.api_key}, json=payload)
-                resp.raise_for_status()
-            except httpx.HTTPStatusError as exc:
-                raise RuntimeError(f"Gemini API error: HTTP {exc.response.status_code}") from None
-            except httpx.HTTPError as exc:
-                raise RuntimeError(f"Gemini API request failed: {exc.__class__.__name__}") from None
-            data = resp.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            if on_token:
-                # The non-streaming generateContent endpoint returns the
-                # full text in one shot; deliver it as a single chunk so
-                # callers relying on on_token still see output.
-                await on_token(text)
-            return text
+            for attempt in range(1, _MAX_ATTEMPTS + 1):
+                try:
+                    resp = await client.post(url, params={"key": self.api_key}, json=payload)
+                    resp.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    status = exc.response.status_code
+                    if status in _RETRYABLE_STATUS and attempt < _MAX_ATTEMPTS:
+                        retry_after = exc.response.headers.get("retry-after")
+                        delay = float(retry_after) if retry_after else _BACKOFF_BASE_S * attempt
+                        await asyncio.sleep(delay)
+                        last_exc = RuntimeError(f"Gemini API error: HTTP {status}")
+                        continue
+                    raise RuntimeError(f"Gemini API error: HTTP {status}") from None
+                except httpx.HTTPError as exc:
+                    raise RuntimeError(f"Gemini API request failed: {exc.__class__.__name__}") from None
+                else:
+                    data = resp.json()
+                    # Concatenate every text part rather than assuming the
+                    # answer is entirely in parts[0] -- defensive against
+                    # any response shape where content is split across parts.
+                    parts = data["candidates"][0]["content"]["parts"]
+                    text = "".join(p.get("text", "") for p in parts)
+                    if on_token:
+                        # The non-streaming generateContent endpoint returns
+                        # the full text in one shot; deliver it as a single
+                        # chunk so callers relying on on_token still see output.
+                        await on_token(text)
+                    return text
+            # Unreachable in practice (loop always returns or raises), but
+            # keeps type-checkers honest about every path having an exit.
+            raise last_exc or RuntimeError("Gemini API request failed")
 
     async def _do_health_check(self) -> str:
         if not self.api_key:

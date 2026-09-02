@@ -109,14 +109,27 @@ def _reduce_committee_vote(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {"decision": decision, "votes": {k: round(v, 2) for k, v in votes.items()}, "tally": tally}
 
 
+_LLM_LAUNCH_STAGGER_S = 0.4
+"""Delay between kicking off consecutive LLM agent calls in a parallel/
+committee_vote run. Firing several LLM calls in the same instant reliably
+trips free-tier rate limits (observed live: 7 simultaneous Gemini calls on
+a fresh key produced several 429s) -- the gemini provider also retries
+transient 429/503 with backoff, but avoiding the burst in the first place
+means fewer calls need to fall back on that. Deterministic agents don't
+hit an external API, so they're launched immediately with no stagger."""
+
+
 async def _run_bounded(
     agents: List[AgentConfig], ctx_input: str, agent_timeout_s: float, run_budget_s: float, job_id: Optional[str]
 ) -> List[Dict[str, Any]]:
-    """Run all agents concurrently; a per-agent timeout and an overall
-    run budget each mark the offending agent(s) `degraded` instead of
-    failing the whole batch."""
+    """Run all agents concurrently (LLM agents staggered slightly to avoid
+    a rate-limit-tripping burst); a per-agent timeout and an overall run
+    budget each mark the offending agent(s) `degraded` instead of failing
+    the whole batch."""
 
-    async def _one(agent: AgentConfig) -> Dict[str, Any]:
+    async def _one(agent: AgentConfig, delay_s: float) -> Dict[str, Any]:
+        if delay_s:
+            await asyncio.sleep(delay_s)
         try:
             return await asyncio.wait_for(run_agent(agent, ctx_input, job_id=job_id), timeout=agent_timeout_s)
         except Exception as exc:
@@ -124,7 +137,14 @@ async def _run_bounded(
                 await jobs.log(job_id, f"agent '{agent.name}' failed: {exc}")
             return {"agent": agent.name, "error": str(exc), "degraded": True}
 
-    tasks = {asyncio.create_task(_one(a)): a for a in agents}
+    tasks = {}
+    llm_index = 0
+    for agent in agents:
+        delay = 0.0
+        if agent.type == "llm":
+            delay = llm_index * _LLM_LAUNCH_STAGGER_S
+            llm_index += 1
+        tasks[asyncio.create_task(_one(agent, delay))] = agent
     if not tasks:
         return []
     done, pending = await asyncio.wait(tasks.keys(), timeout=run_budget_s)
