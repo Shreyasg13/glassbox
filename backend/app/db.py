@@ -1,0 +1,231 @@
+"""SQLite-backed storage for the Agent Factory (Phase 4).
+
+Placeholder persistence: SQLite via SQLAlchemy Core, file at
+backend/app/glassbox.db. Swapping to Postgres later only means
+changing DATABASE_URL and the engine's connect args.
+"""
+from __future__ import annotations
+
+import json
+import os
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+from sqlalchemy import Column, String, Boolean, create_engine, MetaData, Table, select, delete, update, insert
+
+DB_PATH = Path(os.environ.get("GLASSBOX_DB_PATH", str(Path(__file__).parent / "glassbox.db")))
+DATABASE_URL = f"sqlite:///{DB_PATH}"
+
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+metadata = MetaData()
+
+agents_table = Table(
+    "agents",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("config", String, nullable=False),  # JSON-encoded AgentConfig
+)
+
+orchestrations_table = Table(
+    "orchestrations",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("config", String, nullable=False),  # JSON-encoded OrchestrationConfig
+)
+
+jobs_table = Table(
+    "jobs",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("config", String, nullable=False),  # JSON-encoded job dict (see jobs.py)
+)
+
+llm_calls_table = Table(
+    "llm_calls",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("config", String, nullable=False),  # JSON-encoded LLMCallLog
+)
+
+report_narratives_table = Table(
+    "report_narratives",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("config", String, nullable=False),  # JSON-encoded DailyReportNarrative
+)
+
+audit_log_table = Table(
+    "audit_log",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("config", String, nullable=False),  # JSON-encoded AuditLogEntry
+)
+
+metadata.create_all(engine)
+
+
+def _list(table: Table) -> List[Dict[str, Any]]:
+    with engine.connect() as conn:
+        rows = conn.execute(select(table)).fetchall()
+        return [json.loads(row.config) for row in rows]
+
+
+def _get(table: Table, item_id: str) -> Optional[Dict[str, Any]]:
+    with engine.connect() as conn:
+        row = conn.execute(select(table).where(table.c.id == item_id)).fetchone()
+        return json.loads(row.config) if row else None
+
+
+def _create(table: Table, data: Dict[str, Any]) -> Dict[str, Any]:
+    new_id = data.get("id") or str(uuid.uuid4())
+    data["id"] = new_id
+    with engine.begin() as conn:
+        conn.execute(insert(table).values(id=new_id, config=json.dumps(data)))
+    return data
+
+
+def _update(table: Table, item_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    data["id"] = item_id
+    with engine.begin() as conn:
+        result = conn.execute(update(table).where(table.c.id == item_id).values(config=json.dumps(data)))
+        if result.rowcount == 0:
+            return None
+    return data
+
+
+def _delete(table: Table, item_id: str) -> bool:
+    with engine.begin() as conn:
+        result = conn.execute(delete(table).where(table.c.id == item_id))
+        return result.rowcount > 0
+
+
+def list_agents() -> List[Dict[str, Any]]:
+    return _list(agents_table)
+
+
+def get_agent(agent_id: str) -> Optional[Dict[str, Any]]:
+    return _get(agents_table, agent_id)
+
+
+def create_agent(data: Dict[str, Any]) -> Dict[str, Any]:
+    return _create(agents_table, data)
+
+
+def update_agent(agent_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    return _update(agents_table, agent_id, data)
+
+
+def delete_agent(agent_id: str) -> bool:
+    return _delete(agents_table, agent_id)
+
+
+def list_orchestrations() -> List[Dict[str, Any]]:
+    return _list(orchestrations_table)
+
+
+def get_orchestration(orch_id: str) -> Optional[Dict[str, Any]]:
+    return _get(orchestrations_table, orch_id)
+
+
+def create_orchestration(data: Dict[str, Any]) -> Dict[str, Any]:
+    return _create(orchestrations_table, data)
+
+
+def update_orchestration(orch_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    return _update(orchestrations_table, orch_id, data)
+
+
+def delete_orchestration(orch_id: str) -> bool:
+    return _delete(orchestrations_table, orch_id)
+
+
+# ---- Jobs (Phase 4/5 background runs) ----
+
+def create_job(data: Dict[str, Any]) -> Dict[str, Any]:
+    return _create(jobs_table, data)
+
+
+def get_job(job_id: str) -> Optional[Dict[str, Any]]:
+    return _get(jobs_table, job_id)
+
+
+def update_job(job_id: str, patch: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Merge `patch` over the existing row so partial updates (e.g. just
+    `status`) don't clobber fields written earlier (e.g. `created_at`)."""
+    existing = get_job(job_id) or {}
+    existing.update(patch)
+    return _update(jobs_table, job_id, existing)
+
+
+# ---- LLM call log (Phase 5 cost/latency observability) ----
+
+def create_llm_call(data: Dict[str, Any]) -> Dict[str, Any]:
+    return _create(llm_calls_table, data)
+
+
+def update_llm_call(call_id: str, patch: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    existing = _get(llm_calls_table, call_id) or {}
+    existing.update(patch)
+    return _update(llm_calls_table, call_id, existing)
+
+
+def list_llm_calls() -> List[Dict[str, Any]]:
+    return _list(llm_calls_table)
+
+
+# ---- Daily report narratives (Phase 5) ----
+
+def create_report_narrative(data: Dict[str, Any]) -> Dict[str, Any]:
+    return _create(report_narratives_table, data)
+
+
+def get_report_narrative(narrative_id: str) -> Optional[Dict[str, Any]]:
+    return _get(report_narratives_table, narrative_id)
+
+
+def list_report_narratives() -> List[Dict[str, Any]]:
+    return _list(report_narratives_table)
+
+
+# ---- Pagination + audit log (Phase 6) ----
+#
+# Tables here store one JSON blob per row rather than typed columns (the
+# pattern already used throughout this file), so "order by timestamp,
+# then page" is done in Python rather than pushed to SQL. At this
+# deployment's scale (a single dev SQLite file) that's simpler and more
+# obviously correct than a partial ORDER BY over a JSON column.
+
+def _list_paginated_sorted(table: Table, limit: int, offset: int, sort_key: str) -> Tuple[List[Dict[str, Any]], int]:
+    items = _list(table)
+    items.sort(key=lambda x: x.get(sort_key, ""), reverse=True)
+    total = len(items)
+    return items[offset : offset + limit], total
+
+
+def log_audit(
+    actor: str,
+    action: str,
+    resource_type: str,
+    resource_id: Optional[str] = None,
+    detail: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    entry = {
+        "id": str(uuid.uuid4()),
+        "actor": actor,
+        "action": action,
+        "resource_type": resource_type,
+        "resource_id": resource_id,
+        "detail": detail or {},
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return _create(audit_log_table, entry)
+
+
+def list_audit_log(limit: int = 50, offset: int = 0) -> Tuple[List[Dict[str, Any]], int]:
+    return _list_paginated_sorted(audit_log_table, limit, offset, "created_at")
+
+
+def list_llm_calls_page(limit: int = 50, offset: int = 0) -> Tuple[List[Dict[str, Any]], int]:
+    return _list_paginated_sorted(llm_calls_table, limit, offset, "started_at")

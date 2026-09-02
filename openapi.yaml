@@ -1,0 +1,904 @@
+openapi: 3.1.0
+info:
+  title: GlassBox API
+  version: 0.1.0
+  description: |
+    Contract for the GlassBox FastAPI gateway. `/api/*` routes are a
+    1:1 port of the legacy Flask dashboard
+    (backend-source/dashboard/DASHBOARD_PRO.py). `/admin/*` routes are
+    new (Phase 4, Agent Factory) and require an admin JWT.
+
+    Live signals are also available over WebSocket at `/ws/signals`
+    (see the `x-websocket` extension below) -- OpenAPI 3.1 has no
+    native operation type for WS, so it's documented rather than
+    declared as a path.
+
+    Every response carries an `X-Request-ID` header (a fresh UUID4 per
+    request), also echoed in that request's structured server-side log
+    line -- quote it when reporting an issue against a specific call.
+servers:
+  - url: http://localhost:8000
+security: []
+
+paths:
+  /health:
+    get:
+      operationId: health
+      summary: Liveness check
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/data:
+    get:
+      operationId: getData
+      summary: Latest daily report (raw)
+      tags: [data]
+      responses:
+        "200":
+          description: Array of daily data points
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrackDataPoint"
+
+  /api/track1/data:
+    get:
+      operationId: getTrack1Data
+      summary: Track 1 (3-agent system) performance series
+      tags: [data]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrackDataPoint"
+
+  /api/track2/data:
+    get:
+      operationId: getTrack2Data
+      summary: Track 2 (7-agent system) performance series
+      tags: [data]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrackDataPoint"
+
+  /api/track1/agents:
+    get:
+      operationId: getTrack1Agents
+      summary: Track 1 agent performance (3 agents)
+      tags: [data]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrackAgentsResponse"
+
+  /api/track2/agents:
+    get:
+      operationId: getTrack2Agents
+      summary: Track 2 agent performance (7 agents)
+      tags: [data]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrackAgentsResponse"
+
+  /api/agent-performance:
+    get:
+      operationId: getAgentPerformance
+      summary: Flat agent-level performance metrics
+      tags: [data]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentPerformance"
+
+  /api/holdings:
+    get:
+      operationId: getHoldings
+      summary: All 15 stock holdings with trained params + latest price data
+      tags: [data]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HoldingsResponse"
+
+  /api/live-signals:
+    get:
+      operationId: getLiveSignals
+      summary: Live BUY/SELL/HOLD signals for all symbols
+      tags: [data]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveSignalsResponse"
+
+  /api/monte-carlo:
+    post:
+      operationId: runMonteCarlo
+      summary: Run a Monte Carlo portfolio simulation
+      tags: [data]
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, default: 7 }
+        - name: simulations
+          in: query
+          schema: { type: integer, default: 1000 }
+        - name: confidence
+          in: query
+          schema: { type: number, default: 0.95 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonteCarloResult"
+        "404":
+          description: No historical data available to simulate from
+
+  /api/historical-reports:
+    get:
+      operationId: getHistoricalReports
+      summary: List of all historical daily reports with summary stats
+      tags: [data]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoricalReport"
+
+  /api/daily-summary:
+    get:
+      operationId: getDailySummary
+      summary: Executive daily summary for the committee view
+      tags: [data]
+      responses:
+        "200":
+          description: OK (empty object if no data yet)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailySummary"
+
+  /auth/login:
+    post:
+      operationId: login
+      summary: Obtain a JWT
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Token"
+        "401":
+          description: Invalid credentials
+
+  /admin/agents:
+    get:
+      operationId: listAgents
+      summary: List agent configs
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AgentConfig" }
+    post:
+      operationId: createAgent
+      summary: Create an agent config
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentConfig" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentConfig" }
+
+  /admin/agents/{agentId}:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getAgent
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentConfig" } } } }
+        "404": { description: Not found }
+    put:
+      operationId: updateAgent
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentConfig" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentConfig" } } } }
+        "404": { description: Not found }
+    delete:
+      operationId: deleteAgent
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "204": { description: Deleted }
+        "404": { description: Not found }
+
+  /admin/orchestrations:
+    get:
+      operationId: listOrchestrations
+      summary: List orchestration configs
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OrchestrationConfig" }
+    post:
+      operationId: createOrchestration
+      summary: Create an orchestration config
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrchestrationConfig" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrchestrationConfig" }
+
+  /admin/orchestrations/{orchestrationId}:
+    parameters:
+      - name: orchestrationId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getOrchestration
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OrchestrationConfig" } } } }
+        "404": { description: Not found }
+    put:
+      operationId: updateOrchestration
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrchestrationConfig" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OrchestrationConfig" } } } }
+        "404": { description: Not found }
+    delete:
+      operationId: deleteOrchestration
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "204": { description: Deleted }
+        "404": { description: Not found }
+
+  /admin/agents/{agentId}/test-run:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: testRunAgent
+      summary: Run one agent against freeform input as a background job
+      description: |
+        Deterministic agents never touch an LLM provider (input is
+        treated as a ticker symbol and resolved against the existing
+        quant signal engine); LLM agents call the configured provider
+        with the agent's system prompt/params. Always runs as a
+        background job -- see /ws/jobs/{jobId} for live progress.
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentTestRunRequest" }
+      responses:
+        "202":
+          description: Accepted -- job created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAccepted" }
+        "404": { description: Agent not found }
+
+  /admin/orchestrations/{orchestrationId}/run:
+    parameters:
+      - name: orchestrationId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: runOrchestration
+      summary: Run an orchestration (sequential/parallel/committee_vote) as a background job
+      description: |
+        committee_vote reduces through a deterministic confidence-weighted
+        vote over participating agents' outputs -- never an LLM judge.
+        Each agent is bounded by agent_timeout_s; the whole run is bounded
+        by run_budget_s. Agents that miss their budget are marked
+        degraded and excluded rather than failing the run.
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrchestrationRunRequest" }
+      responses:
+        "202":
+          description: Accepted -- job created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAccepted" }
+        "404": { description: Orchestration not found }
+
+  /admin/jobs/{jobId}:
+    parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getJob
+      summary: Poll a background job's status (fallback to /ws/jobs/{jobId})
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/JobStatus" } } } }
+        "404": { description: Not found }
+
+  /admin/providers/health:
+    get:
+      operationId: getProvidersHealth
+      summary: Concurrently health-check all four provider adapters
+      description: |
+        A provider being unreachable/unconfigured is a normal, correctly
+        reported state (reachable: false with a detail message), not an
+        error response -- this endpoint always returns 200.
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProviderHealth" }
+
+  /admin/audit-log:
+    get:
+      operationId: getAuditLog
+      summary: Paginated history of every admin mutation and login attempt
+      description: |
+        Every agent/orchestration create-update-delete, test-run,
+        orchestration-run, report.generate, and login attempt (success or
+        failure -- failures record the attempted username, never the
+        password) is written here at the time it happens. Newest first.
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaginatedAuditLog" }
+
+  /admin/llm-calls:
+    get:
+      operationId: getLLMCalls
+      summary: Paginated cost/latency log of every LLM call made anywhere in the app
+      description: |
+        Covers both agent test-runs / orchestration runs and
+        /reports/generate narration -- every path that calls an
+        LLMProvider writes a row here. Newest first.
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaginatedLLMCalls" }
+
+  /reports/generate:
+    post:
+      operationId: generateReport
+      summary: Generate an LLM-narrated daily report as a background job
+      description: |
+        Reads the latest reports/daily_*.json plus current live signals,
+        builds a narration prompt, and calls the selected provider.
+        Result (a DailyReportNarrative) is delivered via /ws/jobs/{jobId}
+        or polled via /admin/jobs/{jobId}, and persisted -- see
+        /reports/narratives.
+      tags: [reports]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReportGenerateRequest" }
+      responses:
+        "202":
+          description: Accepted -- job created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAccepted" }
+        "404": { description: No report data available to narrate }
+
+  /reports/narratives:
+    get:
+      operationId: listReportNarratives
+      summary: List generated report narratives
+      tags: [reports]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DailyReportNarrative" }
+
+  /reports/narratives/{narrativeId}:
+    parameters:
+      - name: narrativeId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getReportNarrative
+      summary: Fetch one generated narrative (viewer-accessible, no admin gate)
+      tags: [reports]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DailyReportNarrative" } } } }
+        "404": { description: Not found }
+
+x-websocket:
+  /ws/signals:
+    summary: Live signal push
+    description: |
+      Server pushes `{"type": "signals", "data": <LiveSignalsResponse>}`
+      every 3 seconds, plus an immediate snapshot on connect. No
+      inbound messages are expected from the client.
+  /ws/jobs/{jobId}:
+    summary: Live progress for one background job (test-run / orchestration run / report generate)
+    description: |
+      All frames share the same envelope as /ws/signals: `{"type", "data"}`.
+        - {"type": "log",    "data": {"message": string, "ts": string}}
+        - {"type": "token",  "data": {"text": string}}        -- one streamed LLM output chunk
+        - {"type": "status", "data": <JobStatus>}              -- terminal frame; server closes the socket right after
+      If the job has already finished by the time the client connects,
+      the server sends the final status frame immediately and closes.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TrackDataPoint:
+      type: object
+      properties:
+        date: { type: string }
+        portfolio_value: { type: number }
+        daily_return: { type: number }
+        positions: { type: integer }
+        signal: { type: string, enum: [BUY, SELL, HOLD] }
+        market_return: { type: number }
+        agents_active: { type: integer }
+        vn_score: { type: number }
+        track: { type: string }
+
+    TrackAgent:
+      type: object
+      required: [name, score, win_rate, decisions, avg_impact, color]
+      properties:
+        name: { type: string }
+        score: { type: number }
+        win_rate: { type: number }
+        decisions: { type: integer }
+        avg_impact: { type: number }
+        color: { type: string }
+
+    TrackAgentsResponse:
+      type: object
+      required: [agents, vn_score, total_agents]
+      properties:
+        agents:
+          type: array
+          items: { $ref: "#/components/schemas/TrackAgent" }
+        vn_score: { type: number }
+        total_agents: { type: integer }
+
+    AgentPerformance:
+      type: object
+      required: [name, score, win_rate, decisions, avg_impact]
+      properties:
+        name: { type: string }
+        score: { type: number }
+        win_rate: { type: number }
+        decisions: { type: integer }
+        avg_impact: { type: number }
+
+    Holding:
+      type: object
+      properties:
+        symbol: { type: string }
+        name: { type: string }
+        sector: { type: string }
+        weight: { type: number }
+        signal: { type: string, enum: [BUY, SELL, HOLD] }
+        win_rate: { type: number }
+        sharpe: { type: number }
+        test_return: { type: number }
+        fast_ma: { type: integer }
+        slow_ma: { type: integer }
+        rsi_low: { type: integer }
+        rsi_high: { type: integer }
+        beta: { type: number }
+        current_price: { type: number }
+        price_change: { type: number }
+        current_rsi: { type: number }
+        volume: { type: integer }
+        data_date: { type: string }
+
+    HoldingsResponse:
+      type: object
+      properties:
+        holdings:
+          type: array
+          items: { $ref: "#/components/schemas/Holding" }
+        summary:
+          type: object
+          properties:
+            total_symbols: { type: integer }
+            avg_win_rate: { type: number }
+            best_performer: { type: string }
+            best_return: { type: number }
+            portfolio_beta: { type: number }
+            data_source: { type: string }
+            data_date: { type: string }
+        sectors:
+          type: object
+          additionalProperties: { type: number }
+
+    LiveSignal:
+      type: object
+      properties:
+        symbol: { type: string }
+        name: { type: string }
+        sector: { type: string }
+        current_price: { type: number }
+        signal: { type: string, enum: [BUY, SELL, HOLD] }
+        confidence: { type: number }
+        rsi: { type: number }
+        ma_cross: { type: string, enum: [BULLISH, BEARISH, NEUTRAL] }
+        volume_ratio: { type: number }
+        suggested_weight: { type: number }
+        fast_ma: { type: integer }
+        slow_ma: { type: integer }
+        test_sharpe: { type: number }
+        win_rate: { type: number }
+        data_date: { type: string }
+
+    LiveSignalsResponse:
+      type: object
+      properties:
+        signals:
+          type: array
+          items: { $ref: "#/components/schemas/LiveSignal" }
+        summary:
+          type: object
+          properties:
+            buy_signals: { type: integer }
+            sell_signals: { type: integer }
+            hold_signals: { type: integer }
+            avg_confidence: { type: number }
+            data_source: { type: string }
+            last_update: { type: string }
+
+    MonteCarloResult:
+      type: object
+      properties:
+        mean: { type: number }
+        percentile_5: { type: number }
+        percentile_95: { type: number }
+        prob_profit: { type: number }
+        paths:
+          type: array
+          items:
+            type: array
+            items: { type: number }
+        final_values:
+          type: array
+          items: { type: number }
+
+    HistoricalReport:
+      type: object
+      properties:
+        date: { type: string }
+        file: { type: string }
+        final_value: { type: number }
+        return: { type: number }
+        sharpe: { type: number }
+        max_dd: { type: number }
+
+    DailySummary:
+      type: object
+      properties:
+        status: { type: string }
+        current_value: { type: number }
+        daily_change: { type: number }
+        vn_score: { type: number }
+        risk_status: { type: string, enum: [LOW, MEDIUM, HIGH] }
+        sharpe: { type: number }
+        max_dd: { type: number }
+        win_rate: { type: number }
+        position_util: { type: number }
+        alerts:
+          type: array
+          items: { type: string }
+        dates:
+          type: array
+          items: { type: string }
+        growth_rates:
+          type: array
+          items: { type: number }
+
+    AgentParams:
+      type: object
+      properties:
+        temperature: { type: number, default: 0.7 }
+        top_p: { type: number, default: 1.0 }
+        max_tokens: { type: integer, default: 1024 }
+        extra: { type: object, additionalProperties: true }
+
+    AgentConfig:
+      type: object
+      required: [name, role, type]
+      properties:
+        id: { type: string, readOnly: true }
+        name: { type: string }
+        role: { type: string, example: "Macro Analyst" }
+        type: { type: string, enum: [deterministic, llm] }
+        provider: { type: string, enum: [vllm, ollama, gemini, claude], nullable: true }
+        model: { type: string, nullable: true }
+        params: { $ref: "#/components/schemas/AgentParams" }
+        system_prompt: { type: string, nullable: true }
+        tools:
+          type: array
+          items: { type: string }
+        enabled: { type: boolean, default: true }
+
+    OrchestrationConfig:
+      type: object
+      required: [name, mode, agent_ids]
+      properties:
+        id: { type: string, readOnly: true }
+        name: { type: string }
+        mode: { type: string, enum: [sequential, parallel, committee_vote] }
+        agent_ids:
+          type: array
+          items: { type: string }
+        coordinator: { type: string, default: vn_engine }
+        schedule: { type: string, nullable: true, example: "0 8 * * 1-5" }
+        agent_timeout_s: { type: number, default: 30.0, description: "Per-agent wall-clock budget for one run" }
+        run_budget_s: { type: number, default: 120.0, description: "Whole-orchestration wall-clock budget" }
+
+    ProviderHealth:
+      type: object
+      required: [provider, reachable, checked_at]
+      properties:
+        provider: { type: string, enum: [vllm, ollama, gemini, claude] }
+        reachable: { type: boolean }
+        detail: { type: string, nullable: true }
+        checked_at: { type: string, format: date-time }
+
+    LLMCallLog:
+      type: object
+      required: [id, provider, model, started_at, status]
+      properties:
+        id: { type: string }
+        agent_id: { type: string, nullable: true }
+        provider: { type: string, enum: [vllm, ollama, gemini, claude] }
+        model: { type: string }
+        started_at: { type: string, format: date-time }
+        duration_ms: { type: integer, nullable: true }
+        tokens_in: { type: integer, nullable: true }
+        tokens_out: { type: integer, nullable: true }
+        status: { type: string, enum: [running, ok, error, timeout] }
+        error: { type: string, nullable: true }
+        estimated_cost_usd:
+          type: number
+          nullable: true
+          description: >-
+            Null when the provider/model has no pricing entry (e.g. Gemini
+            with no GEMINI_*_COST_PER_1M env vars set). Always 0.0 for
+            self-hosted ollama/vllm. Token counts feeding this estimate are
+            approximate (whitespace-based), so treat the figure as
+            directional, not billing-grade.
+
+    PaginatedLLMCalls:
+      type: object
+      required: [items, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/LLMCallLog" } }
+        total: { type: integer }
+
+    AuditLogEntry:
+      type: object
+      required: [id, actor, action, resource_type, detail, created_at]
+      properties:
+        id: { type: string }
+        actor: { type: string, description: "Username, or \"unknown\" for a failed login attempt" }
+        action: { type: string, example: "agent.create" }
+        resource_type: { type: string, enum: [agent, orchestration, report, auth] }
+        resource_id: { type: string, nullable: true }
+        detail: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+
+    PaginatedAuditLog:
+      type: object
+      required: [items, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AuditLogEntry" } }
+        total: { type: integer }
+
+    JobStatus:
+      type: object
+      required: [job_id, kind, status, created_at]
+      properties:
+        job_id: { type: string }
+        kind: { type: string, enum: [agent_test_run, orchestration_run, report_generate] }
+        status: { type: string, enum: [queued, running, done, error] }
+        created_at: { type: string, format: date-time }
+        result: { type: object, additionalProperties: true, nullable: true }
+        error: { type: string, nullable: true }
+
+    JobAccepted:
+      type: object
+      required: [job_id]
+      properties:
+        job_id: { type: string }
+
+    AgentTestRunRequest:
+      type: object
+      required: [input]
+      properties:
+        input: { type: string, description: "Freeform prompt/context; treated as a ticker symbol for deterministic agents" }
+
+    OrchestrationRunRequest:
+      type: object
+      properties:
+        input: { type: string, nullable: true }
+
+    ReportGenerateRequest:
+      type: object
+      required: [model]
+      properties:
+        date: { type: string, nullable: true, description: "YYYYMMDD; defaults to today if omitted (report data itself is always the latest on disk)" }
+        provider: { type: string, enum: [vllm, ollama, gemini, claude], default: ollama }
+        model: { type: string }
+        agent_id: { type: string, nullable: true, description: "Reuse an existing agent's system_prompt for narration style" }
+
+    DailyReportNarrative:
+      type: object
+      required: [id, date, provider, model, narrative, created_at]
+      properties:
+        id: { type: string }
+        date: { type: string }
+        provider: { type: string, enum: [vllm, ollama, gemini, claude] }
+        model: { type: string }
+        narrative: { type: string }
+        created_at: { type: string, format: date-time }
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string }
+
+    Token:
+      type: object
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, default: bearer }
+        role: { type: string, enum: [admin, viewer] }

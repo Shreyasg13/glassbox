@@ -1,0 +1,176 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── DESIGN TOKENS ──
+   Ported verbatim from C:\Users\shrey\Downloads\Glassbox\GlassBox_Complete_v3(1).html
+   Keep this file and tailwind.config.ts in sync — this is the single source of truth. */
+:root {
+  --c-bg: #06090f;
+  --c-bg1: #0a0f1a;
+  --c-bg2: #0d1422;
+  --c-bg3: #101929;
+  --c-panel: #111b2e;
+  --c-panel2: #172035;
+  --c-raised: #1a2640;
+  --c-border: rgba(255, 255, 255, 0.07);
+  --c-border2: rgba(255, 255, 255, 0.12);
+
+  --c-teal: #0dccaa;
+  --c-teal2: #0ab898;
+  --c-teal-glow: rgba(13, 204, 170, 0.08);
+  --c-teal-dim: rgba(13, 204, 170, 0.15);
+
+  --c-gold: #e8a020;
+  --c-gold-dim: rgba(232, 160, 32, 0.12);
+  --c-red: #e8445a;
+  --c-red-dim: rgba(232, 68, 90, 0.1);
+  --c-green: #0db87a;
+  --c-green-dim: rgba(13, 184, 122, 0.1);
+  --c-blue: #4d7aff;
+  --c-blue-dim: rgba(77, 122, 255, 0.1);
+
+  --c-t1: #edf2ff;
+  --c-t2: #9aaccc;
+  --c-t3: #5c7090;
+  --c-t4: #3a4d66;
+
+  --font: "Inter", system-ui, sans-serif;
+  --mono: "JetBrains Mono", monospace;
+
+  --sh-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --sh-md: 0 4px 16px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --sh-lg: 0 12px 40px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
+  --sh-teal: 0 0 0 1px rgba(13, 204, 170, 0.25), 0 4px 20px rgba(13, 204, 170, 0.1);
+
+  --ease: cubic-bezier(0.22, 0.68, 0, 1.2);
+  --t1: 0.1s ease;
+  --t2: 0.18s ease;
+  --t3: 0.28s ease;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--c-bg);
+  color: var(--c-t1);
+  line-height: 1.5;
+}
+
+/* ── GLASS PRIMITIVES ── */
+.glass-nav {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(10, 15, 26, 0.72);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.glass-panel {
+  background: var(--c-panel);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r3, 14px);
+  box-shadow: var(--sh-sm);
+}
+
+.glass-panel-raised {
+  background: var(--c-panel2);
+  border: 1px solid var(--c-border2);
+  border-radius: var(--r3, 14px);
+  box-shadow: var(--sh-md);
+}
+
+.glass-panel-accent {
+  background: var(--c-panel);
+  border: 1px solid rgba(13, 204, 170, 0.18);
+  border-radius: var(--r3, 14px);
+  box-shadow: var(--sh-teal);
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c-teal);
+  box-shadow: 0 0 0 3px rgba(13, 204, 170, 0.16);
+}
+
+/* ── FORM PRIMITIVES (Phase 4: Agent Factory) ── */
+.input,
+.select,
+textarea.input {
+  width: 100%;
+  background: var(--c-bg2);
+  border: 1px solid var(--c-border2);
+  border-radius: var(--r1, 6px);
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--c-t1);
+  font-family: var(--font);
+  outline: none;
+  transition: border-color var(--t2, 0.18s ease);
+}
+
+.input:focus,
+.select:focus {
+  border-color: var(--c-teal);
+}
+
+.input::placeholder {
+  color: var(--c-t3);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--r1, 6px);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--t2, 0.18s ease);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--c-teal);
+  color: #06090f;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--c-teal2);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--c-border2);
+  color: var(--c-t2);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--c-teal);
+  color: var(--c-t1);
+}
+
+.btn-danger {
+  background: transparent;
+  border-color: var(--c-red-dim);
+  color: var(--c-red);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--c-red-dim);
+}

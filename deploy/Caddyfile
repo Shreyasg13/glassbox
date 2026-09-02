@@ -1,0 +1,13 @@
+# Two subdomains, not one domain with path routing — the frontend's own
+# /admin/* pages (Agent Factory UI) would collide with the backend's
+# /admin/* API prefix under path-based routing on a single host.
+# Caddy's reverse_proxy handles WebSocket upgrades automatically, so
+# /ws/signals and /ws/jobs/{id} need no special config.
+
+{$APP_DOMAIN} {
+	reverse_proxy frontend:3000
+}
+
+{$API_DOMAIN} {
+	reverse_proxy backend:8000
+}
