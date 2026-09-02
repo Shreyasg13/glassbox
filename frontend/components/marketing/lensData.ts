@@ -35,6 +35,12 @@ export type LensPersona = {
   risk: number;
   story: string;
   look: LensLook;
+  // Kokoro-82M voice id (see backend/app/tts.py) -- verified real IDs
+  // from huggingface.co/hexgrad/Kokoro-82M/raw/main/VOICES.md, fetched
+  // directly rather than guessed. All 8 personas are archetypes of real
+  // men, hence an all-male voice set; the two `lead: true` personas got
+  // the two highest-graded voices per that file's own quality grading.
+  voiceId: string;
 };
 
 export const LENS_FILTERS: { value: "all" | LensFilter; label: string }[] = [
@@ -74,6 +80,7 @@ export const LENS_PERSONAS: LensPersona[] = [
       glassCol: "#8a6a2a",
       mouth: "warm",
     },
+    voiceId: "am_michael",
   },
   {
     id: "lyn",
@@ -101,6 +108,7 @@ export const LENS_PERSONAS: LensPersona[] = [
       tie: "#0DB87A",
       mouth: "warm",
     },
+    voiceId: "am_puck",
   },
   {
     id: "gri",
@@ -128,6 +136,7 @@ export const LENS_PERSONAS: LensPersona[] = [
       tie: "#0DCCAA",
       mouth: "confident",
     },
+    voiceId: "am_fenrir",
   },
   {
     id: "dal",
@@ -156,6 +165,7 @@ export const LENS_PERSONAS: LensPersona[] = [
       glassCol: "#5a3a8a",
       mouth: "neutral",
     },
+    voiceId: "bm_george",
   },
   {
     id: "sim",
@@ -183,6 +193,7 @@ export const LENS_PERSONAS: LensPersona[] = [
       facialHair: "beard",
       mouth: "confident",
     },
+    voiceId: "bm_fable",
   },
   {
     id: "eng",
@@ -211,6 +222,7 @@ export const LENS_PERSONAS: LensPersona[] = [
       glassCol: "#2a6a8a",
       mouth: "neutral",
     },
+    voiceId: "am_eric",
   },
   {
     id: "sha",
@@ -239,6 +251,7 @@ export const LENS_PERSONAS: LensPersona[] = [
       facialHair: "beard",
       mouth: "confident",
     },
+    voiceId: "am_onyx",
   },
   {
     id: "sor",
@@ -268,5 +281,6 @@ export const LENS_PERSONAS: LensPersona[] = [
       glassCol: "#8a3a3a",
       mouth: "confident",
     },
+    voiceId: "bm_lewis",
   },
 ];

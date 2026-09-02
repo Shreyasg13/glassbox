@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { Reveal } from "@/components/Reveal";
+import { useLensVoice } from "@/lib/useLensVoice";
 import { LENS_FILTERS, LENS_PERSONAS, type LensFilter, type LensPersona } from "./lensData";
 import { LensPortrait } from "./lensPortrait";
 
@@ -36,6 +37,7 @@ export function StrategyLenses() {
   const typeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const dragStartX = useRef<number | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const voice = useLensVoice();
 
   const view = filter === "all" ? LENS_PERSONAS : LENS_PERSONAS.filter((a) => a.cls === filter);
   const active: LensPersona | undefined = view[cur];
@@ -67,6 +69,14 @@ export function StrategyLenses() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id, reduceMotion]);
+
+  // voice playback, loosely synced with the typewriter above -- starts
+  // around the same time the text starts revealing, no word-level sync
+  useEffect(() => {
+    if (!active || !voice.enabled) return;
+    voice.speak(active.id, active.story, active.voiceId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.id, voice.enabled]);
 
   // autoplay
   useEffect(() => {
@@ -130,8 +140,28 @@ export function StrategyLenses() {
         </div>
       </Reveal>
 
+      {/* voice toggle -- off by default, never autoplays without this */}
+      <div className="mt-sp6 flex justify-center">
+        <button
+          type="button"
+          onClick={voice.toggle}
+          aria-pressed={voice.enabled}
+          className={`flex items-center gap-sp2 rounded-r4 border px-sp4 py-2 text-[12.5px] font-semibold transition-colors duration-200 ease-glass ${
+            voice.enabled
+              ? "border-transparent bg-teal text-bg shadow-teal"
+              : "border-border bg-panel text-t2 hover:border-border2 hover:text-t1"
+          }`}
+        >
+          <span aria-hidden>{voice.enabled ? "\u{1F50A}" : "\u{1F507}"}</span>
+          {voice.enabled ? "Voices on" : "Enable voices"}
+        </button>
+      </div>
+      {voice.enabled && voice.unavailable && (
+        <p className="mono mt-sp2 text-center text-[11px] text-t4">Voice playback unavailable right now.</p>
+      )}
+
       {/* filter chips */}
-      <div className="mb-sp5 mt-sp6 flex flex-wrap justify-center gap-sp2">
+      <div className="mb-sp5 mt-sp5 flex flex-wrap justify-center gap-sp2">
         {LENS_FILTERS.map((f) => {
           const count = f.value === "all" ? LENS_PERSONAS.length : LENS_PERSONAS.filter((a) => a.cls === f.value).length;
           return (

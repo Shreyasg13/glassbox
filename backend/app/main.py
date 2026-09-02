@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .logging_config import request_id_var, setup_logging
-from .routers import admin, auth, data, jobs_ws, monte_carlo, reports, ws
+from .routers import admin, auth, data, jobs_ws, monte_carlo, reports, tts, ws
 
 app = FastAPI(
     title="GlassBox API",
@@ -75,6 +75,7 @@ app.include_router(jobs_ws.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(reports.router)
+app.include_router(tts.router)
 
 
 @app.get("/health", tags=["meta"])
