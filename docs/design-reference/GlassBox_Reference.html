@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GlassBox — Full Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --c-bg:#06090F;--c-bg1:#0A0F1A;--c-bg2:#0D1422;--c-bg3:#101929;
+  --c-panel:#111B2E;--c-panel2:#172035;--c-raised:#1A2640;
+  --c-border:rgba(255,255,255,.07);--c-border2:rgba(255,255,255,.12);
+  --c-t1:#EDF2FF;--c-t2:#9AACCC;--c-t3:#5C7090;--c-t4:#3A4D66;
+  --c-teal:#0DCCAA;--c-teal2:#0AB898;--c-teal-dim:rgba(13,204,170,.15);--c-teal-glow:rgba(13,204,170,.08);
+  --c-blue:#4D7AFF;--c-blue-dim:rgba(77,122,255,.1);
+  --c-green:#0DB87A;--c-green-dim:rgba(13,184,122,.1);
+  --c-gold:#E8A020;--c-gold-dim:rgba(232,160,32,.12);
+  --c-red:#E8445A;--c-red-dim:rgba(232,68,90,.1);
+  --font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  --r1:6px;--r2:10px;--r3:14px;--r4:20px;
+  --sh-sm:0 1px 3px rgba(0,0,0,.4),0 1px 2px rgba(0,0,0,.3);
+  --sh-md:0 4px 16px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3);
+  --sh-lg:0 12px 40px rgba(0,0,0,.6),0 4px 12px rgba(0,0,0,.4);
+  --sh-teal:0 0 0 1px rgba(13,204,170,.25),0 4px 20px rgba(13,204,170,.1);
+  --sp1:4px;--sp2:8px;--sp3:12px;--sp4:16px;--sp5:20px;--sp6:24px;--sp8:32px;--sp10:40px;
+  --t1:.1s ease;--t2:.18s ease;--t3:.28s ease;--ease:cubic-bezier(.22,.68,0,1.2);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:var(--font);color:var(--c-t1);
+  background:
+    radial-gradient(1200px 600px at 80% -10%,rgba(13,204,170,.06),transparent 60%),
+    radial-gradient(900px 500px at 0% 100%,rgba(77,122,255,.05),transparent 55%),
+    var(--c-bg);
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden;
+}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--c-raised);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:var(--c-panel2)}
+.mono{font-family:var(--mono)}
+.pos{color:var(--c-green)}.neg{color:var(--c-red)}.warn{color:var(--c-gold)}.info{color:var(--c-blue)}.teal{color:var(--c-teal)}
+.muted{color:var(--c-t3)}.dim{color:var(--c-t2)}
+
+/* ---------- glass surfaces ---------- */
+.glass{
+  background:linear-gradient(160deg,rgba(23,32,53,.72),rgba(17,27,46,.55));
+  border:1px solid var(--c-border);border-radius:var(--r3);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
+  box-shadow:var(--sh-md);
+}
+.glass-hi{border-color:var(--c-border2);box-shadow:var(--sh-lg)}
+
+/* ---------- app shell ---------- */
+.app{display:grid;grid-template-columns:230px 1fr;height:100vh;height:100dvh}
+.sidebar{
+  border-right:1px solid var(--c-border);background:linear-gradient(180deg,rgba(13,20,34,.9),rgba(6,9,15,.9));
+  backdrop-filter:blur(20px);display:flex;flex-direction:column;padding:var(--sp5) var(--sp3);gap:var(--sp1);overflow-y:auto
+}
+.brand{display:flex;align-items:center;gap:var(--sp3);padding:var(--sp2) var(--sp3) var(--sp6)}
+.logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--c-teal),var(--c-blue));
+  display:grid;place-items:center;font-weight:800;color:#04110d;box-shadow:var(--sh-teal);flex:none}
+.brand h1{font-size:16px;font-weight:800;letter-spacing:-.02em}
+.brand .sub{font-size:10px;color:var(--c-t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.1em}
+.nav-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--c-t4);padding:var(--sp4) var(--sp3) var(--sp2);font-weight:700}
+.nav a{display:flex;align-items:center;gap:var(--sp3);padding:9px var(--sp3);border-radius:var(--r2);color:var(--c-t2);
+  cursor:pointer;font-weight:500;font-size:13px;transition:all var(--t2);border:1px solid transparent;position:relative}
+.nav a .ic{width:18px;text-align:center;opacity:.8}
+.nav a:hover{background:var(--c-panel);color:var(--c-t1)}
+.nav a.active{background:var(--c-teal-dim);color:var(--c-teal);border-color:rgba(13,204,170,.25);font-weight:600}
+.nav a.active::before{content:'';position:absolute;left:-var(--sp3);left:0;top:50%;transform:translateY(-50%);width:3px;height:16px;background:var(--c-teal);border-radius:3px;box-shadow:0 0 8px var(--c-teal)}
+.nav a .badge{margin-left:auto;font-size:10px;background:var(--c-raised);padding:1px 7px;border-radius:20px;color:var(--c-t2);font-family:var(--mono)}
+.side-foot{margin-top:auto;padding-top:var(--sp4)}
+.user-chip{display:flex;align-items:center;gap:var(--sp3);padding:var(--sp3);border-radius:var(--r2);background:var(--c-panel);border:1px solid var(--c-border);cursor:pointer;transition:var(--t2)}
+.user-chip:hover{border-color:var(--c-border2)}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--c-blue),var(--c-teal));display:grid;place-items:center;font-weight:700;color:#04110d;flex:none;font-size:13px}
+.user-chip .nm{font-size:12px;font-weight:600}.user-chip .rl{font-size:10px;color:var(--c-t3)}
+
+/* mode switch */
+.mode-switch{display:flex;gap:4px;background:var(--c-bg2);padding:4px;border-radius:var(--r2);border:1px solid var(--c-border);margin-bottom:var(--sp4)}
+.mode-switch button{flex:1;padding:7px;border:none;border-radius:7px;background:transparent;color:var(--c-t3);font-family:var(--font);font-weight:600;font-size:12px;cursor:pointer;transition:var(--t2)}
+.mode-switch button.on{background:var(--c-raised);color:var(--c-t1);box-shadow:var(--sh-sm)}
+.mode-switch button.on.admin{color:var(--c-gold)}
+
+/* ---------- main ---------- */
+.main{overflow-y:auto;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:var(--sp4);padding:var(--sp4) var(--sp6);
+  border-bottom:1px solid var(--c-border);background:rgba(6,9,15,.7);backdrop-filter:blur(16px)}
+.topbar h2{font-size:18px;font-weight:700;letter-spacing:-.02em}
+.topbar .crumb{font-size:11px;color:var(--c-t3);font-family:var(--mono)}
+.search{margin-left:auto;position:relative}
+.search input{background:var(--c-bg2);border:1px solid var(--c-border);border-radius:var(--r2);padding:8px 12px 8px 34px;color:var(--c-t1);font-family:var(--font);width:240px;font-size:13px;transition:var(--t2)}
+.search input:focus{outline:none;border-color:var(--c-teal);box-shadow:var(--sh-teal);width:280px}
+.search .si{position:absolute;left:11px;top:8px;color:var(--c-t3)}
+.tb-btn{background:var(--c-bg2);border:1px solid var(--c-border);color:var(--c-t2);width:36px;height:36px;border-radius:var(--r2);cursor:pointer;display:grid;place-items:center;transition:var(--t2);position:relative;font-size:15px}
+.tb-btn:hover{border-color:var(--c-border2);color:var(--c-t1)}
+.tb-btn .dot{position:absolute;top:8px;right:8px;width:7px;height:7px;background:var(--c-red);border-radius:50%;border:2px solid var(--c-bg)}
+.market-pill{display:flex;align-items:center;gap:7px;background:var(--c-green-dim);border:1px solid rgba(13,184,122,.3);padding:6px 12px;border-radius:20px;font-size:11px;font-weight:600;color:var(--c-green)}
+.market-pill .pulse{width:7px;height:7px;background:var(--c-green);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(13,184,122,.5)}50%{box-shadow:0 0 0 5px rgba(13,184,122,0)}}
+.content{padding:var(--sp6);flex:1}
+.page{display:none;animation:fade .35s var(--ease)}
+.page.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* headings/util */
+.ph{display:flex;align-items:center;gap:var(--sp4);margin-bottom:var(--sp5);flex-wrap:wrap}
+.ph h3{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.ph .desc{font-size:12px;color:var(--c-t3);margin-top:2px}
+.ph .right{margin-left:auto;display:flex;gap:var(--sp2);align-items:center;flex-wrap:wrap}
+.section-t{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--c-t3);font-weight:700;margin:var(--sp6) 0 var(--sp3)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:var(--sp2);padding:8px 14px;border-radius:var(--r2);border:1px solid var(--c-border2);
+  background:var(--c-panel);color:var(--c-t1);font-family:var(--font);font-weight:600;font-size:13px;cursor:pointer;transition:var(--t2)}
+.btn:hover{background:var(--c-panel2);border-color:var(--c-t4);transform:translateY(-1px)}
+.btn.primary{background:linear-gradient(135deg,var(--c-teal),var(--c-teal2));color:#04110d;border-color:transparent;box-shadow:var(--sh-teal)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.gold{background:linear-gradient(135deg,var(--c-gold),#c98814);color:#1a1204;border-color:transparent}
+.btn.danger{background:var(--c-red-dim);color:var(--c-red);border-color:rgba(232,68,90,.3)}
+.btn.ghost{background:transparent}
+.btn.sm{padding:5px 10px;font-size:12px}
+.btn.icon{padding:8px;width:36px;justify-content:center}
+
+/* chips/tags/badges */
+.chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;font-family:var(--mono)}
+.chip.buy,.chip.long,.chip.active,.chip.online,.chip.pass{background:var(--c-green-dim);color:var(--c-green)}
+.chip.sell,.chip.short,.chip.err,.chip.fail,.chip.offline{background:var(--c-red-dim);color:var(--c-red)}
+.chip.hold,.chip.pending,.chip.warn{background:var(--c-gold-dim);color:var(--c-gold)}
+.chip.info,.chip.running{background:var(--c-blue-dim);color:var(--c-blue)}
+.chip.teal{background:var(--c-teal-dim);color:var(--c-teal)}
+.chip.neutral{background:var(--c-raised);color:var(--c-t2)}
+.dotb{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+
+/* grids/cards */
+.grid{display:grid;gap:var(--sp4)}
+.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+.card{padding:var(--sp5)}
+.stat .lbl{font-size:11px;color:var(--c-t3);text-transform:uppercase;letter-spacing:.08em;font-weight:600;display:flex;align-items:center;gap:6px}
+.stat .val{font-size:26px;font-weight:800;font-family:var(--mono);letter-spacing:-.02em;margin:8px 0 4px}
+.stat .delta{font-size:12px;font-weight:600;font-family:var(--mono)}
+.spark{height:36px;margin-top:10px;display:flex;align-items:flex-end;gap:2px}
+.spark i{flex:1;background:linear-gradient(180deg,var(--c-teal),rgba(13,204,170,.1));border-radius:2px 2px 0 0;opacity:.7}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;border-radius:var(--r3)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{text-align:left;padding:11px var(--sp4);font-size:10px;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--c-t3);font-weight:700;border-bottom:1px solid var(--c-border);white-space:nowrap;position:sticky;top:0;background:var(--c-panel)}
+thead th.r,td.r{text-align:right}
+tbody td{padding:12px var(--sp4);border-bottom:1px solid var(--c-border);color:var(--c-t2);white-space:nowrap}
+tbody tr{transition:background var(--t1)}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+tbody tr:last-child td{border-bottom:none}
+td .sym{font-weight:700;color:var(--c-t1);font-family:var(--mono)}
+td .co{font-size:11px;color:var(--c-t3)}
+.tbar{display:flex;align-items:center;gap:var(--sp2);padding:var(--sp3) var(--sp4);border-bottom:1px solid var(--c-border);flex-wrap:wrap}
+.tbar .ttl{font-weight:700;font-size:14px}
+.tbar .cnt{font-size:11px;color:var(--c-t3);font-family:var(--mono);background:var(--c-bg2);padding:2px 8px;border-radius:12px}
+.tbar .sp{margin-left:auto}
+.filter{background:var(--c-bg2);border:1px solid var(--c-border);color:var(--c-t2);padding:6px 10px;border-radius:var(--r1);font-size:12px;font-family:var(--font);cursor:pointer}
+.mini-bar{height:5px;border-radius:4px;background:var(--c-bg2);overflow:hidden;min-width:60px}
+.mini-bar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--c-teal),var(--c-blue))}
+
+/* agent cards */
+.agent-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--sp4)}
+.agent-card{padding:var(--sp5);position:relative;overflow:hidden;transition:var(--t2)}
+.agent-card:hover{transform:translateY(-2px);border-color:var(--c-border2)}
+.agent-card .ah{display:flex;align-items:center;gap:var(--sp3);margin-bottom:var(--sp4)}
+.agent-ic{width:42px;height:42px;border-radius:var(--r2);display:grid;place-items:center;font-size:19px;flex:none}
+.agent-card .an{font-weight:700;font-size:14px}
+.agent-card .ar{font-size:11px;color:var(--c-t3)}
+.agent-meta{display:flex;justify-content:space-between;font-size:11px;padding:8px 0;border-top:1px solid var(--c-border)}
+.agent-meta .k{color:var(--c-t3)}.agent-meta .v{font-family:var(--mono);font-weight:600;color:var(--c-t1)}
+.conf-ring{margin-left:auto;font-family:var(--mono);font-weight:700;font-size:13px}
+
+/* forms */
+.form-row{margin-bottom:var(--sp4)}
+.form-row label{display:block;font-size:12px;font-weight:600;color:var(--c-t2);margin-bottom:6px}
+.form-row label .hint{color:var(--c-t4);font-weight:400;margin-left:6px}
+.inp,.sel,textarea.inp{width:100%;background:var(--c-bg2);border:1px solid var(--c-border);border-radius:var(--r2);
+  padding:10px 12px;color:var(--c-t1);font-family:var(--font);font-size:13px;transition:var(--t2)}
+.inp:focus,.sel:focus,textarea.inp:focus{outline:none;border-color:var(--c-teal);box-shadow:var(--sh-teal)}
+textarea.inp{resize:vertical;min-height:80px;font-family:var(--mono);font-size:12px;line-height:1.6}
+.sel{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%235C7090' viewBox='0 0 16 16'><path d='M8 11L3 6h10z'/></svg>");background-repeat:no-repeat;background-position:right 12px center}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp4)}
+.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp4)}
+
+/* toggle */
+.toggle{position:relative;width:42px;height:24px;flex:none}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .tk{position:absolute;inset:0;background:var(--c-raised);border-radius:20px;cursor:pointer;transition:var(--t2)}
+.toggle .tk::before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:var(--c-t2);border-radius:50%;transition:var(--t2)}
+.toggle input:checked+.tk{background:var(--c-teal)}
+.toggle input:checked+.tk::before{transform:translateX(18px);background:#04110d}
+.opt-row{display:flex;align-items:center;gap:var(--sp4);padding:var(--sp4);border-bottom:1px solid var(--c-border)}
+.opt-row:last-child{border-bottom:none}
+.opt-row .ot{font-weight:600;font-size:13px}.opt-row .od{font-size:11px;color:var(--c-t3);margin-top:2px}
+.opt-row .sp{margin-left:auto}
+
+/* slider */
+.slider{width:100%;-webkit-appearance:none;height:5px;border-radius:5px;background:var(--c-bg2);outline:none}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--c-teal);cursor:pointer;box-shadow:var(--sh-teal);border:2px solid var(--c-bg)}
+.slider-row{display:flex;align-items:center;gap:var(--sp4)}
+.slider-val{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--c-teal);min-width:44px;text-align:right}
+
+/* segmented */
+.seg{display:inline-flex;background:var(--c-bg2);border:1px solid var(--c-border);border-radius:var(--r2);padding:3px;gap:2px}
+.seg button{padding:6px 14px;border:none;background:transparent;color:var(--c-t3);border-radius:7px;font-family:var(--font);font-weight:600;font-size:12px;cursor:pointer;transition:var(--t2)}
+.seg button.on{background:var(--c-raised);color:var(--c-t1);box-shadow:var(--sh-sm)}
+
+/* checkbox pills */
+.pill-check{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:var(--r2);border:1px solid var(--c-border);background:var(--c-bg2);cursor:pointer;font-size:12px;font-weight:600;transition:var(--t2);user-select:none}
+.pill-check.on{border-color:var(--c-teal);background:var(--c-teal-dim);color:var(--c-teal)}
+.pill-check .bx{width:15px;height:15px;border-radius:4px;border:1.5px solid var(--c-t4);display:grid;place-items:center;font-size:10px}
+.pill-check.on .bx{background:var(--c-teal);border-color:var(--c-teal);color:#04110d}
+
+/* progress steps */
+.steps{display:flex;gap:0;margin-bottom:var(--sp6)}
+.step{flex:1;text-align:center;position:relative;font-size:11px;color:var(--c-t3);font-weight:600}
+.step .n{width:30px;height:30px;border-radius:50%;background:var(--c-bg2);border:2px solid var(--c-border);display:grid;place-items:center;margin:0 auto 6px;font-family:var(--mono);transition:var(--t2)}
+.step.done .n{background:var(--c-teal);border-color:var(--c-teal);color:#04110d}
+.step.cur .n{border-color:var(--c-teal);color:var(--c-teal);box-shadow:var(--sh-teal)}
+.step.cur{color:var(--c-teal)}
+.step::after{content:'';position:absolute;top:15px;left:50%;width:100%;height:2px;background:var(--c-border);z-index:-1}
+.step:last-child::after{display:none}
+.step.done::after{background:var(--c-teal)}
+
+/* report/log */
+.report-body{font-size:13px;line-height:1.8;color:var(--c-t2)}
+.report-body h4{color:var(--c-t1);font-size:15px;margin:var(--sp5) 0 var(--sp2);font-weight:700}
+.report-body p{margin-bottom:var(--sp3)}
+.report-body .quote{border-left:3px solid var(--c-teal);padding:var(--sp2) var(--sp4);background:var(--c-teal-glow);border-radius:0 var(--r2) var(--r2) 0;margin:var(--sp3) 0;color:var(--c-t1)}
+.log{font-family:var(--mono);font-size:12px;line-height:1.9;background:var(--c-bg);border-radius:var(--r2);padding:var(--sp4);max-height:320px;overflow-y:auto;border:1px solid var(--c-border)}
+.log .ts{color:var(--c-t4)}.log .lvl-ok{color:var(--c-green)}.log .lvl-warn{color:var(--c-gold)}.log .lvl-err{color:var(--c-red)}.log .lvl-info{color:var(--c-blue)}
+
+/* pipeline flow */
+.flow{display:flex;align-items:stretch;gap:var(--sp3);overflow-x:auto;padding-bottom:var(--sp2)}
+.flow-node{min-width:150px;padding:var(--sp4);border-radius:var(--r2);border:1px solid var(--c-border);background:var(--c-panel);position:relative;flex:none}
+.flow-node .fn-t{font-weight:700;font-size:12px;margin-bottom:4px}
+.flow-node .fn-s{font-size:10px;color:var(--c-t3);font-family:var(--mono)}
+.flow-arrow{display:grid;place-items:center;color:var(--c-t4);font-size:18px;flex:none}
+.flow-node.active{border-color:var(--c-teal);box-shadow:var(--sh-teal)}
+
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(3,5,10,.7);backdrop-filter:blur(6px);z-index:100;display:none;place-items:center;padding:var(--sp6);animation:fade .2s}
+.modal-bg.on{display:grid}
+.modal{width:100%;max-width:640px;max-height:88vh;overflow-y:auto;padding:0}
+.modal-h{display:flex;align-items:center;gap:var(--sp3);padding:var(--sp5) var(--sp6);border-bottom:1px solid var(--c-border);position:sticky;top:0;background:var(--c-panel);z-index:2}
+.modal-h h3{font-size:16px;font-weight:700}
+.modal-h .x{margin-left:auto;cursor:pointer;color:var(--c-t3);font-size:20px;width:30px;height:30px;display:grid;place-items:center;border-radius:8px}
+.modal-h .x:hover{background:var(--c-panel2);color:var(--c-t1)}
+.modal-b{padding:var(--sp6)}
+.modal-f{padding:var(--sp4) var(--sp6);border-top:1px solid var(--c-border);display:flex;gap:var(--sp2);justify-content:flex-end;position:sticky;bottom:0;background:var(--c-panel)}
+
+/* KV list */
+.kv{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--c-border);font-size:13px}
+.kv:last-child{border:none}.kv .k{color:var(--c-t3)}.kv .v{font-family:var(--mono);font-weight:600}
+
+/* alert banner */
+.banner{display:flex;align-items:center;gap:var(--sp3);padding:var(--sp3) var(--sp4);border-radius:var(--r2);font-size:13px;margin-bottom:var(--sp4)}
+.banner.info{background:var(--c-blue-dim);border:1px solid rgba(77,122,255,.25);color:var(--c-blue)}
+.banner.warn{background:var(--c-gold-dim);border:1px solid rgba(232,160,32,.25);color:var(--c-gold)}
+.banner.ok{background:var(--c-green-dim);border:1px solid rgba(13,184,122,.25);color:var(--c-green)}
+
+/* admin accent */
+.admin-only{display:none}
+body.admin .admin-only{display:block}
+body.admin .user-only{display:none}
+.adm-tag{font-size:9px;background:var(--c-gold-dim);color:var(--c-gold);padding:2px 6px;border-radius:5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+
+/* value function viz */
+.vn-box{padding:var(--sp5);text-align:center}
+.vn-formula{font-family:var(--mono);font-size:18px;color:var(--c-teal);background:var(--c-bg);padding:var(--sp4);border-radius:var(--r2);border:1px solid var(--c-border);margin:var(--sp3) 0;letter-spacing:.02em}
+.heat{display:grid;grid-template-columns:repeat(12,1fr);gap:3px}
+.heat i{aspect-ratio:1;border-radius:3px}
+
+.empty{text-align:center;padding:var(--sp10);color:var(--c-t3)}
+.empty .big{font-size:40px;margin-bottom:var(--sp3);opacity:.5}
+hr.div{border:none;border-top:1px solid var(--c-border);margin:var(--sp5) 0}
+.tag{font-size:10px;font-family:var(--mono);background:var(--c-bg2);border:1px solid var(--c-border);padding:2px 7px;border-radius:5px;color:var(--c-t2)}
+@media(max-width:1100px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}}
+@media(max-width:820px){.app{grid-template-columns:1fr}.sidebar{display:none}}
+</style>
+</head>
+<body class="user">
+
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">G</div>
+      <div><h1>GlassBox</h1><div class="sub">v3 · reference</div></div>
+    </div>
+
+    <div class="mode-switch">
+      <button id="mUser" class="on" onclick="setMode('user')">User</button>
+      <button id="mAdmin" onclick="setMode('admin')">Admin</button>
+    </div>
+
+    <!-- USER NAV -->
+    <nav class="nav user-only" id="userNav">
+      <div class="nav-lbl">Overview</div>
+      <a class="active" onclick="go('dashboard',this)"><span class="ic">◈</span>Dashboard</a>
+      <a onclick="go('portfolio',this)"><span class="ic">▣</span>Portfolio<span class="badge">12</span></a>
+      <a onclick="go('signals',this)"><span class="ic">⚡</span>Live Signals<span class="badge">8</span></a>
+      <a onclick="go('watchlist',this)"><span class="ic">★</span>Watchlist</a>
+      <div class="nav-lbl">Intelligence</div>
+      <a onclick="go('agents',this)"><span class="ic">◆</span>Agents<span class="badge">7</span></a>
+      <a onclick="go('orchestration',this)"><span class="ic">⟳</span>Orchestration</a>
+      <a onclick="go('valuefn',this)"><span class="ic">ƒ</span>V(n) Engine</a>
+      <a onclick="go('reports',this)"><span class="ic">▤</span>Daily Reports</a>
+      <div class="nav-lbl">Account</div>
+      <a onclick="go('onboarding',this)"><span class="ic">✦</span>Onboarding</a>
+      <a onclick="go('settings',this)"><span class="ic">⚙</span>Settings</a>
+    </nav>
+
+    <!-- ADMIN NAV -->
+    <nav class="nav admin-only" id="adminNav">
+      <div class="nav-lbl">Control</div>
+      <a class="active" onclick="go('adm-overview',this)"><span class="ic">◈</span>Admin Overview</a>
+      <a onclick="go('adm-factory',this)"><span class="ic">⚗</span>Agent Factory</a>
+      <a onclick="go('adm-orch',this)"><span class="ic">⟳</span>Orchestrations</a>
+      <a onclick="go('adm-models',this)"><span class="ic">▚</span>Model Providers</a>
+      <div class="nav-lbl">Operations</div>
+      <a onclick="go('adm-runs',this)"><span class="ic">▷</span>Run History</a>
+      <a onclick="go('adm-reports',this)"><span class="ic">▤</span>Report Builder</a>
+      <a onclick="go('adm-users',this)"><span class="ic">◉</span>Users &amp; Roles</a>
+      <a onclick="go('adm-logs',this)"><span class="ic">≡</span>System Logs</a>
+      <div class="nav-lbl">Platform</div>
+      <a onclick="go('adm-data',this)"><span class="ic">▦</span>Data Sources</a>
+      <a onclick="go('adm-settings',this)"><span class="ic">⚙</span>Platform Settings</a>
+    </nav>
+
+    <div class="side-foot">
+      <div class="user-chip" onclick="go(isAdmin()?'adm-users':'settings')">
+        <div class="avatar" id="avi">SH</div>
+        <div><div class="nm" id="uname">Shreyash</div><div class="rl" id="urole">Trader</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="crumb" id="crumb">GlassBox / Dashboard</div>
+        <h2 id="ptitle">Dashboard</h2>
+      </div>
+      <div class="search"><span class="si">⌕</span><input placeholder="Search symbols, agents, reports…"></div>
+      <div class="market-pill"><span class="pulse"></span>MARKET OPEN</div>
+      <button class="tb-btn" title="Notifications"><span>◔</span><span class="dot"></span></button>
+      <button class="tb-btn" title="Refresh">⟲</button>
+    </div>
+
+    <div class="content" id="content">
+      <!-- pages injected here -->
+    </div>
+  </main>
+</div>
+
+<!-- ============ MODAL ============ -->
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal glass glass-hi" id="modalCard"></div>
+</div>
+
+<script>
+/* ---------------- tiny helpers ---------------- */
+const $=s=>document.querySelector(s);
+const isAdmin=()=>document.body.classList.contains('admin');
+function setMode(m){
+  document.body.classList.toggle('admin',m==='admin');
+  $('#mUser').classList.toggle('on',m==='user');
+  $('#mAdmin').classList.toggle('on',m==='admin');
+  $('#mAdmin').classList.toggle('admin',m==='admin');
+  $('#uname').textContent=m==='admin'?'Shreyash':'Shreyash';
+  $('#urole').textContent=m==='admin'?'Platform Admin':'Trader';
+  $('#avi').textContent='SH';
+  go(m==='admin'?'adm-overview':'dashboard');
+}
+function go(id,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  const pg=document.getElementById('pg-'+id);
+  if(pg)pg.classList.add('on');
+  const nav=isAdmin()?'#adminNav':'#userNav';
+  document.querySelectorAll(nav+' a').forEach(a=>a.classList.remove('active'));
+  if(el)el.classList.add('active');
+  else{ // find nav link by onclick containing id
+    document.querySelectorAll(nav+' a').forEach(a=>{if(a.getAttribute('onclick')?.includes("'"+id+"'"))a.classList.add('active')});
+  }
+  const t=TITLES[id]||id;
+  $('#ptitle').textContent=t;
+  $('#crumb').textContent='GlassBox / '+(isAdmin()?'Admin / ':'')+t;
+  window.scrollTo?.(0,0);$('#content').scrollTop=0;
+}
+function openModal(html){$('#modalCard').innerHTML=html;$('#modalBg').classList.add('on')}
+function closeModal(){$('#modalBg').classList.remove('on')}
+const TITLES={
+  dashboard:'Dashboard',portfolio:'Portfolio',signals:'Live Signals',watchlist:'Watchlist',
+  agents:'Agents',orchestration:'Orchestration',valuefn:'V(n) Value Engine',reports:'Daily Reports',
+  onboarding:'Onboarding',settings:'Settings',
+  'adm-overview':'Admin Overview','adm-factory':'Agent Factory','adm-orch':'Orchestrations',
+  'adm-models':'Model Providers','adm-runs':'Run History','adm-reports':'Report Builder',
+  'adm-users':'Users & Roles','adm-logs':'System Logs','adm-data':'Data Sources','adm-settings':'Platform Settings'
+};
+
+/* ---------------- fake data ---------------- */
+const HOLDINGS=[
+  ['NVDA','NVIDIA Corp',180,'$118.42','$21,315','+$4,210','+24.6%','long'],
+  ['AAPL','Apple Inc',120,'$229.10','$27,492','+$1,830','+7.1%','long'],
+  ['MSFT','Microsoft',60,'$441.58','$26,494','+$2,140','+8.8%','long'],
+  ['TSLA','Tesla Inc',90,'$251.44','$22,629','-$1,540','-6.4%','long'],
+  ['AMZN','Amazon',75,'$186.30','$13,972','+$920','+7.0%','long'],
+  ['META','Meta Platforms',45,'$563.27','$25,347','+$3,410','+15.6%','long'],
+  ['GOOGL','Alphabet',80,'$164.74','$13,179','+$610','+4.8%','long'],
+  ['AMD','Adv Micro Dev',150,'$142.60','$21,390','-$780','-3.5%','short'],
+];
+const SIGNALS=[
+  ['NVDA','BUY','buy','0.91','Momentum + Sentiment','2m ago','Quant, Sentiment, Macro'],
+  ['TSLA','SELL','sell','0.78','Overbought RSI','5m ago','Technical, Risk'],
+  ['AAPL','HOLD','hold','0.64','Consolidation','8m ago','Quant, Fundamental'],
+  ['META','BUY','buy','0.88','Earnings beat','12m ago','Sentiment, Fundamental'],
+  ['AMD','SELL','sell','0.71','Sector rotation','15m ago','Macro, Technical'],
+  ['MSFT','BUY','buy','0.83','Cloud growth','18m ago','Fundamental, Quant'],
+  ['GOOGL','HOLD','hold','0.59','Mixed signals','22m ago','Technical'],
+  ['AMZN','BUY','buy','0.80','Retail strength','25m ago','Macro, Sentiment'],
+];
+const AGENTS=[
+  ['Quantitative','Momentum & statistical models','▲','var(--c-teal)','llm','deterministic','0.87','2,340','94.2%'],
+  ['Sentiment','News & social NLP','◐','var(--c-blue)','llm','qwen2.5-32b','0.82','1,890','88.7%'],
+  ['Macro','Rates, FX, commodities','◉','var(--c-gold)','llm','llama-3.3-70b','0.79','980','85.1%'],
+  ['Technical','Chart patterns & TA','◈','var(--c-teal)','det','deterministic','0.85','3,120','91.4%'],
+  ['Fundamental','Earnings & valuation','▣','var(--c-blue)','llm','gemini-2.0','0.81','760','89.9%'],
+  ['Risk','Exposure & drawdown','⚠','var(--c-red)','det','deterministic','0.93','4,500','96.8%'],
+  ['Coordinator','V(n) aggregation','ƒ','var(--c-teal)','sys','vn-engine','0.90','7,100','92.3%'],
+];
+const RUNS=[
+  ['#R-2481','Daily Pre-Market','2026-09-02 06:30','committee_vote','7 agents','✓ Complete','2m 14s','pass'],
+  ['#R-2480','Intraday Sweep','2026-09-01 13:00','parallel','5 agents','✓ Complete','1m 02s','pass'],
+  ['#R-2479','EOD Report','2026-09-01 16:15','sequential','7 agents','✓ Complete','3m 41s','pass'],
+  ['#R-2478','Daily Pre-Market','2026-09-01 06:30','committee_vote','7 agents','⚠ Partial','2m 55s','warn'],
+  ['#R-2477','Risk Recheck','2026-08-31 11:00','parallel','2 agents','✗ Failed','0m 18s','fail'],
+];
+const USERS=[
+  ['Shreyash','shreyash@emc.io','Platform Admin','online','2 min ago'],
+  ['A. Kapoor','akapoor@emc.io','Trader','online','5 min ago'],
+  ['J. Chen','jchen@emc.io','Analyst','offline','2 h ago'],
+  ['M. Reyes','mreyes@emc.io','Viewer','offline','1 d ago'],
+  ['Service Bot','bot@emc.io','API Service','online','live'],
+];
+const PROVIDERS=[
+  ['vLLM (GPU)','Self-hosted','qwen2.5-32b, llama-3.3-70b','online','12ms','$0.00/1k'],
+  ['Ollama','Local','llama3.2, mistral, phi3','online','45ms','$0.00/1k'],
+  ['Gemini','Cloud API','gemini-2.0-flash, 1.5-pro','online','280ms','$0.15/1k'],
+  ['Claude','Cloud API','opus-4.8, sonnet-5','online','310ms','$0.30/1k'],
+];
+
+/* ---------------- builders ---------------- */
+const spark=(n=16,up=1)=>`<div class="spark">${Array.from({length:n},()=>`<i style="height:${20+Math.random()*80}%;${up?'':'background:linear-gradient(180deg,var(--c-red),rgba(232,68,90,.1))'}"></i>`).join('')}</div>`;
+function statCard(lbl,val,delta,pos,ico){return `<div class="glass card stat">
+  <div class="lbl">${ico||''} ${lbl}</div><div class="val">${val}</div>
+  <div class="delta ${pos?'pos':'neg'}">${delta}</div>${spark(18,pos?1:0)}</div>`;}
+
+function holdingsTable(){return `<div class="glass tbl-wrap">
+  <div class="tbar"><span class="ttl">Holdings</span><span class="cnt">${HOLDINGS.length} positions</span>
+    <div class="sp"></div><select class="filter"><option>All sectors</option><option>Tech</option><option>Consumer</option></select>
+    <select class="filter"><option>Sort: Value</option><option>Sort: P&amp;L</option><option>Sort: Symbol</option></select></div>
+  <table><thead><tr>
+    <th>Symbol</th><th>Qty</th><th class="r">Price</th><th class="r">Mkt Value</th><th class="r">P&amp;L</th><th class="r">Return</th><th>Side</th><th></th>
+  </tr></thead><tbody>${HOLDINGS.map(h=>`<tr>
+    <td><span class="sym">${h[0]}</span><div class="co">${h[1]}</div></td>
+    <td class="mono">${h[2]}</td><td class="r mono">${h[3]}</td><td class="r mono">${h[4]}</td>
+    <td class="r mono ${h[5].startsWith('+')?'pos':'neg'}">${h[5]}</td>
+    <td class="r mono ${h[6].startsWith('+')?'pos':'neg'}">${h[6]}</td>
+    <td><span class="chip ${h[7]}"><span class="dotb"></span>${h[7].toUpperCase()}</span></td>
+    <td class="r"><button class="btn sm ghost" onclick="viewPosition('${h[0]}')">View</button></td>
+  </tr>`).join('')}</tbody></table></div>`;}
+
+function signalsTable(){return `<div class="glass tbl-wrap">
+  <div class="tbar"><span class="ttl">Live Signals</span><span class="cnt">${SIGNALS.length} active</span>
+    <div class="sp"></div><div class="seg"><button class="on">All</button><button>Buy</button><button>Sell</button><button>Hold</button></div></div>
+  <table><thead><tr>
+    <th>Symbol</th><th>Signal</th><th class="r">Confidence</th><th>Rationale</th><th>Contributing Agents</th><th class="r">Age</th><th></th>
+  </tr></thead><tbody>${SIGNALS.map(s=>`<tr>
+    <td><span class="sym">${s[0]}</span></td>
+    <td><span class="chip ${s[2]}">${s[1]}</span></td>
+    <td class="r"><div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
+      <div class="mini-bar" style="width:70px"><i style="width:${+s[3]*100}%"></i></div><span class="mono">${s[3]}</span></div></td>
+    <td class="dim">${s[4]}</td>
+    <td>${s[6].split(', ').map(a=>`<span class="tag">${a}</span>`).join(' ')}</td>
+    <td class="r muted mono">${s[5]}</td>
+    <td class="r"><button class="btn sm primary" onclick="viewSignal('${s[0]}')">Details</button></td>
+  </tr>`).join('')}</tbody></table></div>`;}
+
+function agentCards(clickable){return `<div class="agent-grid">${AGENTS.map((a,i)=>`
+  <div class="glass agent-card" ${clickable?`onclick="viewAgent(${i})"`:''} style="cursor:${clickable?'pointer':'default'}">
+    <div class="ah">
+      <div class="agent-ic" style="background:${a[3].replace(')',',.15)').replace('var(--c-','rgba-')};color:${a[3]}">${a[2]}</div>
+      <div><div class="an">${a[0]}</div><div class="ar">${a[1]}</div></div>
+      <div class="conf-ring" style="color:${a[3]}">${a[6]}</div>
+    </div>
+    <div class="agent-meta"><span class="k">Type</span><span class="v">${a[4]==='det'?'Deterministic':a[4]==='sys'?'System':'LLM'}</span></div>
+    <div class="agent-meta"><span class="k">Model</span><span class="v">${a[5]}</span></div>
+    <div class="agent-meta"><span class="k">Signals</span><span class="v">${a[7]}</span></div>
+    <div class="agent-meta"><span class="k">Accuracy</span><span class="v pos">${a[8]}</span></div>
+    <div style="margin-top:12px;display:flex;gap:6px">
+      <span class="chip active"><span class="dotb"></span>ACTIVE</span>
+      ${a[4]==='llm'?'<span class="chip info">LLM</span>':a[4]==='det'?'<span class="chip teal">DETERMINISTIC</span>':'<span class="chip neutral">CORE</span>'}
+    </div>
+  </div>`).join('')}</div>`;}
+
+/* rgba fix for agent-ic bg */
+function fixColors(){document.querySelectorAll('.agent-ic').forEach(e=>{
+  const c=e.style.color;const map={'#0DCCAA':'rgba(13,204,170,.15)','#4D7AFF':'rgba(77,122,255,.15)','#E8A020':'rgba(232,160,32,.15)','#E8445A':'rgba(232,68,90,.15)'};
+  const hex=window.getComputedStyle(e).color;e.style.background=map[c]||'rgba(13,204,170,.15)';});}
+
+/* ---------------- PAGES ---------------- */
+const PAGES={
+/* ===== USER: DASHBOARD ===== */
+dashboard:()=>`
+  <div class="ph"><div><h3>Portfolio Dashboard</h3><div class="desc">Real-time overview · synced 2s ago via WebSocket</div></div>
+    <div class="right"><div class="seg"><button>1D</button><button class="on">1W</button><button>1M</button><button>YTD</button><button>ALL</button></div>
+    <button class="btn"><span>⤓</span>Export</button><button class="btn primary" onclick="go('reports')"><span>▤</span>Daily Report</button></div></div>
+  <div class="grid g4">
+    ${statCard('Total Value','$172,819','+$12,840 (8.0%)',1,'')}
+    ${statCard("Today's P&amp;L",'+$3,214','+1.9%',1,'')}
+    ${statCard('Open Positions','8','2 short',1,'')}
+    ${statCard('V(n) Score','0.847','+0.03 confidence',1,'ƒ')}
+  </div>
+  <div class="grid g2" style="margin-top:16px;grid-template-columns:1.6fr 1fr">
+    <div class="glass card">
+      <div style="display:flex;align-items:center;margin-bottom:16px"><b>Equity Curve</b><div class="sp" style="margin-left:auto"></div>
+        <span class="chip active">▲ +8.0% this week</span></div>
+      <div style="height:220px;display:flex;align-items:flex-end;gap:4px">
+        ${Array.from({length:40},(_,i)=>`<div style="flex:1;background:linear-gradient(180deg,var(--c-teal),rgba(13,204,170,.05));border-radius:3px 3px 0 0;height:${30+Math.sin(i/3)*20+i*1.5}%;opacity:.85"></div>`).join('')}
+      </div>
+    </div>
+    <div class="glass card">
+      <b>Agent Consensus</b><div style="margin:14px 0;font-size:12px;color:var(--c-t3)">Aggregated recommendation</div>
+      <div style="text-align:center;padding:20px 0">
+        <div style="font-size:48px;font-weight:800;font-family:var(--mono);color:var(--c-green)">BUY</div>
+        <div class="chip active" style="margin-top:8px">6 of 7 agents agree · V(n)=0.85</div>
+      </div>
+      <hr class="div">
+      <div class="kv"><span class="k">Bullish agents</span><span class="v pos">6</span></div>
+      <div class="kv"><span class="k">Bearish agents</span><span class="v neg">1</span></div>
+      <div class="kv"><span class="k">Confidence</span><span class="v">84.7%</span></div>
+    </div>
+  </div>
+  <div class="section-t">Top Positions</div>
+  ${holdingsTable()}`,
+
+/* ===== USER: PORTFOLIO ===== */
+portfolio:()=>`
+  <div class="ph"><div><h3>Portfolio</h3><div class="desc">8 positions · $172,819 total market value</div></div>
+    <div class="right"><button class="btn"><span>⤓</span>Export CSV</button><button class="btn primary"><span>+</span>Add Position</button></div></div>
+  <div class="grid g4">
+    ${statCard('Invested','$160,000','cost basis',1,'')}
+    ${statCard('Market Value','$172,819','+8.0%',1,'')}
+    ${statCard('Unrealized P&amp;L','+$12,819','+8.0%',1,'')}
+    ${statCard('Realized (YTD)','+$28,400','143 trades',1,'')}
+  </div>
+  <div style="margin-top:16px">${holdingsTable()}</div>
+  <div class="section-t">Allocation</div>
+  <div class="grid g2">
+    <div class="glass card"><b>By Sector</b>
+      ${[['Technology',62,'var(--c-teal)'],['Consumer',22,'var(--c-blue)'],['Communication',11,'var(--c-gold)'],['Cash',5,'var(--c-t3)']].map(s=>`
+      <div style="margin-top:14px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span>${s[0]}</span><span class="mono">${s[1]}%</span></div>
+      <div class="mini-bar" style="height:8px"><i style="width:${s[1]}%;background:${s[2]}"></i></div></div>`).join('')}
+    </div>
+    <div class="glass card"><b>Risk Metrics</b>
+      <div class="kv"><span class="k">Beta</span><span class="v">1.24</span></div>
+      <div class="kv"><span class="k">Sharpe Ratio</span><span class="v pos">1.87</span></div>
+      <div class="kv"><span class="k">Max Drawdown</span><span class="v neg">-12.4%</span></div>
+      <div class="kv"><span class="k">Volatility (30d)</span><span class="v warn">18.2%</span></div>
+      <div class="kv"><span class="k">Value at Risk (95%)</span><span class="v neg">-$8,410</span></div>
+    </div>
+  </div>`,
+
+/* ===== USER: SIGNALS ===== */
+signals:()=>`
+  <div class="ph"><div><h3>Live Signals</h3><div class="desc">Streaming from 7 agents · WebSocket connected</div></div>
+    <div class="right"><span class="market-pill"><span class="pulse"></span>LIVE</span><button class="btn"><span>⚙</span>Configure</button></div></div>
+  <div class="grid g4">
+    ${statCard('Buy Signals','4','strong',1,'')}
+    ${statCard('Sell Signals','2','moderate',0,'')}
+    ${statCard('Hold','2','neutral',1,'')}
+    ${statCard('Avg Confidence','0.77','+0.05',1,'')}
+  </div>
+  <div style="margin-top:16px">${signalsTable()}</div>`,
+
+/* ===== USER: WATCHLIST ===== */
+watchlist:()=>`
+  <div class="ph"><div><h3>Watchlist</h3><div class="desc">Symbols you're tracking for signals</div></div>
+    <div class="right"><input class="inp" style="width:180px" placeholder="Add ticker…"><button class="btn primary"><span>+</span>Add</button></div></div>
+  <div class="glass tbl-wrap"><table><thead><tr>
+    <th>Symbol</th><th class="r">Price</th><th class="r">Change</th><th class="r">Signal</th><th>Alerts</th><th></th></tr></thead>
+    <tbody>${[['COIN','$248.30','+5.2%','buy','BUY'],['PLTR','$41.80','-2.1%','hold','HOLD'],['SMCI','$52.14','+8.9%','buy','BUY'],['ARM','$138.60','+1.4%','hold','HOLD'],['NFLX','$702.10','-0.8%','sell','SELL']].map(w=>`
+    <tr><td><span class="sym">${w[0]}</span></td><td class="r mono">${w[1]}</td>
+    <td class="r mono ${w[2].startsWith('+')?'pos':'neg'}">${w[2]}</td>
+    <td class="r"><span class="chip ${w[3]}">${w[4]}</span></td>
+    <td><label class="toggle"><input type="checkbox" ${Math.random()>.5?'checked':''}><span class="tk"></span></label></td>
+    <td class="r"><button class="btn sm danger">Remove</button></td></tr>`).join('')}</tbody></table></div>`,
+
+/* ===== USER: AGENTS ===== */
+agents:()=>`
+  <div class="ph"><div><h3>Intelligence Agents</h3><div class="desc">7 agents · click a card for detail · configure in Admin → Agent Factory</div></div>
+    <div class="right"><div class="seg"><button class="on">Grid</button><button>Table</button></div></div></div>
+  ${agentCards(true)}`,
+
+/* ===== USER: ORCHESTRATION ===== */
+orchestration:()=>`
+  <div class="ph"><div><h3>Orchestration</h3><div class="desc">How agents combine into a decision · committee vote via V(n)</div></div></div>
+  <div class="banner info"><span>ℹ</span>Signals are aggregated by the V(n) value function coordinator. Deterministic agents are auditable; LLM agents provide reasoning summaries.</div>
+  <div class="glass card"><b style="margin-bottom:16px;display:block">Daily Pre-Market Pipeline · committee_vote</b>
+    <div class="flow">
+      <div class="flow-node"><div class="fn-t">Data Ingest</div><div class="fn-s">market · news · rates</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node active"><div class="fn-t">Parallel Agents</div><div class="fn-s">7 running</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node"><div class="fn-t">V(n) Aggregate</div><div class="fn-s">weighted vote</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node"><div class="fn-t">Risk Gate</div><div class="fn-s">exposure check</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node"><div class="fn-t">Decision</div><div class="fn-s">signal emitted</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node"><div class="fn-t">Report</div><div class="fn-s">LLM narrative</div></div>
+    </div>
+  </div>
+  <div class="section-t">Configured Orchestrations</div>
+  <div class="glass tbl-wrap"><table><thead><tr><th>Name</th><th>Mode</th><th>Agents</th><th>Schedule</th><th>Status</th></tr></thead>
+  <tbody>${[['Daily Pre-Market','committee_vote','7','0 6 * * 1-5','active'],['Intraday Sweep','parallel','5','0 */2 * * *','active'],['EOD Report','sequential','7','15 16 * * 1-5','active'],['Risk Recheck','parallel','2','manual','pending']].map(o=>`
+  <tr><td style="color:var(--c-t1);font-weight:600">${o[0]}</td><td><span class="chip info">${o[1]}</span></td>
+  <td class="mono">${o[2]}</td><td class="mono muted">${o[3]}</td><td><span class="chip ${o[4]}"><span class="dotb"></span>${o[4].toUpperCase()}</span></td></tr>`).join('')}</tbody></table></div>`,
+
+/* ===== USER: VALUE FN ===== */
+valuefn:()=>`
+  <div class="ph"><div><h3>V(n) Value Engine</h3><div class="desc">The deterministic value function that aggregates agent signals</div></div>
+    <div class="right"><span class="chip teal">See the math</span></div></div>
+  <div class="grid g2" style="grid-template-columns:1fr 1fr">
+    <div class="glass vn-box">
+      <div style="font-size:12px;color:var(--c-t3);margin-bottom:8px">VALUE FUNCTION</div>
+      <div class="vn-formula">V(n) = Σ wᵢ · sᵢ · cᵢ</div>
+      <div style="font-size:12px;color:var(--c-t2);line-height:1.9;text-align:left;margin-top:12px">
+        <b>wᵢ</b> — agent weight (accuracy-adjusted)<br>
+        <b>sᵢ</b> — agent signal (-1 sell … +1 buy)<br>
+        <b>cᵢ</b> — agent confidence (0…1)<br>
+        <b>n</b> — decision horizon
+      </div>
+      <div style="margin-top:16px;font-family:var(--mono);font-size:22px;font-weight:800;color:var(--c-teal)">V(n) = 0.847</div>
+    </div>
+    <div class="glass card"><b>Agent Weights</b>
+      ${AGENTS.slice(0,6).map(a=>`<div style="margin-top:12px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span>${a[0]}</span><span class="mono teal">${(0.1+Math.random()*0.25).toFixed(2)}</span></div>
+      <div class="mini-bar"><i style="width:${40+Math.random()*55}%"></i></div></div>`).join('')}
+    </div>
+  </div>
+  <div class="section-t">Confidence Heatmap · last 12 runs × 12 symbols</div>
+  <div class="glass card"><div class="heat">${Array.from({length:144},()=>{const v=Math.random();const c=v>.66?'var(--c-green)':v>.33?'var(--c-gold)':'var(--c-red)';return `<i style="background:${c};opacity:${.3+v*.7}"></i>`}).join('')}</div>
+    <div style="display:flex;gap:16px;margin-top:12px;font-size:11px;color:var(--c-t3)"><span>◼ High conf</span><span>◼ Medium</span><span>◼ Low</span></div></div>`,
+
+/* ===== USER: REPORTS ===== */
+reports:()=>`
+  <div class="ph"><div><h3>Daily Reports</h3><div class="desc">LLM-narrated summaries generated from agent signals + V(n)</div></div>
+    <div class="right"><select class="filter"><option>Sep 2, 2026</option><option>Sep 1, 2026</option><option>Aug 31, 2026</option></select>
+    <button class="btn"><span>⤓</span>PDF</button><button class="btn primary"><span>✦</span>Regenerate</button></div></div>
+  <div class="grid g2" style="grid-template-columns:2fr 1fr">
+    <div class="glass card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <span class="chip info">◆ qwen2.5-32b</span><span class="chip teal">V(n)=0.85</span><span class="muted mono" style="font-size:11px">generated 06:34 EST</span></div>
+      <h4 style="font-size:18px">Pre-Market Brief — September 2, 2026</h4>
+      <div class="report-body">
+        <p>Overnight sentiment turned constructive as futures firmed on cooling rate expectations. The committee reached a <b class="pos">BUY</b> consensus with 6 of 7 agents aligned.</p>
+        <div class="quote">"Momentum and sentiment both flipped positive on NVDA, while the Risk agent flags elevated exposure in semis — trim on strength above $122."</div>
+        <h4>Key Signals</h4>
+        <p><b class="teal">NVDA</b> — strong buy (0.91). Momentum breakout confirmed by volume; sentiment score at 3-week high.</p>
+        <p><b class="teal">META</b> — buy (0.88) on earnings-beat follow-through.</p>
+        <p><b class="neg">TSLA</b> — sell (0.78); RSI overbought, sector rotation out of high-beta names.</p>
+        <h4>Risk Notes</h4>
+        <p>Portfolio beta at 1.24 is slightly elevated. VaR (95%) at -$8,410. Recommend keeping single-name exposure below 15%.</p>
+      </div>
+    </div>
+    <div>
+      <div class="glass card"><b>Report Meta</b>
+        <div class="kv"><span class="k">Model</span><span class="v">qwen2.5-32b</span></div>
+        <div class="kv"><span class="k">Provider</span><span class="v">vLLM</span></div>
+        <div class="kv"><span class="k">Temperature</span><span class="v">0.30</span></div>
+        <div class="kv"><span class="k">Tokens</span><span class="v">1,840</span></div>
+        <div class="kv"><span class="k">Latency</span><span class="v pos">2.1s</span></div>
+        <div class="kv"><span class="k">Source run</span><span class="v">#R-2481</span></div>
+      </div>
+      <div class="glass card" style="margin-top:16px"><b>Delivery</b>
+        <div class="opt-row" style="padding:12px 0"><div><div class="ot">Email</div></div><div class="sp"></div><label class="toggle"><input type="checkbox" checked><span class="tk"></span></label></div>
+        <div class="opt-row" style="padding:12px 0"><div><div class="ot">Slack</div></div><div class="sp"></div><label class="toggle"><input type="checkbox" checked><span class="tk"></span></label></div>
+        <div class="opt-row" style="padding:12px 0;border:none"><div><div class="ot">Webhook</div></div><div class="sp"></div><label class="toggle"><input type="checkbox"><span class="tk"></span></label></div>
+      </div>
+    </div>
+  </div>`,
+
+/* ===== USER: ONBOARDING ===== */
+onboarding:()=>`
+  <div class="ph"><div><h3>Onboarding</h3><div class="desc">Set up your account · 4 steps</div></div></div>
+  <div class="glass card" style="max-width:760px;margin:0 auto">
+    <div class="steps">
+      <div class="step done"><div class="n">✓</div>Account</div>
+      <div class="step cur"><div class="n">2</div>Watchlist</div>
+      <div class="step"><div class="n">3</div>Brokers</div>
+      <div class="step"><div class="n">4</div>Delivery</div>
+    </div>
+    <h4 style="font-size:16px;margin-bottom:6px">Add symbols to track</h4>
+    <p class="muted" style="font-size:12px;margin-bottom:16px">These feed your agents and signals. Add at least 3.</p>
+    <div class="form-row"><label>Ticker symbol</label>
+      <div style="display:flex;gap:8px"><input class="inp" placeholder="e.g. NVDA"><button class="btn primary">Add</button></div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:16px 0">
+      ${['NVDA','AAPL','MSFT','TSLA','META'].map(t=>`<span class="pill-check on"><span class="bx">✓</span>${t}<span style="margin-left:4px;cursor:pointer;color:var(--c-t3)">✕</span></span>`).join('')}
+    </div>
+    <div class="form-row"><label>Signal threshold <span class="hint">minimum confidence to alert</span></label>
+      <div class="slider-row"><input type="range" class="slider" min="0" max="100" value="70" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="slider-val">70%</span></div></div>
+    <div style="display:flex;justify-content:space-between;margin-top:24px">
+      <button class="btn ghost">← Back</button><button class="btn primary">Continue →</button></div>
+  </div>`,
+
+/* ===== USER: SETTINGS ===== */
+settings:()=>`
+  <div class="ph"><div><h3>Settings</h3><div class="desc">Account &amp; preferences</div></div></div>
+  <div class="grid g2" style="grid-template-columns:1fr 1fr">
+    <div class="glass card"><b>Profile</b>
+      <div class="form-row" style="margin-top:14px"><label>Display name</label><input class="inp" value="Shreyash"></div>
+      <div class="form-row"><label>Email</label><input class="inp" value="shreyash@emc.io"></div>
+      <div class="form-row"><label>Timezone</label><select class="sel"><option>America/New_York (EST)</option><option>UTC</option><option>America/Chicago</option></select></div>
+      <div class="form-row"><label>Base currency</label><select class="sel"><option>USD</option><option>EUR</option><option>INR</option></select></div>
+      <button class="btn primary">Save changes</button>
+    </div>
+    <div>
+      <div class="glass card"><b>Notifications</b>
+        ${[['Signal alerts','Push when confidence exceeds threshold',1],['Daily report','Delivered pre-market',1],['Risk warnings','Drawdown &amp; exposure alerts',1],['Weekly digest','Summary every Friday',0]].map(o=>`
+        <div class="opt-row"><div><div class="ot">${o[0]}</div><div class="od">${o[1]}</div></div><div class="sp"></div>
+        <label class="toggle"><input type="checkbox" ${o[2]?'checked':''}><span class="tk"></span></label></div>`).join('')}
+      </div>
+      <div class="glass card" style="margin-top:16px"><b>Delivery channels</b>
+        ${[['Email','shreyash@emc.io',1],['Slack','#trading-signals',1],['SMS','+1 •••• 4417',0]].map(o=>`
+        <div class="opt-row"><div><div class="ot">${o[0]}</div><div class="od mono">${o[1]}</div></div><div class="sp"></div>
+        <label class="toggle"><input type="checkbox" ${o[2]?'checked':''}><span class="tk"></span></label></div>`).join('')}
+      </div>
+      <div class="glass card" style="margin-top:16px"><b>Appearance</b>
+        <div class="opt-row"><div><div class="ot">Theme</div></div><div class="sp"></div><div class="seg"><button class="on">Dark</button><button>Light</button><button>Auto</button></div></div>
+        <div class="opt-row" style="border:none"><div><div class="ot">Density</div></div><div class="sp"></div><div class="seg"><button>Compact</button><button class="on">Cozy</button></div></div>
+      </div>
+    </div>
+  </div>`,
+
+/* ============ ADMIN PAGES ============ */
+/* ===== ADMIN OVERVIEW ===== */
+'adm-overview':()=>`
+  <div class="ph"><div><h3>Admin Overview <span class="adm-tag">admin</span></h3><div class="desc">Platform health &amp; agent operations</div></div>
+    <div class="right"><button class="btn"><span>▷</span>Run Orchestration</button><button class="btn gold"><span>⚗</span>New Agent</button></div></div>
+  <div class="grid g4">
+    ${statCard('Active Agents','7','of 9 configured',1,'')}
+    ${statCard('Runs Today','14','2m avg',1,'')}
+    ${statCard('LLM Cost (24h)','$4.82','gemini + claude',0,'')}
+    ${statCard('System Health','99.9%','all green',1,'')}
+  </div>
+  <div class="grid g2" style="margin-top:16px;grid-template-columns:1.4fr 1fr">
+    <div class="glass tbl-wrap"><div class="tbar"><span class="ttl">Recent Runs</span><span class="cnt">${RUNS.length}</span><div class="sp"></div><button class="btn sm" onclick="go('adm-runs')">View all</button></div>
+      <table><thead><tr><th>Run</th><th>Pipeline</th><th>Mode</th><th>Status</th><th class="r">Duration</th></tr></thead>
+      <tbody>${RUNS.slice(0,5).map(r=>`<tr><td class="mono" style="color:var(--c-t1)">${r[0]}</td><td>${r[1]}</td>
+      <td><span class="tag">${r[3]}</span></td><td><span class="chip ${r[7]==='pass'?'pass':r[7]==='warn'?'warn':'fail'}">${r[5]}</span></td>
+      <td class="r mono muted">${r[6]}</td></tr>`).join('')}</tbody></table></div>
+    <div class="glass card"><b>Provider Status</b>
+      ${PROVIDERS.map(p=>`<div class="opt-row"><div><div class="ot">${p[0]}</div><div class="od">${p[2]}</div></div><div class="sp"></div>
+      <div style="text-align:right"><span class="chip online"><span class="dotb"></span>ONLINE</span><div class="muted mono" style="font-size:10px;margin-top:3px">${p[4]}</div></div></div>`).join('')}
+    </div>
+  </div>`,
+
+/* ===== ADMIN: AGENT FACTORY ===== */
+'adm-factory':()=>`
+  <div class="ph"><div><h3>Agent Factory <span class="adm-tag">admin</span></h3><div class="desc">Create &amp; configure agents · pick provider, model, params, orchestration</div></div>
+    <div class="right"><button class="btn gold" onclick="newAgentModal()"><span>+</span>Create Agent</button></div></div>
+  <div class="banner warn"><span>⚗</span>Provider-agnostic: any agent can run on vLLM, Ollama, Gemini, or Claude. Trade signals stay deterministic; LLMs power reasoning &amp; narration.</div>
+  <div class="glass tbl-wrap"><div class="tbar"><span class="ttl">Configured Agents</span><span class="cnt">${AGENTS.length}</span>
+    <div class="sp"></div><select class="filter"><option>All types</option><option>LLM</option><option>Deterministic</option></select></div>
+    <table><thead><tr><th>Agent</th><th>Type</th><th>Provider</th><th>Model</th><th class="r">Temp</th><th class="r">Accuracy</th><th>Status</th><th></th></tr></thead>
+    <tbody>${AGENTS.map((a,i)=>`<tr>
+      <td><span class="sym" style="font-family:var(--font)">${a[0]}</span><div class="co">${a[1]}</div></td>
+      <td><span class="chip ${a[4]==='llm'?'info':a[4]==='det'?'teal':'neutral'}">${a[4]==='det'?'DETERMINISTIC':a[4]==='sys'?'SYSTEM':'LLM'}</span></td>
+      <td class="mono">${a[4]==='llm'?(i%2?'ollama':i%3?'gemini':'vllm'):'—'}</td>
+      <td class="mono dim">${a[5]}</td>
+      <td class="r mono">${a[4]==='llm'?'0.3'+i:'—'}</td>
+      <td class="r mono pos">${a[8]}</td>
+      <td><label class="toggle"><input type="checkbox" checked><span class="tk"></span></label></td>
+      <td class="r"><button class="btn sm" onclick="editAgentModal(${i})">Configure</button></td>
+    </tr>`).join('')}</tbody></table></div>`,
+
+/* ===== ADMIN: ORCHESTRATIONS ===== */
+'adm-orch':()=>`
+  <div class="ph"><div><h3>Orchestrations <span class="adm-tag">admin</span></h3><div class="desc">Define how agents combine · schedule runs</div></div>
+    <div class="right"><button class="btn gold" onclick="newOrchModal()"><span>+</span>New Orchestration</button></div></div>
+  <div class="glass tbl-wrap"><table><thead><tr><th>Name</th><th>Mode</th><th>Agents</th><th>Coordinator</th><th>Schedule (cron)</th><th>Last Run</th><th>Status</th><th></th></tr></thead>
+  <tbody>${[['Daily Pre-Market','committee_vote','7','vn_engine','0 6 * * 1-5','06:30 today','active'],['Intraday Sweep','parallel','5','vn_engine','0 */2 * * *','13:00 today','active'],['EOD Report','sequential','7','vn_engine','15 16 * * 1-5','16:15 yest','active'],['Risk Recheck','parallel','2','risk_gate','manual','11:00 Aug31','pending']].map((o,i)=>`
+  <tr><td style="color:var(--c-t1);font-weight:600">${o[0]}</td><td><span class="chip info">${o[1]}</span></td>
+  <td class="mono">${o[2]}</td><td class="mono dim">${o[3]}</td><td class="mono muted">${o[4]}</td><td class="muted">${o[5]}</td>
+  <td><span class="chip ${o[6]}"><span class="dotb"></span>${o[6].toUpperCase()}</span></td>
+  <td class="r"><button class="btn sm">Edit</button> <button class="btn sm primary">▷ Run</button></td></tr>`).join('')}</tbody></table></div>
+  <div class="section-t">Orchestration Modes</div>
+  <div class="grid g3">
+    ${[['Sequential','Agents run one after another; each sees prior output','⟶'],['Parallel','All agents run at once; results aggregated by V(n)','⇉'],['Committee Vote','Weighted majority vote via value function','⚖']].map(m=>`
+    <div class="glass card"><div style="font-size:26px;margin-bottom:8px">${m[2]}</div><b>${m[0]}</b><p class="muted" style="font-size:12px;margin-top:6px">${m[1]}</p></div>`).join('')}
+  </div>`,
+
+/* ===== ADMIN: MODEL PROVIDERS ===== */
+'adm-models':()=>`
+  <div class="ph"><div><h3>Model Providers <span class="adm-tag">admin</span></h3><div class="desc">Provider abstraction layer · vLLM · Ollama · Gemini · Claude</div></div>
+    <div class="right"><button class="btn gold"><span>+</span>Add Provider</button></div></div>
+  <div class="glass tbl-wrap"><table><thead><tr><th>Provider</th><th>Type</th><th>Available Models</th><th>Status</th><th class="r">Latency</th><th class="r">Cost</th><th></th></tr></thead>
+  <tbody>${PROVIDERS.map(p=>`<tr>
+    <td><span class="sym" style="font-family:var(--font)">${p[0]}</span></td>
+    <td><span class="chip ${p[1]==='Self-hosted'?'teal':p[1]==='Local'?'info':'warn'}">${p[1]}</span></td>
+    <td class="mono dim" style="font-size:11px">${p[2]}</td>
+    <td><span class="chip online"><span class="dotb"></span>ONLINE</span></td>
+    <td class="r mono">${p[4]}</td><td class="r mono">${p[5]}</td>
+    <td class="r"><button class="btn sm">Configure</button> <button class="btn sm ghost">Test</button></td>
+  </tr>`).join('')}</tbody></table></div>
+  <div class="section-t">Add / Configure Provider</div>
+  <div class="glass card" style="max-width:640px">
+    <div class="form-row"><label>Provider type</label><select class="sel"><option>vLLM (self-hosted GPU)</option><option>Ollama (local)</option><option>Gemini (cloud)</option><option>Claude (cloud)</option></select></div>
+    <div class="row2">
+      <div class="form-row"><label>Endpoint URL</label><input class="inp mono" value="http://localhost:8000/v1"></div>
+      <div class="form-row"><label>API key <span class="hint">cloud only</span></label><input class="inp" type="password" value="sk-••••••••••••"></div>
+    </div>
+    <div class="form-row"><label>Default model</label><input class="inp mono" value="qwen2.5-32b-instruct"></div>
+    <div style="display:flex;gap:8px"><button class="btn primary">Save provider</button><button class="btn ghost">Test connection</button></div>
+  </div>`,
+
+/* ===== ADMIN: RUN HISTORY ===== */
+'adm-runs':()=>`
+  <div class="ph"><div><h3>Run History <span class="adm-tag">admin</span></h3><div class="desc">Every orchestration execution</div></div>
+    <div class="right"><select class="filter"><option>All pipelines</option><option>Daily Pre-Market</option></select>
+    <select class="filter"><option>All status</option><option>Complete</option><option>Failed</option></select></div></div>
+  <div class="glass tbl-wrap"><table><thead><tr><th>Run ID</th><th>Pipeline</th><th>Started</th><th>Mode</th><th>Agents</th><th>Status</th><th class="r">Duration</th><th></th></tr></thead>
+  <tbody>${RUNS.map(r=>`<tr><td class="mono" style="color:var(--c-t1)">${r[0]}</td><td>${r[1]}</td><td class="mono muted">${r[2]}</td>
+  <td><span class="tag">${r[3]}</span></td><td class="mono">${r[4]}</td>
+  <td><span class="chip ${r[7]==='pass'?'pass':r[7]==='warn'?'warn':'fail'}">${r[5]}</span></td><td class="r mono">${r[6]}</td>
+  <td class="r"><button class="btn sm" onclick="viewRun('${r[0]}')">Logs</button></td></tr>`).join('')}</tbody></table></div>`,
+
+/* ===== ADMIN: REPORT BUILDER ===== */
+'adm-reports':()=>`
+  <div class="ph"><div><h3>Report Builder <span class="adm-tag">admin</span></h3><div class="desc">Configure the LLM narration layer for daily reports</div></div></div>
+  <div class="grid g2" style="grid-template-columns:1fr 1fr">
+    <div class="glass card"><b>Generation Settings</b>
+      <div class="form-row" style="margin-top:14px"><label>Report model</label><select class="sel"><option>qwen2.5-32b (vLLM)</option><option>llama-3.3-70b (vLLM)</option><option>gemini-2.0-flash</option><option>claude-opus-4.8</option></select></div>
+      <div class="form-row"><label>Temperature <span class="hint">lower = more factual</span></label>
+        <div class="slider-row"><input type="range" class="slider" min="0" max="100" value="30" oninput="this.nextElementSibling.textContent=(this.value/100).toFixed(2)"><span class="slider-val">0.30</span></div></div>
+      <div class="form-row"><label>Max tokens</label><input class="inp mono" value="2048"></div>
+      <div class="form-row"><label>System prompt</label><textarea class="inp">You are a pre-market analyst. Summarize agent signals and the V(n) consensus into a concise, factual brief. Never invent numbers; cite only provided data.</textarea></div>
+      <button class="btn primary"><span>✦</span>Generate preview</button>
+    </div>
+    <div class="glass card"><b>Schedule &amp; Sections</b>
+      <div class="form-row" style="margin-top:14px"><label>Run schedule (cron)</label><input class="inp mono" value="0 6 * * 1-5"></div>
+      <div class="section-t" style="margin-top:12px">Include sections</div>
+      ${[['Executive summary',1],['Key signals',1],['Risk notes',1],['Agent breakdown',1],['Backtest comparison',0],['Raw data appendix',0]].map(s=>`
+      <div class="opt-row" style="padding:10px 0"><div class="ot">${s[0]}</div><div class="sp"></div><label class="toggle"><input type="checkbox" ${s[1]?'checked':''}><span class="tk"></span></label></div>`).join('')}
+      <div class="section-t" style="margin-top:12px">Deliver to</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <span class="pill-check on"><span class="bx">✓</span>Email</span>
+        <span class="pill-check on"><span class="bx">✓</span>Slack</span>
+        <span class="pill-check"><span class="bx"></span>Webhook</span>
+        <span class="pill-check"><span class="bx"></span>Dashboard only</span>
+      </div>
+    </div>
+  </div>`,
+
+/* ===== ADMIN: USERS ===== */
+'adm-users':()=>`
+  <div class="ph"><div><h3>Users &amp; Roles <span class="adm-tag">admin</span></h3><div class="desc">Access control · ${USERS.length} accounts</div></div>
+    <div class="right"><button class="btn gold"><span>+</span>Invite User</button></div></div>
+  <div class="glass tbl-wrap"><table><thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Last active</th><th></th></tr></thead>
+  <tbody>${USERS.map(u=>`<tr>
+    <td><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:28px;height:28px;font-size:11px">${u[0].split(' ').map(x=>x[0]).join('').slice(0,2)}</div><span style="color:var(--c-t1);font-weight:600">${u[0]}</span></div></td>
+    <td class="mono muted">${u[1]}</td>
+    <td><span class="chip ${u[2].includes('Admin')?'warn':u[2]==='Trader'?'teal':u[2]==='API Service'?'info':'neutral'}">${u[2]}</span></td>
+    <td><span class="chip ${u[3]}"><span class="dotb"></span>${u[3].toUpperCase()}</span></td>
+    <td class="muted">${u[4]}</td>
+    <td class="r"><button class="btn sm">Edit</button> <button class="btn sm danger">Revoke</button></td>
+  </tr>`).join('')}</tbody></table></div>
+  <div class="section-t">Role Permissions</div>
+  <div class="glass tbl-wrap"><table><thead><tr><th>Capability</th><th class="r">Admin</th><th class="r">Trader</th><th class="r">Analyst</th><th class="r">Viewer</th></tr></thead>
+  <tbody>${[['View dashboards',1,1,1,1],['Execute trades',1,1,0,0],['Create agents',1,0,0,0],['Configure providers',1,0,0,0],['Manage users',1,0,0,0],['Generate reports',1,1,1,0]].map(p=>`
+  <tr><td style="color:var(--c-t1)">${p[0]}</td>${[1,2,3,4].map(i=>`<td class="r">${p[i]?'<span class="pos">✓</span>':'<span class="muted">—</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`,
+
+/* ===== ADMIN: LOGS ===== */
+'adm-logs':()=>`
+  <div class="ph"><div><h3>System Logs <span class="adm-tag">admin</span></h3><div class="desc">Live event stream</div></div>
+    <div class="right"><div class="seg"><button class="on">All</button><button>Info</button><button>Warn</button><button>Error</button></div><button class="btn"><span>⤓</span>Export</button></div></div>
+  <div class="glass card"><div class="log">
+    ${[['06:34:12','ok','report','Daily report generated · qwen2.5-32b · 2.1s'],
+       ['06:32:40','info','vn','V(n) aggregation complete · score=0.847'],
+       ['06:32:38','ok','agent','Quantitative agent → BUY NVDA (0.91)'],
+       ['06:32:37','warn','risk','Semis exposure 18% > 15% target'],
+       ['06:32:35','info','orch','committee_vote: 6/7 bullish'],
+       ['06:30:02','info','orch','Run #R-2481 started · Daily Pre-Market'],
+       ['06:30:01','ok','provider','vLLM healthcheck OK · 12ms'],
+       ['06:29:58','info','data','Ingested market + news + rates'],
+       ['06:28:11','err','provider','Gemini rate-limit hit · retrying (2/3)'],
+       ['06:28:00','info','sched','Cron trigger 0 6 * * 1-5 fired']
+    ].map(l=>`<div><span class="ts">${l[0]}</span> <span class="lvl-${l[1]}">[${l[1].toUpperCase()}]</span> <span class="muted">${l[2]}</span> ${l[3]}</div>`).join('')}
+  </div></div>`,
+
+/* ===== ADMIN: DATA SOURCES ===== */
+'adm-data':()=>`
+  <div class="ph"><div><h3>Data Sources <span class="adm-tag">admin</span></h3><div class="desc">Market, news &amp; alternative data feeds</div></div>
+    <div class="right"><button class="btn gold"><span>+</span>Add Source</button></div></div>
+  <div class="glass tbl-wrap"><table><thead><tr><th>Source</th><th>Category</th><th>Refresh</th><th>Status</th><th>Last sync</th><th></th></tr></thead>
+  <tbody>${[['Polygon.io','Market data','realtime','online','live'],['NewsAPI','News feed','1 min','online','12s ago'],['FRED','Macro/rates','1 hr','online','40 min ago'],['Reddit/X','Social sentiment','5 min','online','2 min ago'],['SEC EDGAR','Filings','1 day','offline','1 d ago']].map(d=>`
+  <tr><td style="color:var(--c-t1);font-weight:600">${d[0]}</td><td><span class="tag">${d[1]}</span></td><td class="mono">${d[2]}</td>
+  <td><span class="chip ${d[3]}"><span class="dotb"></span>${d[3].toUpperCase()}</span></td><td class="muted">${d[4]}</td>
+  <td class="r"><button class="btn sm">Configure</button></td></tr>`).join('')}</tbody></table></div>`,
+
+/* ===== ADMIN: PLATFORM SETTINGS ===== */
+'adm-settings':()=>`
+  <div class="ph"><div><h3>Platform Settings <span class="adm-tag">admin</span></h3><div class="desc">Global configuration</div></div></div>
+  <div class="grid g2" style="grid-template-columns:1fr 1fr">
+    <div class="glass card"><b>Backend</b>
+      <div class="kv"><span class="k">API Gateway</span><span class="v">FastAPI · async</span></div>
+      <div class="kv"><span class="k">WebSocket</span><span class="v pos">connected</span></div>
+      <div class="kv"><span class="k">Legacy Flask</span><span class="v warn">read-only</span></div>
+      <div class="kv"><span class="k">Database</span><span class="v">PostgreSQL</span></div>
+      <div class="kv"><span class="k">V(n) engine</span><span class="v">vn_core v3</span></div>
+    </div>
+    <div class="glass card"><b>Feature Flags</b>
+      ${[['Real-time WebSocket push',1],['LLM report narration',1],['Auto-trade execution',0],['Committee voting',1],['Backtest on new agents',1],['Cloud provider fallback',1]].map(f=>`
+      <div class="opt-row" style="padding:11px 0"><div class="ot">${f[0]}</div><div class="sp"></div><label class="toggle"><input type="checkbox" ${f[1]?'checked':''}><span class="tk"></span></label></div>`).join('')}
+    </div>
+  </div>
+  <div class="section-t">Risk Guardrails</div>
+  <div class="glass card" style="max-width:640px">
+    <div class="form-row"><label>Max single-name exposure</label><div class="slider-row"><input type="range" class="slider" min="5" max="40" value="15" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="slider-val">15%</span></div></div>
+    <div class="form-row"><label>Max portfolio beta</label><div class="slider-row"><input type="range" class="slider" min="50" max="200" value="130" oninput="this.nextElementSibling.textContent=(this.value/100).toFixed(2)"><span class="slider-val">1.30</span></div></div>
+    <div class="form-row"><label>Daily loss circuit-breaker</label><input class="inp mono" value="-5.0%"></div>
+    <button class="btn primary">Save guardrails</button>
+  </div>`,
+};
+
+/* ---------------- modals ---------------- */
+function newAgentModal(){openModal(`
+  <div class="modal-h"><span class="adm-tag">factory</span><h3>Create Agent</h3><div class="x" onclick="closeModal()">✕</div></div>
+  <div class="modal-b">
+    <div class="row2">
+      <div class="form-row"><label>Agent name</label><input class="inp" placeholder="e.g. Macro Analyst"></div>
+      <div class="form-row"><label>Role</label><input class="inp" placeholder="e.g. Rates & FX signals"></div>
+    </div>
+    <div class="form-row"><label>Agent type</label>
+      <div class="seg" style="width:100%"><button class="on" style="flex:1">LLM</button><button style="flex:1">Deterministic</button><button style="flex:1">System</button></div></div>
+    <div class="row3">
+      <div class="form-row"><label>Provider</label><select class="sel"><option>vLLM</option><option>Ollama</option><option>Gemini</option><option>Claude</option></select></div>
+      <div class="form-row"><label>Model</label><select class="sel"><option>qwen2.5-32b</option><option>llama-3.3-70b</option><option>gemini-2.0-flash</option><option>claude-opus-4.8</option></select></div>
+      <div class="form-row"><label>Max tokens</label><input class="inp mono" value="1024"></div>
+    </div>
+    <div class="row2">
+      <div class="form-row"><label>Temperature</label><div class="slider-row"><input type="range" class="slider" min="0" max="100" value="30" oninput="this.nextElementSibling.textContent=(this.value/100).toFixed(2)"><span class="slider-val">0.30</span></div></div>
+      <div class="form-row"><label>Top-p</label><div class="slider-row"><input type="range" class="slider" min="0" max="100" value="90" oninput="this.nextElementSibling.textContent=(this.value/100).toFixed(2)"><span class="slider-val">0.90</span></div></div>
+    </div>
+    <div class="form-row"><label>System prompt</label><textarea class="inp" placeholder="You are a specialist agent that…"></textarea></div>
+    <div class="form-row"><label>Weight in V(n) <span class="hint">0–1, accuracy-adjusted at runtime</span></label><input class="inp mono" value="0.15"></div>
+  </div>
+  <div class="modal-f"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="closeModal()">Create Agent</button></div>`);}
+
+function editAgentModal(i){const a=AGENTS[i];openModal(`
+  <div class="modal-h"><div class="agent-ic" style="width:34px;height:34px;font-size:16px;background:rgba(13,204,170,.15);color:${a[3]}">${a[2]}</div><h3>Configure · ${a[0]}</h3><div class="x" onclick="closeModal()">✕</div></div>
+  <div class="modal-b">
+    <div class="banner ${a[4]==='det'?'ok':'info'}"><span>${a[4]==='det'?'✓':'◆'}</span>${a[4]==='det'?'Deterministic agent — no LLM. Fully auditable math.':'LLM agent — provider &amp; params configurable below.'}</div>
+    <div class="row2">
+      <div class="form-row"><label>Name</label><input class="inp" value="${a[0]}"></div>
+      <div class="form-row"><label>Role</label><input class="inp" value="${a[1]}"></div>
+    </div>
+    ${a[4]==='llm'?`
+    <div class="row3">
+      <div class="form-row"><label>Provider</label><select class="sel"><option>vLLM</option><option>Ollama</option><option>Gemini</option><option>Claude</option></select></div>
+      <div class="form-row"><label>Model</label><select class="sel"><option>${a[5]}</option></select></div>
+      <div class="form-row"><label>Max tokens</label><input class="inp mono" value="1024"></div>
+    </div>
+    <div class="form-row"><label>Temperature</label><div class="slider-row"><input type="range" class="slider" min="0" max="100" value="30" oninput="this.nextElementSibling.textContent=(this.value/100).toFixed(2)"><span class="slider-val">0.30</span></div></div>
+    <div class="form-row"><label>System prompt</label><textarea class="inp">You are the ${a[0]} agent. ${a[1]}.</textarea></div>`:`
+    <div class="form-row"><label>Model parameters <span class="hint">deterministic</span></label>
+      <div class="kv"><span class="k">Lookback window</span><span class="v">20 periods</span></div>
+      <div class="kv"><span class="k">Signal threshold</span><span class="v">0.6</span></div>
+      <div class="kv"><span class="k">Smoothing</span><span class="v">EMA-9</span></div></div>`}
+    <div class="form-row"><label>V(n) weight</label><input class="inp mono" value="0.15"></div>
+    <div class="opt-row" style="border:none;padding:12px 0"><div><div class="ot">Enabled</div><div class="od">Include in orchestrations</div></div><div class="sp"></div><label class="toggle"><input type="checkbox" checked><span class="tk"></span></label></div>
+  </div>
+  <div class="modal-f"><button class="btn danger" onclick="closeModal()">Delete</button><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="closeModal()">Save</button></div>`);}
+
+function newOrchModal(){openModal(`
+  <div class="modal-h"><span class="adm-tag">orchestration</span><h3>New Orchestration</h3><div class="x" onclick="closeModal()">✕</div></div>
+  <div class="modal-b">
+    <div class="form-row"><label>Name</label><input class="inp" placeholder="e.g. Midday Sweep"></div>
+    <div class="form-row"><label>Mode</label><div class="seg" style="width:100%"><button style="flex:1">Sequential</button><button style="flex:1">Parallel</button><button class="on" style="flex:1">Committee Vote</button></div></div>
+    <div class="form-row"><label>Coordinator</label><select class="sel"><option>vn_engine (V(n) value function)</option><option>risk_gate</option><option>simple_average</option></select></div>
+    <div class="form-row"><label>Select agents</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">${AGENTS.map((a,i)=>`<span class="pill-check ${i<5?'on':''}"><span class="bx">${i<5?'✓':''}</span>${a[0]}</span>`).join('')}</div></div>
+    <div class="form-row"><label>Schedule (cron)</label><input class="inp mono" value="0 12 * * 1-5"></div>
+  </div>
+  <div class="modal-f"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="closeModal()">Create</button></div>`);}
+
+function viewAgent(i){editAgentModal(i);}
+function viewRun(id){openModal(`
+  <div class="modal-h"><h3>Run ${id} · Logs</h3><div class="x" onclick="closeModal()">✕</div></div>
+  <div class="modal-b"><div class="log">
+    <div><span class="ts">06:30:02</span> <span class="lvl-info">[INFO]</span> Run started · committee_vote · 7 agents</div>
+    <div><span class="ts">06:30:03</span> <span class="lvl-ok">[OK]</span> Data ingested (market, news, rates)</div>
+    <div><span class="ts">06:31:10</span> <span class="lvl-ok">[OK]</span> All agents returned signals</div>
+    <div><span class="ts">06:32:38</span> <span class="lvl-ok">[OK]</span> V(n)=0.847 · consensus BUY</div>
+    <div><span class="ts">06:32:37</span> <span class="lvl-warn">[WARN]</span> Semis exposure over target</div>
+    <div><span class="ts">06:34:12</span> <span class="lvl-ok">[OK]</span> Report generated · 2.1s</div>
+  </div></div>
+  <div class="modal-f"><button class="btn ghost" onclick="closeModal()">Close</button><button class="btn primary" onclick="closeModal()">View Report</button></div>`);}
+function viewPosition(s){openModal(`
+  <div class="modal-h"><span class="sym mono">${s}</span><h3 style="margin-left:8px">Position Detail</h3><div class="x" onclick="closeModal()">✕</div></div>
+  <div class="modal-b"><div class="kv"><span class="k">Quantity</span><span class="v">180 shares</span></div>
+  <div class="kv"><span class="k">Avg cost</span><span class="v">$94.80</span></div>
+  <div class="kv"><span class="k">Current</span><span class="v">$118.42</span></div>
+  <div class="kv"><span class="k">Market value</span><span class="v">$21,315</span></div>
+  <div class="kv"><span class="k">Unrealized P&amp;L</span><span class="v pos">+$4,210 (24.6%)</span></div>
+  <div class="kv"><span class="k">Latest signal</span><span class="v"><span class="chip buy">BUY 0.91</span></span></div>
+  <div style="margin-top:16px">${spark(24,1)}</div></div>
+  <div class="modal-f"><button class="btn danger" onclick="closeModal()">Close position</button><button class="btn ghost" onclick="closeModal()">Dismiss</button><button class="btn primary" onclick="closeModal()">Add to position</button></div>`);}
+function viewSignal(s){openModal(`
+  <div class="modal-h"><span class="sym mono">${s}</span><h3 style="margin-left:8px">Signal Breakdown</h3><div class="x" onclick="closeModal()">✕</div></div>
+  <div class="modal-b"><div style="text-align:center;padding:12px"><div style="font-size:32px;font-weight:800;font-family:var(--mono)" class="pos">BUY</div><div class="chip teal" style="margin-top:6px">V(n) weighted · 0.91</div></div>
+  <div class="section-t">Per-agent contribution</div>
+  ${AGENTS.slice(0,5).map(a=>`<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>${a[0]}</span><span class="mono ${Math.random()>.3?'pos':'neg'}">${(Math.random()>.3?'+':'-')+(Math.random()*0.9).toFixed(2)}</span></div><div class="mini-bar"><i style="width:${40+Math.random()*55}%"></i></div></div>`).join('')}</div>
+  <div class="modal-f"><button class="btn ghost" onclick="closeModal()">Close</button><button class="btn primary" onclick="closeModal()">Execute BUY</button></div>`);}
+
+/* ---------------- render all pages ---------------- */
+const content=$('#content');
+content.innerHTML=Object.entries(PAGES).map(([id,fn])=>`<section class="page" id="pg-${id}">${fn()}</section>`).join('');
+$('#pg-dashboard').classList.add('on');
+fixColors();
+</script>
+</body>
+</html>

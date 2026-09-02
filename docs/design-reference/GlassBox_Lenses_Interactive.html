@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glass Box — The Strategy Lenses (Interactive)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --c-bg:#06090F;--c-bg1:#0A0F1A;--c-bg2:#0D1422;--c-panel:#111B2E;--c-panel2:#172035;--c-raised:#1A2640;
+  --c-border:rgba(255,255,255,.07);--c-border2:rgba(255,255,255,.12);
+  --c-t1:#EDF2FF;--c-t2:#9AACCC;--c-t3:#5C7090;--c-t4:#3A4D66;
+  --c-teal:#0DCCAA;--c-teal2:#0AB898;--c-teal-dim:rgba(13,204,170,.15);--c-teal-glow:rgba(13,204,170,.08);
+  --c-blue:#4D7AFF;--c-green:#0DB87A;--c-gold:#E8A020;--c-red:#E8445A;--c-purple:#A46BFF;--c-cyan:#22D3EE;
+  --font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;--ease:cubic-bezier(.22,.68,0,1.2);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);color:var(--c-t1);background:
+  radial-gradient(1200px 700px at 50% 0%,rgba(13,204,170,.06),transparent 55%),
+  radial-gradient(900px 600px at 10% 90%,rgba(77,122,255,.05),transparent 55%),var(--c-bg);
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;min-height:100vh}
+.mono{font-family:var(--mono)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:12px;border:1px solid var(--c-border2);background:var(--c-panel);color:var(--c-t1);font-weight:700;font-size:13px;cursor:pointer;transition:.2s var(--ease)}
+.btn:hover{transform:translateY(-2px);border-color:var(--c-t4)}
+.btn.primary{background:linear-gradient(135deg,var(--c-teal),var(--c-teal2));color:#04110d;border-color:transparent}
+
+/* section head */
+.sec{padding:64px 0 90px}
+.sec-h{text-align:center;margin-bottom:14px;opacity:0;transform:translateY(24px);transition:.8s var(--ease)}
+.sec-h.in{opacity:1;transform:none}
+.sec-h .tag{font-size:12px;font-family:var(--mono);color:var(--c-teal);letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+.sec-h h3{font-size:38px;font-weight:900;letter-spacing:-.02em;margin:10px 0}
+.sec-h p{font-size:16px;color:var(--c-t2);max-width:640px;margin:0 auto;line-height:1.6}
+
+/* filter tabs — drive the slide */
+.filters{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin:30px 0 14px;opacity:0;transform:translateY(20px);transition:.8s var(--ease) .1s}
+.filters.in{opacity:1;transform:none}
+.chip-f{padding:10px 18px;border-radius:22px;border:1px solid var(--c-border);background:var(--c-panel);color:var(--c-t2);font-size:13px;font-weight:600;cursor:pointer;transition:.25s var(--ease);position:relative}
+.chip-f:hover{border-color:var(--c-border2);color:var(--c-t1)}
+.chip-f.on{background:var(--c-teal);color:#04110d;border-color:transparent;box-shadow:0 6px 20px rgba(13,204,170,.3)}
+.chip-f .cnt{font-family:var(--mono);font-size:10px;opacity:.7;margin-left:4px}
+
+/* progress dots */
+.dots{display:flex;gap:8px;justify-content:center;margin-bottom:26px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--c-raised);cursor:pointer;transition:.3s}
+.dot.on{background:var(--c-teal);width:28px;border-radius:8px}
+
+/* ============ 3D CAROUSEL STAGE ============ */
+.stage-wrap{position:relative;perspective:1600px;height:520px;margin-top:10px}
+.stage{position:relative;width:100%;height:100%;transform-style:preserve-3d}
+.lens{position:absolute;top:50%;left:50%;width:300px;transform-style:preserve-3d;
+  transition:transform .7s var(--ease),opacity .6s var(--ease),filter .6s var(--ease);cursor:pointer;will-change:transform,opacity}
+.lens-card{background:linear-gradient(180deg,rgba(23,32,53,.9),rgba(17,27,46,.7));border:1px solid var(--ac);border-radius:22px;padding:24px;
+  backdrop-filter:blur(16px);box-shadow:0 30px 70px rgba(0,0,0,.6),0 0 40px var(--acg);position:relative;overflow:hidden}
+.lens-card::before{content:'';position:absolute;top:-40%;left:-40%;width:180%;height:80%;background:linear-gradient(120deg,transparent,rgba(255,255,255,.06),transparent);transform:rotate(8deg);opacity:0;transition:.6s}
+.lens.active .lens-card::before{opacity:1;animation:sheen 3s ease-in-out infinite}
+@keyframes sheen{0%{transform:translateX(-60%) rotate(8deg)}100%{transform:translateX(60%) rotate(8deg)}}
+.rank-tag{position:absolute;top:12px;left:12px;font-size:10px;font-family:var(--mono);font-weight:800;color:var(--c-t2);background:rgba(0,0,0,.45);border:1px solid var(--c-border);padding:3px 8px;border-radius:7px}
+.lead-tag{position:absolute;top:0;right:0;font-size:9px;font-family:var(--mono);font-weight:700;color:#04110d;background:linear-gradient(135deg,var(--c-teal),var(--c-teal2));padding:4px 11px;border-bottom-left-radius:10px}
+.portrait-wrap{width:120px;height:120px;margin:8px auto 10px;position:relative;transform:translateZ(40px)}
+.portrait{width:100%;height:100%;border-radius:50%;border:2px solid var(--ac);background:var(--acd);padding:4px;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+.speak-ring{position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--ac);opacity:0}
+.lens.active .speak-ring{animation:speakring 1.4s ease-out infinite}
+@keyframes speakring{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(1.25)}}
+.verify-badge{position:absolute;bottom:4px;right:14px;width:26px;height:26px;border-radius:50%;background:var(--c-teal);border:2px solid var(--c-panel);display:grid;place-items:center;font-size:12px;color:#04110d;font-weight:900}
+.lens .pn{font-size:20px;font-weight:900;text-align:center;transform:translateZ(30px)}
+.lens .pt{font-size:10px;font-family:var(--mono);color:var(--ac);text-transform:uppercase;letter-spacing:.06em;font-weight:700;text-align:center;margin-top:4px;transform:translateZ(30px)}
+.inspired{font-size:11px;color:var(--c-t3);text-align:center;margin-top:10px;padding:9px;background:rgba(0,0,0,.25);border-radius:10px;transform:translateZ(20px)}
+.inspired b{color:var(--c-t2)}.inspired .firm{color:var(--ac);font-weight:600}
+.track{font-family:var(--mono);font-size:11px;color:var(--c-green);font-weight:700;margin-top:5px}
+/* growth/risk */
+.rep{margin-top:14px;transform:translateZ(20px)}
+.rep .rr{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px}
+.rep .rk{width:48px;flex:none;font-family:var(--mono);font-size:9px;text-transform:uppercase;color:var(--c-t3)}
+.rep .rbar{flex:1;height:6px;border-radius:5px;background:rgba(255,255,255,.06);overflow:hidden}
+.rep .rbar i{display:block;height:100%;border-radius:5px;width:0;transition:width 1s var(--ease) .3s}
+.rep .rv{width:26px;text-align:right;font-family:var(--mono);font-weight:700;font-size:11px;flex:none}
+
+/* speech bubble — the "tells its story" element */
+.speech{position:absolute;left:50%;bottom:-4px;transform:translate(-50%,100%);width:340px;max-width:86vw;
+  background:linear-gradient(160deg,rgba(23,32,53,.96),rgba(13,20,34,.96));border:1px solid var(--ac);border-radius:16px;
+  padding:16px 18px;box-shadow:0 20px 50px rgba(0,0,0,.6),0 0 26px var(--acg);opacity:0;pointer-events:none;transition:.5s var(--ease);z-index:20}
+.speech.show{opacity:1;transform:translate(-50%,calc(100% + 14px))}
+.speech::before{content:'';position:absolute;top:-8px;left:50%;transform:translateX(-50%) rotate(45deg);width:16px;height:16px;background:rgba(23,32,53,.96);border-left:1px solid var(--ac);border-top:1px solid var(--ac)}
+.speech .sp-h{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.speech .sp-ic{width:26px;height:26px;border-radius:8px;background:var(--acd);color:var(--ac);display:grid;place-items:center;font-size:13px;font-weight:800;font-family:var(--mono);flex:none}
+.speech .sp-nm{font-size:12px;font-weight:800}
+.speech .sp-wave{margin-left:auto;display:flex;gap:2px;align-items:flex-end;height:16px}
+.speech .sp-wave i{width:3px;background:var(--ac);border-radius:2px;animation:wave 1s ease-in-out infinite}
+.speech .sp-wave i:nth-child(2){animation-delay:.15s}.speech .sp-wave i:nth-child(3){animation-delay:.3s}.speech .sp-wave i:nth-child(4){animation-delay:.45s}
+@keyframes wave{0%,100%{height:4px}50%{height:15px}}
+.speech .sp-txt{font-size:13px;line-height:1.6;color:var(--c-t1);font-style:italic;min-height:60px}
+.speech .sp-cursor{display:inline-block;width:2px;height:14px;background:var(--ac);vertical-align:middle;animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* nav arrows */
+.arrows{display:flex;justify-content:center;gap:14px;margin-top:120px}
+.arrow{width:46px;height:46px;border-radius:50%;background:var(--c-panel);border:1px solid var(--c-border2);color:var(--c-t1);font-size:18px;cursor:pointer;display:grid;place-items:center;transition:.2s var(--ease)}
+.arrow:hover{background:var(--c-panel2);transform:scale(1.08);border-color:var(--c-teal);color:var(--c-teal)}
+.play-toggle{width:auto;padding:0 16px;font-family:var(--mono);font-size:12px;font-weight:700;gap:6px}
+
+.hint{text-align:center;font-size:12px;color:var(--c-t4);font-family:var(--mono);margin-top:20px}
+@media(max-width:640px){.lens{width:260px}.sec-h h3{font-size:28px}}
+</style>
+</head>
+<body>
+
+<section class="sec"><div class="wrap">
+  <div class="sec-h" id="secH">
+    <div class="tag">The Strategy Lenses</div>
+    <h3>Nine legendary lenses. One audited score.</h3>
+    <p>Each lens is pretrained on a legendary investor's documented strategy and reads your holdings for growth and risk — every view traces back to the same audited data. Lenses inform; they never advise.</p>
+  </div>
+
+  <div class="filters" id="filters">
+    <div class="chip-f on" data-f="all">All <span class="cnt" id="cnt-all"></span></div>
+    <div class="chip-f" data-f="value">Value / GARP <span class="cnt" id="cnt-value"></span></div>
+    <div class="chip-f" data-f="quant">Quant <span class="cnt" id="cnt-quant"></span></div>
+    <div class="chip-f" data-f="macro">Macro <span class="cnt" id="cnt-macro"></span></div>
+    <div class="chip-f" data-f="multi">Multi-Strategy <span class="cnt" id="cnt-multi"></span></div>
+  </div>
+  <div class="dots" id="dots"></div>
+
+  <div class="stage-wrap"><div class="stage" id="stage"></div></div>
+
+  <div class="arrows">
+    <button class="arrow" id="prev" title="Previous">‹</button>
+    <button class="arrow play-toggle" id="play" title="Autoplay">⏸ auto</button>
+    <button class="arrow" id="next" title="Next">›</button>
+  </div>
+  <div class="hint">click a lens to hear its story · drag / arrows to slide · filter to spin the desk</div>
+</div></section>
+
+<script>
+const RGB={'--c-teal':'13,204,170','--c-blue':'77,122,255','--c-gold':'232,160,32','--c-red':'232,68,90','--c-purple':'164,107,255','--c-green':'13,184,122','--c-cyan':'34,211,238'};
+
+/* ---- portrait (original, not likeness) ---- */
+function portrait(p,color){
+  const ac=`rgb(${RGB[color]})`,acd=`rgba(${RGB[color]},.15)`;
+  const skin=p.skin,skinSh=shade(p.skin,-18),hair=p.hair,hairSh=shade(p.hair,-20),suit=p.suit,suitSh=shade(p.suit,-22),shirt=p.shirt||'#F4F7FF';
+  return `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+    <defs><radialGradient id="pg${p.id}" cx="50%" cy="30%" r="80%"><stop offset="0%" stop-color="${acd}"/><stop offset="100%" stop-color="rgba(10,15,26,.85)"/></radialGradient>
+    <linearGradient id="sh${p.id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${skin}"/><stop offset="100%" stop-color="${skinSh}"/></linearGradient></defs>
+    <circle cx="60" cy="60" r="60" fill="url(#pg${p.id})"/>
+    <path d="M18 120 q0 -30 42 -30 q42 0 42 30 z" fill="${suit}"/>
+    <path d="M60 90 l-11 30 h22 z" fill="${shirt}"/><path d="M60 90 l-9 12 9 6 9 -6 z" fill="${suitSh}"/>
+    ${p.tie?`<path d="M60 96 l-4 5 4 16 4 -16 z" fill="${p.tie}"/>`:''}
+    <path d="M52 78 h16 v12 q-8 6 -16 0 z" fill="url(#sh${p.id})"/>
+    <ellipse cx="60" cy="56" rx="22" ry="24" fill="url(#sh${p.id})"/>
+    <circle cx="38" cy="58" r="4" fill="${skinSh}"/><circle cx="82" cy="58" r="4" fill="${skinSh}"/>
+    ${hairStyle(p.hairStyle,hair,hairSh)}
+    <path d="M48 48 q4 -2 8 -0.5" stroke="${hairSh}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M64 47.5 q4 -1.5 8 0.5" stroke="${hairSh}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    ${p.glasses?`<circle cx="52" cy="54" r="7.5" fill="#fff" opacity=".08"/><circle cx="68" cy="54" r="7.5" fill="#fff" opacity=".08"/><circle cx="52" cy="54" r="7.5" fill="none" stroke="${p.glassCol||ac}" stroke-width="2"/><circle cx="68" cy="54" r="7.5" fill="none" stroke="${p.glassCol||ac}" stroke-width="2"/><line x1="59.5" y1="54" x2="60.5" y2="54" stroke="${p.glassCol||ac}" stroke-width="2"/>`:''}
+    <ellipse cx="52" cy="54" rx="2.6" ry="3" fill="#1c2536"/><ellipse cx="68" cy="54" rx="2.6" ry="3" fill="#1c2536"/>
+    <circle cx="53" cy="53" r=".9" fill="#fff"/><circle cx="69" cy="53" r=".9" fill="#fff"/>
+    <path d="M60 56 l-2 8 q2 1.5 4 0" stroke="${skinSh}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    ${mouthStyle(p.mouth)}${p.facialHair?facialHair(p.facialHair,hairSh):''}</svg>`;
+}
+function hairStyle(s,h){
+  if(s==='short')return `<path d="M38 52 q0 -26 22 -26 q22 0 22 26 q-6 -14 -22 -14 q-16 0 -22 14" fill="${h}"/>`;
+  if(s==='balding')return `<path d="M40 46 q5 -16 20 -16 q15 0 20 16 q-9 -7 -20 -7 q-6 0 -11 2" fill="${h}" opacity=".7"/>`;
+  if(s==='silver')return `<path d="M38 52 q0 -26 22 -26 q22 0 22 26 q-6 -14 -22 -14 q-16 0 -22 14" fill="#C8CEDA"/>`;
+  return `<path d="M38 52 q0 -26 22 -26 q22 0 22 26 q-6 -14 -22 -14 q-16 0 -22 14" fill="${h}"/>`;
+}
+function mouthStyle(m){const c='#9E5A44';
+  if(m==='confident')return `<path d="M53 68 q7 5 14 0" stroke="${c}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
+  if(m==='warm')return `<path d="M52 67 q8 7 16 0 q-8 3 -16 0" fill="#fff" stroke="${c}" stroke-width="1.4"/>`;
+  if(m==='neutral')return `<path d="M54 68 h12" stroke="${c}" stroke-width="2.2" stroke-linecap="round"/>`;
+  return `<path d="M53 68 q7 5 14 0" stroke="${c}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;}
+function facialHair(t,c){if(t==='beard')return `<path d="M40 60 q0 22 20 24 q20 -2 20 -24 q-6 12 -20 12 q-14 0 -20 -12" fill="${c}" opacity=".85"/>`;return '';}
+function shade(hex,amt){let c=hex.replace('#','');if(c.length===3)c=c.split('').map(x=>x+x).join('');
+  let r=parseInt(c.slice(0,2),16),g=parseInt(c.slice(2,4),16),b=parseInt(c.slice(4,6),16);
+  r=Math.max(0,Math.min(255,r+amt));g=Math.max(0,Math.min(255,g+amt));b=Math.max(0,Math.min(255,b+amt));
+  return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');}
+
+/* ---- lenses ---- */
+const AGENTS=[
+  {id:'buf',code:'V',name:'The Value Lens',title:'Value & Buy-and-Hold',color:'--c-gold',cls:'value',rank:'',lead:true,
+   inspiredName:'Buffett & Munger',firm:'Berkshire Hathaway',strat:'Value / Buy & Hold',track:'~20% annual, 50+ yrs',growth:70,risk:18,
+   story:'I read your holdings like a business owner, not a ticker-watcher. Durable moat, honest management, cash that compounds — if the business is wonderful and the price is fair, time does the rest. I flag the ones you should never sell.',
+   look:{skin:'#E8CBA8',hair:'#D8DCE4',hairStyle:'balding',suit:'#2A2416',shirt:'#FFFDF5',tie:'#E8A020',glasses:true,glassCol:'#8a6a2a',mouth:'warm'}},
+  {id:'lyn',code:'G',name:'The GARP Lens',title:'Growth at Reasonable Price',color:'--c-green',cls:'value',rank:'',lead:false,
+   inspiredName:'Peter Lynch',firm:'Fidelity Magellan',strat:'GARP',track:'29.2% avg annual (1977–90)',growth:86,risk:34,
+   story:'I hunt growth hiding in plain sight — the everyday company Wall Street ignored. I check the PEG, not just the P/E, so you pay a fair price for real earnings. Turn over enough rocks and the tenbagger is already in your cart.',
+   look:{skin:'#EAC9A0',hair:'#E4E8EE',hairStyle:'silver',suit:'#14342E',shirt:'#F0FFF9',tie:'#0DB87A',mouth:'warm'}},
+  {id:'gri',code:'X',name:'The Multi-Strat Lens',title:'Multi-Strategy',color:'--c-teal',cls:'multi',rank:'#1 · ~$74B',lead:true,
+   inspiredName:'Ken Griffin',firm:'Citadel',strat:'Multi-Strategy',track:'~$74B lifetime net gains',growth:82,risk:40,
+   story:'I look at your book as many uncorrelated bets at once — equities, credit, commodities — each on a tight risk leash. My edge is not one big call; it is a hundred small ones that never blow up together.',
+   look:{skin:'#E8B892',hair:'#3A3F4A',hairStyle:'short',suit:'#0E2E2A',shirt:'#EAFDF9',tie:'#0DCCAA',mouth:'confident'}},
+  {id:'dal',code:'M',name:'The Macro Lens',title:'Global Macro / Risk Parity',color:'--c-purple',cls:'macro',rank:'#2 · ~$58B',lead:false,
+   inspiredName:'Ray Dalio',firm:'Bridgewater',strat:'Global Macro',track:'~$58B lifetime net gains',growth:74,risk:44,
+   story:'I balance your portfolio against every economic weather — growth, inflation, both rising, both falling. I do not predict the storm; I make sure you hold up in all of them. Principles over forecasts, always.',
+   look:{skin:'#DFB98E',hair:'#C8CEDA',hairStyle:'silver',suit:'#2E1E4A',shirt:'#F3EEFF',glasses:true,glassCol:'#5a3a8a',mouth:'neutral'}},
+  {id:'sim',code:'Q',name:'The Quant Lens',title:'Quantitative',color:'--c-cyan',cls:'quant',rank:'#3 · ~$51B',lead:false,
+   inspiredName:'Jim Simons',firm:'Renaissance Tech',strat:'Quantitative',track:'~$51B lifetime net gains',growth:90,risk:28,
+   story:'I see patterns in your holdings no human eye catches — faint, statistical, fleeting. I let the mathematics speak and I never override the model on a hunch. Signal, not story. Discipline, not drama.',
+   look:{skin:'#E4C4A0',hair:'#D8DCE4',hairStyle:'silver',suit:'#123A44',shirt:'#E6FBFF',facialHair:'beard',mouth:'confident'}},
+  {id:'eng',code:'A',name:'The Allocation Lens',title:'Multi-Strat Risk',color:'--c-teal',cls:'multi',rank:'#4 · ~$50B',lead:false,
+   inspiredName:'Izzy Englander',firm:'Millennium',strat:'Multi-Strategy',track:'~$50B lifetime net gains',growth:68,risk:22,
+   story:'I treat your book like a floor of specialist teams on tight leashes. The moment a position breaches its risk limit, it gets cut — no debate, no ego. Consistency is the alpha; the drawdown you avoid is the return you keep.',
+   look:{skin:'#D6A470',hair:'#C8CEDA',hairStyle:'silver',suit:'#123040',shirt:'#EAF6FF',glasses:true,glassCol:'#2a6a8a',mouth:'neutral'}},
+  {id:'sha',code:'D',name:'The Algo Lens',title:'Quant / Multi-Strategy',color:'--c-blue',cls:'quant',rank:'#5 · ~$43B',lead:false,
+   inspiredName:'David Shaw',firm:'D.E. Shaw',strat:'Quant',track:'~$43B lifetime net gains',growth:80,risk:30,
+   story:'I was doing computational finance before it had a name. Every inefficiency in your holdings is a problem to be solved with code and clean data — not intuition. If the math does not confirm it, I do not act on it.',
+   look:{skin:'#C68642',hair:'#2B2B33',hairStyle:'short',suit:'#1E2A44',shirt:'#EAF0FF',tie:'#4D7AFF',facialHair:'beard',mouth:'confident'}},
+  {id:'sor',code:'R',name:'The Reflexive Lens',title:'Global Macro',color:'--c-red',cls:'macro',rank:'#6 · ~$41B',lead:false,
+   inspiredName:'George Soros',firm:'Soros Fund Mgmt',strat:'Global Macro',track:'~$41B lifetime net gains',growth:78,risk:58,
+   story:'I watch how perception bends reality in your positions — the feedback loop between what people believe and what then becomes true. When the thesis is right and the crowd is wrong, that gap is the opportunity.',
+   look:{skin:'#E0BE98',hair:'#D8DCE4',hairStyle:'balding',suit:'#3A1E22',shirt:'#FFECEE',tie:'#E8445A',glasses:true,glassCol:'#8a3a3a',mouth:'confident'}},
+];
+
+/* ---- state ---- */
+let filter='all', view=[], cur=0, autoplay=true, autoTimer=null, typeTimer=null;
+const stage=document.getElementById('stage');
+
+function applyFilter(f){
+  filter=f; view=AGENTS.filter(a=>f==='all'||a.cls===f); cur=0;
+  buildStage(); buildDots(); layout(); speak(view[0]);
+}
+function buildStage(){
+  stage.innerHTML='';
+  view.forEach((a,i)=>{
+    const el=document.createElement('div');el.className='lens';el.dataset.i=i;
+    el.style.setProperty('--ac',`var(${a.color})`);el.style.setProperty('--acd',`rgba(${RGB[a.color]},.15)`);el.style.setProperty('--acg',`rgba(${RGB[a.color]},.3)`);
+    const gcol=a.growth>=70?'--c-green':a.growth>=50?'--c-gold':'--c-t3';
+    const rcol=a.risk<=25?'--c-green':a.risk<=45?'--c-gold':'--c-red';
+    el.innerHTML=`
+      <div class="lens-card">
+        ${a.rank?`<div class="rank-tag">${a.rank}</div>`:''}
+        ${a.lead?'<div class="lead-tag">LEAD LENS</div>':''}
+        <div class="portrait-wrap"><div class="speak-ring"></div><div class="portrait">${portrait({...a.look,id:a.id},a.color)}</div><div class="verify-badge">✓</div></div>
+        <div class="pn">${a.name}</div><div class="pt">${a.title}</div>
+        <div class="inspired">Pretrained on <b>${a.inspiredName}</b><br><span class="firm">${a.firm}</span> · ${a.strat}<div class="track">📈 ${a.track}</div></div>
+        <div class="rep">
+          <div class="rr"><span class="rk">Growth</span><span class="rbar"><i data-w="${a.growth}" style="background:var(${gcol})"></i></span><span class="rv" style="color:var(${gcol})">${a.growth}</span></div>
+          <div class="rr"><span class="rk">Risk</span><span class="rbar"><i data-w="${a.risk}" style="background:var(${rcol})"></i></span><span class="rv" style="color:var(${rcol})">${a.risk}</span></div>
+        </div>
+      </div>`;
+    el.onclick=()=>{ if(i===cur){speak(view[cur]);} else {cur=i;layout();speak(view[cur]);} stopAuto(); };
+    stage.appendChild(el);
+  });
+  // speech bubble (single, moves with active)
+  let sp=document.getElementById('speech');
+  if(!sp){sp=document.createElement('div');sp.className='speech';sp.id='speech';
+    sp.innerHTML=`<div class="sp-h"><div class="sp-ic" id="spIc"></div><div class="sp-nm" id="spNm"></div>
+      <div class="sp-wave"><i style="height:6px"></i><i style="height:12px"></i><i style="height:8px"></i><i style="height:14px"></i></div></div>
+      <div class="sp-txt"><span id="spTxt"></span><span class="sp-cursor"></span></div>`;
+    stage.parentElement.appendChild(sp);}
+}
+function buildDots(){
+  const d=document.getElementById('dots');d.innerHTML='';
+  view.forEach((a,i)=>{const dot=document.createElement('div');dot.className='dot'+(i===cur?' on':'');
+    dot.onclick=()=>{cur=i;layout();speak(view[cur]);stopAuto();};d.appendChild(dot);});
+}
+function layout(){
+  const lenses=stage.querySelectorAll('.lens');const n=view.length;
+  lenses.forEach((el,i)=>{
+    let off=i-cur;
+    // wrap to shortest path for carousel feel
+    if(off>n/2)off-=n; if(off<-n/2)off+=n;
+    const abs=Math.abs(off);
+    const x=off*150, z=-abs*220, ry=off*-34, op=abs>2?0:1-abs*0.28, sc=1-abs*0.06;
+    el.style.transform=`translate(-50%,-50%) translateX(${x}px) translateZ(${z}px) rotateY(${ry}deg) scale(${sc})`;
+    el.style.opacity=op;el.style.zIndex=100-abs;el.style.filter=abs?`brightness(${1-abs*0.18})`:'none';
+    el.classList.toggle('active',off===0);
+    if(off===0){el.querySelectorAll('.rbar i').forEach(b=>b.style.width=b.dataset.w+'%');}
+    else {el.querySelectorAll('.rbar i').forEach(b=>b.style.width='0');}
+  });
+  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('on',i===cur));
+}
+/* typewriter speech */
+function speak(a){
+  if(!a)return;
+  const sp=document.getElementById('speech');const txt=document.getElementById('spTxt');
+  document.getElementById('spIc').textContent=a.code;
+  document.getElementById('spIc').style.background=`rgba(${RGB[a.color]},.15)`;
+  document.getElementById('spIc').style.color=`rgb(${RGB[a.color]})`;
+  document.getElementById('spNm').textContent=a.inspiredName+' — '+a.title;
+  sp.style.setProperty('--ac',`var(${a.color})`);sp.style.setProperty('--acg',`rgba(${RGB[a.color]},.3)`);
+  sp.style.borderColor=`rgb(${RGB[a.color]})`;
+  sp.classList.add('show');
+  clearInterval(typeTimer);txt.textContent='';
+  let i=0;const s=a.story;
+  typeTimer=setInterval(()=>{txt.textContent=s.slice(0,i++);if(i>s.length)clearInterval(typeTimer);},18);
+}
+function nextL(){cur=(cur+1)%view.length;layout();speak(view[cur]);}
+function prevL(){cur=(cur-1+view.length)%view.length;layout();speak(view[cur]);}
+
+/* autoplay */
+function startAuto(){autoplay=true;document.getElementById('play').textContent='⏸ auto';clearInterval(autoTimer);autoTimer=setInterval(nextL,4200);}
+function stopAuto(){autoplay=false;document.getElementById('play').textContent='▶ play';clearInterval(autoTimer);}
+document.getElementById('play').onclick=()=>autoplay?stopAuto():startAuto();
+document.getElementById('next').onclick=()=>{nextL();stopAuto();};
+document.getElementById('prev').onclick=()=>{prevL();stopAuto();};
+
+/* filters */
+document.getElementById('filters').addEventListener('click',e=>{const chip=e.target.closest('.chip-f');if(!chip)return;
+  document.querySelectorAll('.chip-f').forEach(c=>c.classList.remove('on'));chip.classList.add('on');
+  // little spin feedback
+  stage.style.transition='transform .5s var(--ease)';stage.style.transform='rotateY(8deg)';
+  setTimeout(()=>{stage.style.transform='rotateY(0)';},260);
+  applyFilter(chip.dataset.f);});
+
+/* counts */
+['all','value','quant','macro','multi'].forEach(f=>{
+  const el=document.getElementById('cnt-'+f);if(el)el.textContent=f==='all'?AGENTS.length:AGENTS.filter(a=>a.cls===f).length;});
+
+/* drag to slide */
+let dragX=null;
+stage.addEventListener('pointerdown',e=>{dragX=e.clientX;});
+addEventListener('pointerup',e=>{if(dragX===null)return;const dx=e.clientX-dragX;if(Math.abs(dx)>60){dx<0?nextL():prevL();stopAuto();}dragX=null;});
+
+/* scroll reveal */
+const io=new IntersectionObserver(es=>{es.forEach(en=>{if(en.isIntersecting){
+  document.getElementById('secH').classList.add('in');document.getElementById('filters').classList.add('in');
+  if(!view.length){applyFilter('all');startAuto();}
+}});},{threshold:.2});
+io.observe(document.getElementById('secH'));
+
+/* keyboard */
+addEventListener('keydown',e=>{if(e.key==='ArrowRight'){nextL();stopAuto();}if(e.key==='ArrowLeft'){prevL();stopAuto();}});
+
+/* init if already visible */
+if(document.getElementById('secH').getBoundingClientRect().top<innerHeight){applyFilter('all');document.getElementById('secH').classList.add('in');document.getElementById('filters').classList.add('in');startAuto();}
+</script>
+</body>
+</html>

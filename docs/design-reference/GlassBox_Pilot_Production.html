@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glass Box — See the math. Trust the data.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --c-bg:#06090F;--c-bg1:#0A0F1A;--c-bg2:#0D1422;--c-bg3:#101929;
+  --c-panel:#111B2E;--c-panel2:#172035;--c-raised:#1A2640;
+  --c-border:rgba(255,255,255,.07);--c-border2:rgba(255,255,255,.12);
+  --c-t1:#EDF2FF;--c-t2:#9AACCC;--c-t3:#5C7090;--c-t4:#3A4D66;
+  --c-teal:#0DCCAA;--c-teal2:#0AB898;--c-teal-dim:rgba(13,204,170,.15);--c-teal-glow:rgba(13,204,170,.08);
+  --c-blue:#4D7AFF;--c-blue-dim:rgba(77,122,255,.1);
+  --c-green:#0DB87A;--c-green-dim:rgba(13,184,122,.1);
+  --c-gold:#E8A020;--c-gold-dim:rgba(232,160,32,.12);
+  --c-red:#E8445A;--c-red-dim:rgba(232,68,90,.1);--c-purple:#A46BFF;--c-cyan:#22D3EE;
+  --font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  --r1:6px;--r2:10px;--r3:14px;--r4:20px;
+  --sh-md:0 4px 16px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3);--sh-lg:0 12px 40px rgba(0,0,0,.6),0 4px 12px rgba(0,0,0,.4);
+  --sh-teal:0 0 0 1px rgba(13,204,170,.25),0 4px 20px rgba(13,204,170,.1);
+  --ease:cubic-bezier(.22,.68,0,1.2);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);color:var(--c-t1);background:var(--c-bg);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.mono{font-family:var(--mono)}a{color:inherit;text-decoration:none}
+::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:var(--c-raised);border-radius:8px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+.teal{color:var(--c-teal)}.green{color:var(--c-green)}.red{color:var(--c-red)}.gold{color:var(--c-gold)}.muted{color:var(--c-t3)}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:12px;border:1px solid var(--c-border2);background:var(--c-panel);color:var(--c-t1);font-weight:700;font-size:14px;cursor:pointer;transition:.2s var(--ease)}
+.btn:hover{transform:translateY(-2px);border-color:var(--c-t4)}
+.btn.primary{background:linear-gradient(135deg,var(--c-teal),var(--c-teal2));color:#04110d;border-color:transparent;box-shadow:var(--sh-teal)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.sm{padding:9px 15px;font-size:13px}.btn.block{width:100%;justify-content:center}.btn.ghost{background:transparent}
+
+/* nav */
+nav{position:sticky;top:0;z-index:60;backdrop-filter:blur(16px);background:rgba(6,9,15,.72);border-bottom:1px solid var(--c-border)}
+nav .wrap{display:flex;align-items:center;gap:14px;padding:13px 24px}
+.logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--c-teal),var(--c-blue));display:grid;place-items:center;font-weight:900;color:#04110d;font-size:13px}
+nav h1{font-size:16px;font-weight:800;letter-spacing:-.02em}
+nav .links{margin-left:auto;display:flex;gap:22px;font-size:14px;font-weight:600;color:var(--c-t2);align-items:center}
+nav .links a:hover{color:var(--c-t1)}
+nav .acc{font-family:var(--mono);font-size:11px;color:var(--c-green);background:var(--c-green-dim);border:1px solid rgba(13,184,122,.3);padding:5px 10px;border-radius:20px}
+@media(max-width:900px){nav .links a:not(.acc){display:none}}
+
+/* ---- SLIDING AGENT BANNER (the missing piece) ---- */
+.agentbar{background:var(--c-bg1);border-bottom:1px solid var(--c-border);overflow:hidden;padding:10px 0;position:relative}
+.agentbar::before,.agentbar::after{content:'';position:absolute;top:0;bottom:0;width:80px;z-index:2;pointer-events:none}
+.agentbar::before{left:0;background:linear-gradient(90deg,var(--c-bg1),transparent)}
+.agentbar::after{right:0;background:linear-gradient(270deg,var(--c-bg1),transparent)}
+.agent-marq{display:flex;gap:14px;white-space:nowrap;width:max-content;animation:amarq 40s linear infinite}
+.agentbar:hover .agent-marq{animation-play-state:paused}
+@keyframes amarq{to{transform:translateX(-50%)}}
+.abadge{display:inline-flex;align-items:center;gap:8px;padding:6px 13px;border-radius:20px;border:1px solid var(--ac);background:var(--acd);font-size:12px;font-weight:600;flex:none}
+.abadge .ai{width:20px;height:20px;border-radius:50%;background:var(--ac);color:#04110d;display:grid;place-items:center;font-size:10px;font-weight:800;font-family:var(--mono)}
+.abadge .spec{color:var(--c-t3);font-size:11px}
+
+/* hero */
+.hero{position:relative;padding:56px 0 30px;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;z-index:0;background:radial-gradient(900px 500px at 78% 0%,rgba(13,204,170,.08),transparent 55%),radial-gradient(800px 500px at 8% 50%,rgba(77,122,255,.06),transparent 55%)}
+.hero .wrap{position:relative;z-index:2;display:grid;grid-template-columns:1.05fr .95fr;gap:44px;align-items:center}
+@media(max-width:960px){.hero .wrap{grid-template-columns:1fr;gap:30px}}
+.hero .kick{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;font-family:var(--mono);color:var(--c-teal);background:var(--c-teal-dim);border:1px solid rgba(13,204,170,.28);padding:7px 14px;border-radius:20px;margin-bottom:20px}
+.hero h2{font-size:52px;line-height:1.03;font-weight:900;letter-spacing:-.03em;margin-bottom:18px}
+.hero h2 .grad{background:linear-gradient(120deg,var(--c-teal),var(--c-blue));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p.lede{font-size:17px;color:var(--c-t2);line-height:1.6;max-width:520px;margin-bottom:24px}
+.hero-cta{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+.checks{display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:var(--c-t2)}
+.checks span{display:inline-flex;align-items:center;gap:6px}.checks .ck{color:var(--c-teal);font-weight:800}
+
+/* verification card (mirrors live site) */
+.vcard{background:linear-gradient(160deg,rgba(23,32,53,.8),rgba(17,27,46,.6));border:1px solid var(--c-border2);border-radius:18px;padding:20px;backdrop-filter:blur(16px);box-shadow:var(--sh-lg)}
+.vcard .vh{display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:11px;font-family:var(--mono);color:var(--c-t3)}
+.vcard .vh .live{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--c-teal)}
+.vcard .vh .live .d{width:7px;height:7px;border-radius:50%;background:var(--c-teal);animation:bk 1.4s infinite}
+@keyframes bk{0%,100%{box-shadow:0 0 0 0 rgba(13,204,170,.6)}50%{box-shadow:0 0 0 5px rgba(13,204,170,0)}}
+.score-row{display:flex;align-items:center;gap:16px;padding:14px;background:var(--c-bg);border-radius:12px;border:1px solid var(--c-border);margin-bottom:12px}
+.score-big{font-size:44px;font-weight:900;font-family:var(--mono);color:var(--c-green);line-height:1}
+.score-row .sm-lbl{font-size:10px;color:var(--c-t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em}
+.score-row .co{font-weight:700;font-size:15px}.score-row .ex{font-size:11px;color:var(--c-t3)}
+.verified-chip{margin-left:auto;font-size:10px;font-family:var(--mono);color:var(--c-teal);background:var(--c-teal-dim);border:1px solid rgba(13,204,170,.3);padding:4px 9px;border-radius:7px}
+.metric-line{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--c-border);font-size:13px}
+.metric-line:last-of-type{border:none}
+.metric-line .mk{color:var(--c-t2)}.metric-line .mv{font-family:var(--mono);font-weight:700}.metric-line .msrc{font-size:10px;color:var(--c-t4);font-family:var(--mono)}
+.audit-strip{margin-top:12px;padding:10px 12px;background:var(--c-teal-glow);border:1px solid rgba(13,204,170,.25);border-radius:10px;font-size:12px;color:var(--c-teal);display:flex;align-items:center;gap:8px}
+
+/* stat trio (audit transparency, from live) */
+.audit-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}
+.audit-stats .as{text-align:center;padding:16px;background:var(--c-bg2);border:1px solid var(--c-border);border-radius:12px}
+.audit-stats .as .n{font-size:26px;font-weight:900;font-family:var(--mono)}
+.audit-stats .as .l{font-size:10px;color:var(--c-t3);margin-top:3px}
+
+/* sections */
+.sec{padding:60px 0}
+.sec-h{text-align:center;margin-bottom:38px}
+.sec-h .tag{font-size:12px;font-family:var(--mono);color:var(--c-teal);letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+.sec-h h3{font-size:34px;font-weight:900;letter-spacing:-.02em;margin:10px 0}
+.sec-h p{font-size:16px;color:var(--c-t2);max-width:620px;margin:0 auto}
+
+/* pipeline (A1->A6) */
+.pipe{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:820px){.pipe{grid-template-columns:1fr}}
+.pstep{background:linear-gradient(160deg,rgba(23,32,53,.6),rgba(17,27,46,.4));border:1px solid var(--c-border);border-radius:16px;padding:24px;position:relative}
+.pstep .pnum{font-family:var(--mono);font-size:11px;color:var(--c-teal);font-weight:700;letter-spacing:.1em}
+.pstep .pic{width:44px;height:44px;border-radius:12px;background:var(--c-teal-dim);color:var(--c-teal);display:grid;place-items:center;font-size:20px;margin:12px 0}
+.pstep h4{font-size:16px;font-weight:800;margin-bottom:8px}
+.pstep p{font-size:13px;color:var(--c-t3);line-height:1.6}
+.pstep .pag{font-size:10px;font-family:var(--mono);color:var(--c-t4);margin-top:12px}
+
+/* ML provenance strip (the "trained/trusted data" gap) */
+.ml-strip{background:linear-gradient(160deg,rgba(23,32,53,.6),rgba(17,27,46,.4));border:1px solid var(--c-border);border-radius:20px;padding:30px}
+.ml-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:20px}
+@media(max-width:820px){.ml-grid{grid-template-columns:1fr 1fr}}
+.ml-item{padding:16px;background:var(--c-bg2);border:1px solid var(--c-border);border-radius:12px}
+.ml-item .mi-ic{font-size:20px;margin-bottom:8px}
+.ml-item .mi-t{font-size:13px;font-weight:800;margin-bottom:4px}
+.ml-item .mi-d{font-size:11px;color:var(--c-t3);line-height:1.5}
+.ml-item .mi-tag{font-size:9px;font-family:var(--mono);color:var(--c-teal);margin-top:8px}
+
+/* legends roster (verification lenses) */
+.filters{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-bottom:28px}
+.chip-f{padding:9px 16px;border-radius:22px;border:1px solid var(--c-border);background:var(--c-panel);color:var(--c-t2);font-size:13px;font-weight:600;cursor:pointer;transition:.2s}
+.chip-f:hover{border-color:var(--c-border2);color:var(--c-t1)}.chip-f.on{background:var(--c-teal);color:#04110d;border-color:transparent}
+.agrid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@media(max-width:1080px){.agrid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:820px){.agrid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.agrid{grid-template-columns:1fr}}
+.pcard{position:relative;background:linear-gradient(180deg,rgba(23,32,53,.72),rgba(17,27,46,.5));border:1px solid var(--c-border);border-radius:18px;padding:18px;transition:.28s var(--ease);overflow:hidden}
+.pcard:hover{transform:translateY(-6px);border-color:var(--ac);box-shadow:0 22px 50px rgba(0,0,0,.5),0 0 26px var(--acg)}
+.rank-tag{position:absolute;top:9px;left:9px;font-size:9px;font-family:var(--mono);font-weight:800;color:var(--c-t2);background:rgba(0,0,0,.4);border:1px solid var(--c-border);padding:3px 7px;border-radius:6px}
+.aoc-tag{position:absolute;top:0;right:0;font-size:9px;font-family:var(--mono);font-weight:700;color:#04110d;background:linear-gradient(135deg,var(--c-teal),var(--c-teal2));padding:4px 10px;border-bottom-left-radius:9px}
+.spon-tag{position:absolute;top:0;right:0;font-size:9px;font-family:var(--mono);font-weight:700;color:#1a1204;background:linear-gradient(135deg,var(--c-gold),#c98814);padding:4px 10px;border-bottom-left-radius:9px}
+.pportrait{width:78px;height:78px;margin:6px auto 8px;border-radius:50%;border:2px solid var(--ac);background:var(--acd);padding:3px;position:relative}
+.verify-badge{position:absolute;bottom:0;right:3px;width:20px;height:20px;border-radius:50%;background:var(--c-teal);border:2px solid var(--c-panel);display:grid;place-items:center;font-size:9px;color:#04110d;font-weight:900}
+.pcard .pn{font-size:15px;font-weight:800;text-align:center;line-height:1.15}
+.pcard .pt-title{font-size:9px;font-family:var(--mono);color:var(--ac);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-top:3px;text-align:center}
+.inspired{font-size:10px;color:var(--c-t3);text-align:center;margin-top:8px;line-height:1.4;padding:7px;background:rgba(0,0,0,.2);border-radius:8px}
+.inspired b{color:var(--c-t2)}.inspired .firm{color:var(--ac);font-weight:600}
+.track{font-family:var(--mono);font-size:10px;color:var(--c-green);font-weight:700;margin-top:4px}
+.ppersona{font-size:11.5px;color:var(--c-t2);line-height:1.5;font-style:italic;margin:11px 0;border-left:2px solid var(--ac);padding-left:9px;min-height:50px}
+.report{background:rgba(0,0,0,.25);border:1px solid var(--c-border);border-radius:10px;padding:9px;margin-bottom:11px}
+.report .rrow{display:flex;align-items:center;gap:7px;padding:3px 0;font-size:11px}
+.report .rk{color:var(--c-t3);width:46px;flex:none;font-family:var(--mono);font-size:9px;text-transform:uppercase}
+.report .rbar{flex:1;height:5px;border-radius:5px;background:rgba(255,255,255,.06);overflow:hidden}
+.report .rbar i{display:block;height:100%;border-radius:5px}
+.report .rv{font-family:var(--mono);font-weight:700;font-size:11px;width:24px;text-align:right;flex:none}
+.pact{display:flex;gap:6px}.aff{font-size:9px;color:var(--c-t4);font-family:var(--mono);margin-top:7px;text-align:center}
+
+/* score-review feedback banner (missing) */
+.review-banner{background:linear-gradient(120deg,rgba(13,204,170,.1),rgba(77,122,255,.06));border:1px solid rgba(13,204,170,.25);border-radius:18px;padding:24px 28px;display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+.review-banner .rb-l{flex:1;min-width:240px}
+.review-banner h4{font-size:19px;font-weight:800;margin-bottom:6px}
+.review-banner p{font-size:13px;color:var(--c-t2)}
+.stars-in{display:flex;gap:6px;font-size:26px;color:var(--c-t4);cursor:pointer}
+.stars-in span{transition:.15s;cursor:pointer}
+.stars-in span:hover,.stars-in span.on{color:var(--c-gold);transform:scale(1.15)}
+.rb-thanks{font-size:13px;color:var(--c-teal);font-weight:700;display:none}
+
+/* pricing (from live) */
+.price-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:820px){.price-grid{grid-template-columns:1fr}}
+.price{background:linear-gradient(180deg,rgba(23,32,53,.7),rgba(17,27,46,.5));border:1px solid var(--c-border);border-radius:18px;padding:26px;position:relative}
+.price.pop{border-color:var(--c-teal);box-shadow:0 0 30px rgba(13,204,170,.1)}
+.price .pop-tag{position:absolute;top:-11px;left:50%;transform:translateX(-50%);font-size:10px;font-family:var(--mono);font-weight:700;color:#04110d;background:var(--c-teal);padding:4px 12px;border-radius:20px}
+.price .pt{font-size:13px;font-family:var(--mono);color:var(--c-t3);text-transform:uppercase;letter-spacing:.08em}
+.price .pp{font-size:40px;font-weight:900;font-family:var(--mono);margin:8px 0}.price .pp span{font-size:14px;color:var(--c-t3);font-weight:600}
+.price .psub{font-size:12px;color:var(--c-t3);margin-bottom:18px}
+.price ul{list-style:none;margin-bottom:20px}
+.price li{font-size:13px;color:var(--c-t2);padding:7px 0;display:flex;gap:9px;align-items:flex-start}
+.price li .yes{color:var(--c-teal);font-weight:800}.price li .no{color:var(--c-t4)}
+
+.final{text-align:center;padding:60px 24px;background:linear-gradient(160deg,rgba(13,204,170,.08),rgba(77,122,255,.05));border:1px solid var(--c-border2);border-radius:24px;margin:20px 0 40px}
+.final h3{font-size:34px;font-weight:900;margin-bottom:12px}.final p{font-size:15px;color:var(--c-t2);margin-bottom:24px}
+.disclaimer{background:rgba(232,160,32,.06);border:1px solid rgba(232,160,32,.2);border-radius:14px;padding:16px 20px;font-size:11.5px;color:var(--c-t2);line-height:1.7;max-width:960px;margin:0 auto 36px}
+.disclaimer b{color:var(--c-gold)}
+footer{border-top:1px solid var(--c-border);padding:26px 0;text-align:center;color:var(--c-t4);font-size:12px;line-height:1.7}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <div class="logo">GB</div><h1>Glass Box</h1>
+  <div class="links">
+    <a href="#how">How it Works</a><a href="#legends">The Lenses</a><a href="#advisors">For Advisors</a><a href="#pricing">Pricing</a>
+    <span class="acc">Accuracy this week: 99.2%</span>
+    <a class="btn primary sm" href="#">Try Free — No card</a>
+  </div>
+</div></nav>
+
+<!-- ===== SLIDING AGENT BANNER (the requested missing piece) ===== -->
+<div class="agentbar"><div class="agent-marq" id="agentMarq"></div></div>
+
+<!-- ===== HERO (lands on live identity) ===== -->
+<header class="hero"><div class="wrap">
+  <div>
+    <div class="kick">◆ AI VERIFICATION · NOT AI ADVICE</div>
+    <h2>See the math.<br><span class="grad">Trust the data.</span></h2>
+    <p class="lede">Glass Box shows exactly why every risk score is what it is — the raw institutional data, the formula, and an independent audit before you see any number. Now with strategy lenses pretrained on the great investors, scoring growth and risk on your holdings.</p>
+    <div class="hero-cta">
+      <a class="btn primary" href="#">Verify a stock free →</a>
+      <a class="btn ghost" href="#how">See how it works</a>
+    </div>
+    <div class="checks">
+      <span><span class="ck">✓</span>No credit card</span>
+      <span><span class="ck">✓</span>5 free verifications daily</span>
+      <span><span class="ck">✓</span>Research tool, not advice</span>
+      <span><span class="ck">✓</span>E&amp;O insured</span>
+    </div>
+  </div>
+  <div>
+    <div class="vcard">
+      <div class="vh">Live verification — illustrative <span class="live"><span class="d"></span>A6 AUDITOR ACTIVE</span></div>
+      <div class="score-row">
+        <div><div class="sm-lbl">Score</div><div class="score-big" id="liveScore">8.4</div></div>
+        <div><div class="co">Apple Inc. — AAPL</div><div class="ex">NASDAQ · Technology</div></div>
+        <div class="verified-chip">✓ A6 · 14:32</div>
+      </div>
+      <div class="metric-line"><span class="mk">Debt / Equity Ratio</span><span><span class="mv">1.78</span> <span class="msrc">FMP · 2h</span></span></div>
+      <div class="metric-line"><span class="mk">Altman Z-Score</span><span><span class="mv">6.24</span> <span class="msrc">Very Low Risk</span></span></div>
+      <div class="metric-line"><span class="mk">Beta vs S&amp;P 500</span><span><span class="mv">1.22</span> <span class="msrc">Twelve Data</span></span></div>
+      <div class="audit-strip">✓ Auditor A6: narrative matches raw API · 0 discrepancies found</div>
+      <div class="audit-stats">
+        <div class="as"><div class="n teal" id="s1">99.2%</div><div class="l">AI accuracy this week</div></div>
+        <div class="as"><div class="n gold" id="s2">17</div><div class="l">errors caught by A6</div></div>
+        <div class="as"><div class="n green" id="s3">0</div><div class="l">errors shown to users</div></div>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<!-- ===== HOW IT WORKS (A1->A6 pipeline, from live) ===== -->
+<section class="sec wrap" id="how">
+  <div class="sec-h"><div class="tag">How Glass Box works</div><h3>Not AI magic. AI math — audited.</h3>
+    <p>A pipeline of specialist agents fetches, explains, and independently audits every number before it reaches your screen.</p></div>
+  <div class="pipe">
+    <div class="pstep"><div class="pnum">01 — FETCH</div><div class="pic">⬇</div><h4>Agent A1 pulls institutional data</h4>
+      <p>Debt-to-equity, Altman Z-Score, free cash flow, 30 years of history — directly from Financial Modeling Prep's institutional API. Twelve Data provides real-time technicals. No aggregators.</p>
+      <div class="pag">A1 Data Fetcher · A2 Technical Analyzer · A3 Sentiment Scanner</div></div>
+    <div class="pstep"><div class="pnum">02 — EXPLAIN</div><div class="pic">✎</div><h4>Agent A5 translates to plain English</h4>
+      <p>A narrative agent generates a clear summary from the underlying risk metrics. Every number in the text traces back to its raw source. Every claim is auditable, not asserted.</p>
+      <div class="pag">A4 Risk Calculator · A5 Narrative Generator</div></div>
+    <div class="pstep"><div class="pnum">03 — AUDIT</div><div class="pic">✓</div><h4>Agent A6 audits before you see it</h4>
+      <p>The Auditor cross-checks the narrative against raw API data. Anything that doesn't match is flagged and corrected before display. We publish the error rate publicly, every week.</p>
+      <div class="pag">A6 Auditor · A7 Compliance Monitor</div></div>
+  </div>
+</section>
+
+<!-- ===== ML PROVENANCE (the "trained / trusted data" gap) ===== -->
+<section class="sec wrap">
+  <div class="sec-h"><div class="tag">Trusted Data · Trained Models</div><h3>What the models learned — and from where</h3>
+    <p>Transparency isn't only about the audit. It's about what went in. Here's the provenance behind every score.</p></div>
+  <div class="ml-strip">
+    <div class="ml-grid">
+      <div class="ml-item"><div class="mi-ic">🏛</div><div class="mi-t">Institutional sources</div><div class="mi-d">FMP + Twelve Data — the same feeds funds pay for, never scraped aggregators.</div><div class="mi-tag">30 yrs history</div></div>
+      <div class="ml-item"><div class="mi-ic">🧮</div><div class="mi-t">Deterministic core</div><div class="mi-d">Risk math (Altman Z, D/E, beta) is formula-based and reproducible — no model guesswork on the numbers.</div><div class="mi-tag">auditable</div></div>
+      <div class="ml-item"><div class="mi-ic">🧠</div><div class="mi-t">Narrative models</div><div class="mi-d">LLMs explain, they don't decide. Trained to summarize the metrics, constrained to cite every claim.</div><div class="mi-tag">Qwen · Llama · cloud</div></div>
+      <div class="ml-item"><div class="mi-ic">🛡</div><div class="mi-t">Audit layer</div><div class="mi-d">A6 checks every narrative against raw data. Weekly error rate published — nothing hidden.</div><div class="mi-tag">0 shown to users</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== THE LENSES (Legends roster, reframed as verification lenses) ===== -->
+<section class="sec wrap" id="legends">
+  <div class="sec-h"><div class="tag">The Strategy Lenses</div><h3>Nine legendary lenses. One audited score.</h3>
+    <p>Each lens is pretrained on a legendary investor's <b>documented</b> strategy and reads your holdings for growth and risk — every view traces back to the same audited data. Lenses inform; they never advise.</p></div>
+  <div class="filters" id="filters">
+    <div class="chip-f on" data-f="all">All</div>
+    <div class="chip-f" data-f="value">Value / GARP</div>
+    <div class="chip-f" data-f="quant">Quant</div>
+    <div class="chip-f" data-f="macro">Macro</div>
+    <div class="chip-f" data-f="multi">Multi-Strategy</div>
+  </div>
+  <div class="agrid" id="agrid"></div>
+</section>
+
+<!-- ===== SCORE REVIEW / FEEDBACK BANNER (missing piece) ===== -->
+<section class="sec wrap">
+  <div class="review-banner">
+    <div class="rb-l">
+      <h4>Was this verification useful?</h4>
+      <p>Your rating trains the trust score shown publicly. Every review is logged with the source data and audit result — feedback is part of the evidence trail.</p>
+    </div>
+    <div>
+      <div class="stars-in" id="stars"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div>
+      <div class="rb-thanks" id="thanks">✓ Logged — thank you. Trust score updated.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== FOR ADVISORS (from live) ===== -->
+<section class="sec wrap" id="advisors">
+  <div class="sec-h"><div class="tag">For Advisors</div><h3>Built for the client conversation, not just the score.</h3></div>
+  <div class="pipe">
+    <div class="pstep"><div class="pic">🔍</div><h4>An evidence trail clients can see</h4><p>When a client asks "why does it say that?", point to the exact API response and the audit that checked it — not a black-box score.</p></div>
+    <div class="pstep"><div class="pic">📋</div><h4>Compliance-ready by default</h4><p>Every verification is logged with its source data, narrative, and audit result. Export the trail for E&amp;O documentation or a compliance review.</p></div>
+    <div class="pstep"><div class="pic">🏷</div><h4>Multi-client, white-label ready</h4><p>Run verifications across client portfolios and hand back reports branded for your practice, not ours.</p></div>
+  </div>
+</section>
+
+<!-- ===== PRICING (from live) ===== -->
+<section class="sec wrap" id="pricing">
+  <div class="sec-h"><div class="tag">Pricing</div><h3>Start free. Upgrade when you trust us.</h3>
+    <p>No dark patterns. All prices visible. Cancel anytime.</p></div>
+  <div class="price-grid">
+    <div class="price"><div class="pt">Free</div><div class="pp">$0</div><div class="psub">forever · no credit card</div>
+      <ul>
+        <li><span class="yes">✓</span>5 stock verifications per day</li>
+        <li><span class="yes">✓</span>Full Evidence Path — raw data visible</li>
+        <li><span class="yes">✓</span>A6 Auditor confirmation badge</li>
+        <li><span class="yes">✓</span>Discrepancy Rate dashboard</li>
+        <li><span class="no">—</span>Portfolio Glass Box Score</li>
+        <li><span class="no">—</span>Strategy Lenses &amp; Crisis Alerts</li>
+      </ul><a class="btn block" href="#">Start Free</a></div>
+    <div class="price pop"><div class="pop-tag">MOST POPULAR</div><div class="pt">Standard</div><div class="pp">$20<span>/mo</span></div><div class="psub">cancel anytime</div>
+      <ul>
+        <li><span class="yes">✓</span>200 verifications per month</li>
+        <li><span class="yes">✓</span>Portfolio Glass Box Score</li>
+        <li><span class="yes">✓</span>All 9 Strategy Lenses</li>
+        <li><span class="yes">✓</span>Crisis Alerts — real-time</li>
+        <li><span class="yes">✓</span>Stress Test — historical simulator</li>
+        <li><span class="yes">✓</span>Broker import via SnapTrade</li>
+      </ul><a class="btn primary block" href="#">Start Standard →</a></div>
+    <div class="price"><div class="pt">Advisor</div><div class="pp">$150<span>/mo</span></div><div class="psub">for independent advisors</div>
+      <ul>
+        <li><span class="yes">✓</span>Unlimited verifications</li>
+        <li><span class="yes">✓</span>White-label Client Reports PDF</li>
+        <li><span class="yes">✓</span>API access for integrations</li>
+        <li><span class="yes">✓</span>Multi-client management</li>
+        <li><span class="yes">✓</span>Compliance audit log export</li>
+        <li><span class="yes">✓</span>30-day free trial</li>
+      </ul><a class="btn block" href="#">Start 30-day Trial</a></div>
+  </div>
+</section>
+
+<section class="wrap"><div class="final">
+  <h3>Start free. See the math.</h3>
+  <p>Verify a stock, watch A6 audit it live, and meet the strategy lenses — no card required.</p>
+  <a class="btn primary" href="#" style="font-size:16px;padding:16px 30px">Try Glass Box Free →</a>
+</div></section>
+
+<section class="wrap">
+  <div class="disclaimer"><b>⚠ Important:</b> Glass Box is a financial research and data-verification tool. It does <b>not</b> constitute investment advice; all scores are informational. The Strategy Lenses are <b>original AI archetypes</b> that study the publicly documented philosophies of well-known investors — named as <b>inspiration only</b>. Glass Box is <b>not affiliated with, endorsed by, or representing</b> any named investor or firm, and portraits are original illustrations, <b>not likenesses</b>. Track-record figures are historical facts about each investor's public record, not a promise of Glass Box performance.</div>
+</section>
+
+<footer>© 2026 Glass Box · Financial research &amp; verification tool · Not investment advice · Strategy Lenses inspired by public philosophies, not affiliated with any named investor · Portraits original, not likenesses.</footer>
+
+<script>
+const RGB={'--c-teal':'13,204,170','--c-blue':'77,122,255','--c-gold':'232,160,32','--c-red':'232,68,90','--c-purple':'164,107,255','--c-green':'13,184,122','--c-cyan':'34,211,238'};
+
+/* ---- portraits (original, not likeness) ---- */
+function portrait(p,color){
+  const ac=`rgb(${RGB[color]})`,acd=`rgba(${RGB[color]},.15)`;
+  const skin=p.skin,skinSh=shade(p.skin,-18),hair=p.hair,hairSh=shade(p.hair,-20),suit=p.suit,suitSh=shade(p.suit,-22),shirt=p.shirt||'#F4F7FF';
+  return `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+    <defs><radialGradient id="pg${p.id}" cx="50%" cy="30%" r="80%"><stop offset="0%" stop-color="${acd}"/><stop offset="100%" stop-color="rgba(10,15,26,.85)"/></radialGradient>
+    <linearGradient id="sh${p.id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${skin}"/><stop offset="100%" stop-color="${skinSh}"/></linearGradient></defs>
+    <circle cx="60" cy="60" r="60" fill="url(#pg${p.id})"/>
+    <path d="M18 120 q0 -30 42 -30 q42 0 42 30 z" fill="${suit}"/>
+    <path d="M60 90 l-11 30 h22 z" fill="${shirt}"/><path d="M60 90 l-9 12 9 6 9 -6 z" fill="${suitSh}"/>
+    ${p.tie?`<path d="M60 96 l-4 5 4 16 4 -16 z" fill="${p.tie}"/>`:''}
+    <path d="M52 78 h16 v12 q-8 6 -16 0 z" fill="url(#sh${p.id})"/>
+    <ellipse cx="60" cy="56" rx="22" ry="24" fill="url(#sh${p.id})"/>
+    <circle cx="38" cy="58" r="4" fill="${skinSh}"/><circle cx="82" cy="58" r="4" fill="${skinSh}"/>
+    ${hairStyle(p.hairStyle,hair,hairSh)}
+    <path d="M48 48 q4 -2 8 -0.5" stroke="${hairSh}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M64 47.5 q4 -1.5 8 0.5" stroke="${hairSh}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    ${p.glasses?`<circle cx="52" cy="54" r="7.5" fill="#fff" opacity=".08"/><circle cx="68" cy="54" r="7.5" fill="#fff" opacity=".08"/><circle cx="52" cy="54" r="7.5" fill="none" stroke="${p.glassCol||ac}" stroke-width="2"/><circle cx="68" cy="54" r="7.5" fill="none" stroke="${p.glassCol||ac}" stroke-width="2"/><line x1="59.5" y1="54" x2="60.5" y2="54" stroke="${p.glassCol||ac}" stroke-width="2"/>`:''}
+    <ellipse cx="52" cy="54" rx="2.6" ry="3" fill="#1c2536"/><ellipse cx="68" cy="54" rx="2.6" ry="3" fill="#1c2536"/>
+    <circle cx="53" cy="53" r=".9" fill="#fff"/><circle cx="69" cy="53" r=".9" fill="#fff"/>
+    <path d="M60 56 l-2 8 q2 1.5 4 0" stroke="${skinSh}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    ${mouthStyle(p.mouth)}${p.facialHair?facialHair(p.facialHair,hairSh):''}</svg>`;
+}
+function hairStyle(s,h,hs){
+  if(s==='short')return `<path d="M38 52 q0 -26 22 -26 q22 0 22 26 q-6 -14 -22 -14 q-16 0 -22 14" fill="${h}"/>`;
+  if(s==='balding')return `<path d="M40 46 q5 -16 20 -16 q15 0 20 16 q-9 -7 -20 -7 q-6 0 -11 2" fill="${h}" opacity=".7"/>`;
+  if(s==='bun')return `<path d="M38 52 q0 -26 22 -26 q22 0 22 26 q-6 -14 -22 -14 q-16 0 -22 14" fill="${h}"/><circle cx="60" cy="24" r="7" fill="${h}"/>`;
+  if(s==='silver')return `<path d="M38 52 q0 -26 22 -26 q22 0 22 26 q-6 -14 -22 -14 q-16 0 -22 14" fill="#C8CEDA"/>`;
+  if(s==='wavy')return `<path d="M37 54 q-2 -28 23 -28 q25 0 23 28 q-4 -8 -8 -6 q-2 -8 -8 -6 q-3 -6 -8 -4 q-5 -4 -10 2 q-6 4 -4 20" fill="${h}"/>`;
+  return `<path d="M38 52 q0 -26 22 -26 q22 0 22 26 q-6 -14 -22 -14 q-16 0 -22 14" fill="${h}"/>`;
+}
+function mouthStyle(m){const c='#9E5A44';
+  if(m==='confident')return `<path d="M53 68 q7 5 14 0" stroke="${c}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
+  if(m==='warm')return `<path d="M52 67 q8 7 16 0 q-8 3 -16 0" fill="#fff" stroke="${c}" stroke-width="1.4"/>`;
+  if(m==='neutral')return `<path d="M54 68 h12" stroke="${c}" stroke-width="2.2" stroke-linecap="round"/>`;
+  if(m==='focused')return `<path d="M53 68 q7 3 14 -1" stroke="${c}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
+  return `<path d="M53 68 q7 5 14 0" stroke="${c}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;}
+function facialHair(t,c){
+  if(t==='beard')return `<path d="M40 60 q0 22 20 24 q20 -2 20 -24 q-6 12 -20 12 q-14 0 -20 -12" fill="${c}" opacity=".85"/>`;
+  if(t==='stubble')return `<path d="M42 62 q0 16 18 18 q18 -2 18 -18 q-6 8 -18 8 q-12 0 -18 -8" fill="${c}" opacity=".3"/>`;return '';}
+function shade(hex,amt){let c=hex.replace('#','');if(c.length===3)c=c.split('').map(x=>x+x).join('');
+  let r=parseInt(c.slice(0,2),16),g=parseInt(c.slice(2,4),16),b=parseInt(c.slice(4,6),16);
+  r=Math.max(0,Math.min(255,r+amt));g=Math.max(0,Math.min(255,g+amt));b=Math.max(0,Math.min(255,b+amt));
+  return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');}
+
+/* ---- A-agents for the sliding banner ---- */
+const ABAND=[
+  ['A1','Data Fetcher','institutional API','--c-teal'],['A2','Technical Analyzer','real-time technicals','--c-blue'],
+  ['A3','Sentiment Scanner','news & social','--c-purple'],['A4','Risk Calculator','Altman Z · D/E · beta','--c-gold'],
+  ['A5','Narrative Generator','plain-English explain','--c-cyan'],['A6','Auditor','cross-checks every claim','--c-green'],
+  ['A7','Compliance Monitor','logs the evidence trail','--c-red'],
+];
+/* legend lenses too, on the banner */
+const LEGBAND=[
+  ['V','Value Lens','Buffett & Munger','--c-gold'],['G','GARP Lens','Peter Lynch','--c-green'],
+  ['Q','Quant Lens','Simons · Shaw','--c-cyan'],['M','Macro Lens','Dalio · Soros','--c-purple'],
+  ['X','Multi-Strat Lens','Griffin · Englander','--c-teal'],
+];
+const marq=document.getElementById('agentMarq');
+function badge(code,name,spec,color){return `<span class="abadge" style="--ac:var(${color});--acd:rgba(${RGB[color]},.12)"><span class="ai">${code}</span>${name}<span class="spec">· ${spec}</span></span>`;}
+const bandHtml=[...ABAND,...LEGBAND].map(a=>badge(a[0],a[1],a[2],a[3])).join('');
+marq.innerHTML=bandHtml+bandHtml;
+
+/* ---- legends roster (verification lenses) ---- */
+const AGENTS=[
+  {id:'buf',name:'The Value Lens',title:'Value & Buy-and-Hold',color:'--c-gold',cls:'value',rank:'',badge:'aoc',
+   inspiredName:'Buffett & Munger',firm:'Berkshire Hathaway',strat:'Value / Buy & Hold',track:'~20% annual, 50+ yrs',
+   growth:70,risk:18,persona:'"Buy wonderful businesses at fair prices — then do nothing, brilliantly, for decades."',
+   look:{skin:'#E8CBA8',hair:'#D8DCE4',hairStyle:'balding',suit:'#2A2416',shirt:'#FFFDF5',tie:'#E8A020',glasses:true,glassCol:'#8a6a2a',mouth:'warm'}},
+  {id:'lyn',name:'The GARP Lens',title:'Growth at Reasonable Price',color:'--c-green',cls:'value',rank:'',badge:'',
+   inspiredName:'Peter Lynch',firm:'Fidelity Magellan',strat:'GARP',track:'29.2% avg annual (1977–90)',
+   growth:86,risk:34,persona:'"Invest in what you know. Turn over the most rocks — the tenbagger hides in plain sight."',
+   look:{skin:'#EAC9A0',hair:'#E4E8EE',hairStyle:'silver',suit:'#14342E',shirt:'#F0FFF9',tie:'#0DB87A',mouth:'warm'}},
+  {id:'gri',name:'The Multi-Strat Lens',title:'Multi-Strategy',color:'--c-teal',cls:'multi',rank:'#1 · ~$74B',badge:'',
+   inspiredName:'Ken Griffin',firm:'Citadel',strat:'Multi-Strategy',track:'~$74B lifetime net gains',
+   growth:82,risk:40,persona:'"Many uncorrelated edges at once, each ruthlessly risk-managed. Excellence across every strategy."',
+   look:{skin:'#E8B892',hair:'#3A3F4A',hairStyle:'short',suit:'#0E2E2A',shirt:'#EAFDF9',tie:'#0DCCAA',mouth:'confident'}},
+  {id:'dal',name:'The Macro Lens',title:'Global Macro / Risk Parity',color:'--c-purple',cls:'macro',rank:'#2 · ~$58B',badge:'',
+   inspiredName:'Ray Dalio',firm:'Bridgewater',strat:'Global Macro',track:'~$58B lifetime net gains',
+   growth:74,risk:44,persona:'"Principles over predictions. Balance risk across every economic environment and let it run."',
+   look:{skin:'#DFB98E',hair:'#C8CEDA',hairStyle:'silver',suit:'#2E1E4A',shirt:'#F3EEFF',glasses:true,glassCol:'#5a3a8a',mouth:'neutral'}},
+  {id:'sim',name:'The Quant Lens',title:'Quantitative',color:'--c-cyan',cls:'quant',rank:'#3 · ~$51B',badge:'spon',
+   inspiredName:'Jim Simons',firm:'Renaissance Tech',strat:'Quantitative',track:'~$51B lifetime net gains',
+   growth:90,risk:28,persona:'"The market has patterns humans can\'t see. I let the mathematics speak and never override the model."',
+   look:{skin:'#E4C4A0',hair:'#D8DCE4',hairStyle:'silver',suit:'#123A44',shirt:'#E6FBFF',facialHair:'beard',mouth:'confident'}},
+  {id:'eng',name:'The Allocation Lens',title:'Multi-Strat Risk',color:'--c-teal',cls:'multi',rank:'#4 · ~$50B',badge:'',
+   inspiredName:'Izzy Englander',firm:'Millennium',strat:'Multi-Strategy',track:'~$50B lifetime net gains',
+   growth:68,risk:22,persona:'"Hundreds of teams, tight risk limits, zero tolerance for drawdown. Discipline is the alpha."',
+   look:{skin:'#D6A470',hair:'#C8CEDA',hairStyle:'silver',suit:'#123040',shirt:'#EAF6FF',glasses:true,glassCol:'#2a6a8a',mouth:'focused'}},
+  {id:'sha',name:'The Algo Lens',title:'Quant / Multi-Strategy',color:'--c-blue',cls:'quant',rank:'#5 · ~$43B',badge:'',
+   inspiredName:'David Shaw',firm:'D.E. Shaw',strat:'Quant',track:'~$43B lifetime net gains',
+   growth:80,risk:30,persona:'"Computational finance before it had a name. Every inefficiency is a problem to solve with code."',
+   look:{skin:'#C68642',hair:'#2B2B33',hairStyle:'short',suit:'#1E2A44',shirt:'#EAF0FF',tie:'#4D7AFF',facialHair:'beard',mouth:'confident'}},
+  {id:'sor',name:'The Reflexive Lens',title:'Global Macro',color:'--c-red',cls:'macro',rank:'#6 · ~$41B',badge:'',
+   inspiredName:'George Soros',firm:'Soros Fund Mgmt',strat:'Global Macro',track:'~$41B lifetime net gains',
+   growth:78,risk:58,persona:'"Markets are reflexive — perception bends reality. When the thesis is right, go for the jugular."',
+   look:{skin:'#E0BE98',hair:'#D8DCE4',hairStyle:'balding',suit:'#3A1E22',shirt:'#FFECEE',tie:'#E8445A',glasses:true,glassCol:'#8a3a3a',mouth:'confident'}},
+];
+const agrid=document.getElementById('agrid');
+function renderAgents(filter='all'){
+  agrid.innerHTML='';
+  AGENTS.filter(a=>filter==='all'||a.cls===filter).forEach(a=>{
+    const el=document.createElement('div');el.className='pcard'+(a.badge==='spon'?' sponsored':'');
+    el.style.setProperty('--ac',`var(${a.color})`);el.style.setProperty('--acd',`rgba(${RGB[a.color]},.15)`);el.style.setProperty('--acg',`rgba(${RGB[a.color]},.22)`);
+    const gcol=a.growth>=70?'--c-green':a.growth>=50?'--c-gold':'--c-t3';
+    const rcol=a.risk<=25?'--c-green':a.risk<=45?'--c-gold':'--c-red';
+    el.innerHTML=`
+      ${a.rank?`<div class="rank-tag">${a.rank}</div>`:''}
+      ${a.badge==='spon'?'<div class="spon-tag">SPONSORED</div>':a.badge==='aoc'?'<div class="aoc-tag">LEAD LENS</div>':''}
+      <div class="pportrait">${portrait({...a.look,id:a.id+'g'},a.color)}<div class="verify-badge">✓</div></div>
+      <div class="pn">${a.name}</div><div class="pt-title">${a.title}</div>
+      <div class="inspired">Pretrained on <b>${a.inspiredName}</b><br><span class="firm">${a.firm}</span> · ${a.strat}<div class="track">📈 ${a.track}</div></div>
+      <div class="ppersona">${a.persona}</div>
+      <div class="report">
+        <div class="rrow"><span class="rk">Growth</span><span class="rbar"><i style="width:${a.growth}%;background:var(${gcol})"></i></span><span class="rv" style="color:var(${gcol})">${a.growth}</span></div>
+        <div class="rrow"><span class="rk">Risk</span><span class="rbar"><i style="width:${a.risk}%;background:var(${rcol})"></i></span><span class="rv" style="color:var(${rcol})">${a.risk}</span></div>
+      </div>
+      <div class="pact"><a class="btn primary sm block" href="#" onclick="return false">Apply Lens →</a></div>
+      <div class="aff">↗ informational lens · not advice</div>`;
+    agrid.appendChild(el);
+  });
+}
+renderAgents();
+document.getElementById('filters').addEventListener('click',e=>{const chip=e.target.closest('.chip-f');if(!chip)return;
+  document.querySelectorAll('.chip-f').forEach(c=>c.classList.remove('on'));chip.classList.add('on');renderAgents(chip.dataset.f);});
+
+/* ---- live score flicker ---- */
+setInterval(()=>{const s=document.getElementById('liveScore');const v=(8.1+Math.random()*0.5).toFixed(1);s.textContent=v;},2600);
+
+/* ---- score review stars ---- */
+const stars=document.getElementById('stars').children;
+[...stars].forEach((st,i)=>{st.onclick=()=>{[...stars].forEach((x,j)=>x.classList.toggle('on',j<=i));
+  document.getElementById('thanks').style.display='block';};});
+</script>
+</body>
+</html>

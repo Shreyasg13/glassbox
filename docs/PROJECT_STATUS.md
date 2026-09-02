@@ -88,33 +88,31 @@ or scope changes — this is the single place to check "where are we" and
    agent's attempt too. Fixed by raising `failure_threshold` to tolerate a
    burst across multiple agents sharing one instance.
 
-## New reference found: `GlassBox_Pilot_Production.html`
+## Phase 11 — Strategy Lenses + Pilot Production landing additions
 
-Reviewed but not yet built. Mostly redundant with what's already live
-(same hero/pricing/how-it-works, trivial copy deltas), but contains real
-new feature concepts:
+Sourced from `GlassBox_Pilot_Production.html` (plan/content) and
+`GlassBox_Lenses_Interactive.html` (the exact interactive spec — full
+persona data, 3D carousel mechanics, animation timings). Landing-page
+content, no backend dependency — can be built independently of Phases 7–10.
 
-1. **"Strategy Lenses"** — 9 investor-archetype cards (Value/GARP/Quant/
-   Macro/Multi-Strategy filterable), each modeled on a real well-known
-   investor (Buffett, Lynch, Griffin, Dalio, Simons, Englander, Shaw,
-   Soros) with a persona quote, growth/risk chart, procedural SVG portrait.
-   **The source file itself carries an explicit legal disclaimer**:
-   "original AI archetypes... NOT affiliated with, endorsed by, or
-   representing any named investor," portraits "original illustrations,
-   not likenesses." If this gets built, that disclaimer must ship with it,
-   prominently, not as an afterthought.
+1. **Strategy Lenses** — 8 investor-archetype cards in a 3D perspective
+   carousel: Value (Buffett/Munger), GARP (Lynch), Multi-Strat (Griffin),
+   Macro (Dalio), Quant (Simons), Allocation (Englander), Algo (Shaw),
+   Reflexive (Soros). Each has a procedurally-generated SVG portrait
+   (explicitly NOT a real likeness), a growth/risk bar chart, a typewriter
+   "speak" quote in first person, filter chips (All/Value-GARP/Quant/
+   Macro/Multi-Strategy), autoplay, drag-to-slide, keyboard nav.
+   **The mandatory legal disclaimer** ("original AI archetypes... NOT
+   affiliated with, endorsed by, or representing any named investor,"
+   portraits "original illustrations, not likenesses") ships with this,
+   visibly, not buried in a footer.
 2. **"ML Provenance" section** — data/model transparency explainer
    (institutional sources / deterministic core / narrative models / audit
    layer).
-3. **Sliding agent/lens marquee banner** under the nav — the mockup's own
-   source comments flag this and the Strategy Lenses as previously
-   "requested missing pieces."
-4. **5-star score-review feedback widget** — "Was this useful?", logged as
-   training signal for a publicly-shown trust score.
+3. **Sliding agent/lens marquee banner** under the nav.
+4. **5-star score-review feedback widget** — "Was this useful?"
 
-Not scoped into Phases 7–10 yet — raise separately if/when you want this
-built; Strategy Lenses in particular is a real content/legal undertaking
-(9 personas, portraits, disclaimers), not a quick add.
+**Status: build in progress.**
 
 ## Task list
 
