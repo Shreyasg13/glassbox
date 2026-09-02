@@ -9,7 +9,7 @@ services:
       GLASSBOX_JWT_SECRET: ${GLASSBOX_JWT_SECRET:?set a real secret in .env}
       GLASSBOX_DB_PATH: /data/glassbox.db
       BACKEND_SOURCE_PATH: /backend-source
-      TRADING_STORAGE_PATH: ${TRADING_STORAGE_PATH:-/backend-source/_no_trading_storage}
+      TRADING_STORAGE_PATH: /data/trading-storage
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       VLLM_BASE_URL: ${VLLM_BASE_URL:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
@@ -21,6 +21,7 @@ services:
       WEB_CONCURRENCY: ${BACKEND_WORKERS:-2}
     volumes:
       - ./backend-source:/backend-source:ro
+      - ./trading-storage:/data/trading-storage:ro
       - glassbox-db:/data
     expose:
       - "8000"
