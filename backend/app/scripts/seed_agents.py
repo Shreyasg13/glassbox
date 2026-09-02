@@ -231,8 +231,12 @@ def _seed_orchestration(agent_ids_by_name: dict[str, str]) -> None:
             "agent_ids": agent_ids,
             "coordinator": "vn_engine",
             "schedule": None,
-            "agent_timeout_s": 30.0,
-            "run_budget_s": 180.0,
+            # 60/240s, not the original 30/180s: the 10s launch stagger
+            # (orchestration.py's _LLM_LAUNCH_STAGGER_S) plus each LLM
+            # call's own retry backoff on a rate limit need real headroom --
+            # see that constant's docstring for the live-observed numbers.
+            "agent_timeout_s": 60.0,
+            "run_budget_s": 240.0,
         }
     )
     log.info(

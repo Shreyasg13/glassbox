@@ -30,10 +30,15 @@ from .base import BaseProvider, NotConfiguredError, OnToken
 # worth retrying here -- both observed live: a fresh free-tier key firing
 # several parallel calls trips 429s, and 503 "high demand" is Google-side
 # and self-resolves within seconds. Anything else (400/404/auth) retrying
-# would never fix.
+# would never fix. Observed live: quota fully recovers within a few
+# minutes of a burst, and a fresh isolated call succeeds cleanly -- so a
+# 429 needs a real wait (the RPM ceiling on a free-tier key is much
+# lower than initially assumed: staggering launches 0.4s apart still
+# left 6 of 7 calls 429'd), while a 503 "high demand" typically clears
+# in a couple seconds and doesn't need as long a wait.
 _RETRYABLE_STATUS = {429, 503}
 _MAX_ATTEMPTS = 3
-_BACKOFF_BASE_S = 1.5
+_BACKOFF_BASE_S = {429: 12.0, 503: 2.0}
 
 
 class GeminiProvider(BaseProvider):
@@ -87,7 +92,7 @@ class GeminiProvider(BaseProvider):
                     status = exc.response.status_code
                     if status in _RETRYABLE_STATUS and attempt < _MAX_ATTEMPTS:
                         retry_after = exc.response.headers.get("retry-after")
-                        delay = float(retry_after) if retry_after else _BACKOFF_BASE_S * attempt
+                        delay = float(retry_after) if retry_after else _BACKOFF_BASE_S[status] * attempt
                         await asyncio.sleep(delay)
                         last_exc = RuntimeError(f"Gemini API error: HTTP {status}")
                         continue

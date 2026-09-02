@@ -50,7 +50,12 @@ class BaseProvider:
     def __init__(
         self,
         *,
-        default_timeout_s: float = 30.0,
+        # 60s, not the original 30s: a retried call (e.g. Gemini's 429
+        # backoff, up to ~36s across 2 retries) must fit inside this outer
+        # wait_for or the retry logic never gets a chance to finish -- 30s
+        # was cutting retries off mid-backoff and converting a recoverable
+        # 429 into an unrecoverable timeout instead.
+        default_timeout_s: float = 60.0,
         failure_threshold: int = 3,
         cooldown_s: float = 30.0,
     ) -> None:

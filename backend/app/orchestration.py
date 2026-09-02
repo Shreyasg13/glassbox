@@ -109,14 +109,19 @@ def _reduce_committee_vote(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {"decision": decision, "votes": {k: round(v, 2) for k, v in votes.items()}, "tally": tally}
 
 
-_LLM_LAUNCH_STAGGER_S = 0.4
+_LLM_LAUNCH_STAGGER_S = 10.0
 """Delay between kicking off consecutive LLM agent calls in a parallel/
 committee_vote run. Firing several LLM calls in the same instant reliably
-trips free-tier rate limits (observed live: 7 simultaneous Gemini calls on
-a fresh key produced several 429s) -- the gemini provider also retries
-transient 429/503 with backoff, but avoiding the burst in the first place
-means fewer calls need to fall back on that. Deterministic agents don't
-hit an external API, so they're launched immediately with no stagger."""
+trips free-tier rate limits -- observed live twice: at 0s stagger, 6 of 7
+Gemini calls 429'd; a single isolated call succeeds cleanly and quota
+recovers within minutes, meaning the free-tier RPM ceiling is much lower
+than a small stagger accounts for. 10s keeps 7 agents within a ~70s launch
+span (matched by the seed script's agent_timeout_s/run_budget_s) while
+actually landing calls in separate rate-limit windows. The gemini provider
+also retries transient 429/503 with backoff as a second line of defense,
+but avoiding the burst in the first place means fewer calls need it.
+Deterministic agents don't hit an external API, so they're launched
+immediately with no stagger."""
 
 
 async def _run_bounded(
