@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const links = [
   { href: "#how-it-works", label: "How it Works" },
@@ -71,6 +72,8 @@ export function MarketingNav() {
         <span className="live-dot" />
         Accuracy this week: 99.2%
       </div>
+
+      <ThemeToggle />
 
       <Link href="/login" className="btn btn-ghost">
         Sign In

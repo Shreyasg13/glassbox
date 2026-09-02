@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 type NavItem = { href: string; label: string; icon: string };
 
@@ -114,6 +115,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="h-[6px] w-[6px] animate-pulse rounded-full bg-green" />
             MARKET OPEN
           </div>
+          <ThemeToggle />
         </div>
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-sp5 py-sp6">{children}</main>
       </div>

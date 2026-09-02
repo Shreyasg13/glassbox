@@ -2,7 +2,17 @@
 
 import { useState } from "react";
 
-const brokers = ["Fidelity", "Schwab", "TD Ameritrade", "Robinhood"];
+// Brand-colored monogram badges, not the real logo artwork -- embedding the
+// actual trademarked logo files would be a real reproduction risk for a
+// project like this. Using each broker's well-known primary brand color
+// with a simple letterform is the same nominative-fair-use pattern most
+// fintech onboarding mockups use when they can't ship official assets.
+const brokers = [
+  { name: "Fidelity", letter: "F", color: "#00754A" },
+  { name: "Schwab", letter: "S", color: "#00A0DF" },
+  { name: "TD Ameritrade", letter: "TD", color: "#5AA220" },
+  { name: "Robinhood", letter: "R", color: "#00C805" },
+];
 
 export function StepPortfolio({
   connectedBroker,
@@ -37,17 +47,23 @@ export function StepPortfolio({
 
       <div className="mb-sp4 grid grid-cols-2 gap-sp2 sm:grid-cols-4">
         {brokers.map((broker) => {
-          const connected = connectedBroker === broker;
+          const connected = connectedBroker === broker.name;
           return (
             <button
-              key={broker}
+              key={broker.name}
               type="button"
-              onClick={() => onConnectBroker(connected ? null : broker)}
-              className={`flex flex-col items-center gap-1 rounded-r2 border p-sp3 text-center transition-colors ${
+              onClick={() => onConnectBroker(connected ? null : broker.name)}
+              className={`flex flex-col items-center gap-sp2 rounded-r2 border p-sp3 text-center transition-colors ${
                 connected ? "border-teal bg-bg2" : "border-border bg-bg2 hover:border-border2"
               }`}
             >
-              <div className="text-[12.5px] font-semibold text-t1">{broker}</div>
+              <div
+                className="grid h-[30px] w-[30px] place-items-center rounded-r1 text-[11px] font-extrabold text-white"
+                style={{ background: broker.color }}
+              >
+                {broker.letter}
+              </div>
+              <div className="text-[12.5px] font-semibold text-t1">{broker.name}</div>
               <div className={`text-[10px] font-semibold ${connected ? "text-teal" : "text-t3"}`}>
                 {connected ? "Connected ✓" : "Click to connect"}
               </div>

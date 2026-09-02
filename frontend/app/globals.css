@@ -39,6 +39,11 @@
   --c-t3: #5c7090;
   --c-t4: #3a4d66;
 
+  /* .glass-nav's translucent backdrop -- kept as its own var (not a literal
+     rgba() in the class rule below) specifically so it re-themes along with
+     everything else under [data-theme="light"]. */
+  --c-glass-nav-bg: rgba(10, 15, 26, 0.72);
+
   --font: "Inter", system-ui, sans-serif;
   --mono: "JetBrains Mono", monospace;
 
@@ -51,6 +56,56 @@
   --t1: 0.1s ease;
   --t2: 0.18s ease;
   --t3: 0.28s ease;
+}
+
+/* ── LIGHT THEME (Theme toggle) ──
+   Same variable set, vivid-but-readable values for a white background.
+   Accent hues are shifted darker than their dark-mode counterparts where
+   they're used as text (e.g. text-teal labels) -- the dark-mode teal
+   #0dccaa reads fine on near-black but fails basic contrast on white,
+   so light mode uses a materially darker, still-vibrant shade instead of
+   reusing the same hex. Applied via :root[data-theme="light"] so it's
+   opt-in; the unscoped :root above stays the default (dark). */
+:root[data-theme="light"] {
+  --c-bg: #f7f9fc;
+  --c-bg1: #ffffff;
+  --c-bg2: #f0f3f9;
+  --c-bg3: #e7ecf5;
+  --c-panel: #ffffff;
+  --c-panel2: #f5f7fb;
+  --c-raised: #ecf0f7;
+  --c-border: rgba(15, 23, 42, 0.08);
+  --c-border2: rgba(15, 23, 42, 0.14);
+
+  --c-teal: #059669;
+  --c-teal2: #047857;
+  --c-teal-glow: rgba(5, 150, 105, 0.08);
+  --c-teal-dim: rgba(5, 150, 105, 0.12);
+
+  --c-gold: #b45309;
+  --c-gold-dim: rgba(180, 83, 9, 0.12);
+  --c-red: #dc2626;
+  --c-red-dim: rgba(220, 38, 38, 0.1);
+  --c-green: #16a34a;
+  --c-green-dim: rgba(22, 163, 74, 0.1);
+  --c-blue: #2563eb;
+  --c-blue-dim: rgba(37, 99, 235, 0.1);
+  --c-purple: #7c3aed;
+  --c-purple-dim: rgba(124, 58, 237, 0.12);
+  --c-cyan: #0891b2;
+  --c-cyan-dim: rgba(8, 145, 178, 0.12);
+
+  --c-t1: #0f1729;
+  --c-t2: #47536b;
+  --c-t3: #6b7a99;
+  --c-t4: #98a6c0;
+
+  --c-glass-nav-bg: rgba(255, 255, 255, 0.72);
+
+  --sh-sm: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.06);
+  --sh-md: 0 4px 16px rgba(15, 23, 42, 0.1), 0 2px 6px rgba(15, 23, 42, 0.06);
+  --sh-lg: 0 12px 40px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(15, 23, 42, 0.08);
+  --sh-teal: 0 0 0 1px rgba(5, 150, 105, 0.25), 0 4px 20px rgba(5, 150, 105, 0.12);
 }
 
 * {
@@ -68,7 +123,7 @@ body {
 .glass-nav {
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  background: rgba(10, 15, 26, 0.72);
+  background: var(--c-glass-nav-bg);
   border-bottom: 1px solid var(--c-border);
 }
 
