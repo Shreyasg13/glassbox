@@ -56,7 +56,18 @@ class BaseProvider:
         # was cutting retries off mid-backoff and converting a recoverable
         # 429 into an unrecoverable timeout instead.
         default_timeout_s: float = 60.0,
-        failure_threshold: int = 3,
+        # 12, not 3: `get_provider()` (factory.py) returns one cached
+        # singleton per provider name, so this circuit breaker's state is
+        # SHARED across every agent using that provider in a run, not
+        # per-agent. Observed live: a 7-agent committee_vote run hit legitimate,
+        # independent rate-limit failures on 3 different agents (each having
+        # already exhausted its own internal retry) within seconds of each
+        # other -- tripping the breaker and blocking the other 4 agents'
+        # attempts too, turning "several agents rate-limited" into "every
+        # agent blocked". 12 tolerates a burst like that across several
+        # agents while still catching genuine sustained outages (a dead key,
+        # a fully down provider) that would keep failing well past 12 tries.
+        failure_threshold: int = 12,
         cooldown_s: float = 30.0,
     ) -> None:
         self.default_timeout_s = default_timeout_s
