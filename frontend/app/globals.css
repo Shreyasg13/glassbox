@@ -29,6 +29,10 @@
   --c-green-dim: rgba(13, 184, 122, 0.1);
   --c-blue: #4d7aff;
   --c-blue-dim: rgba(77, 122, 255, 0.1);
+  --c-purple: #a46bff;
+  --c-purple-dim: rgba(164, 107, 255, 0.12);
+  --c-cyan: #22d3ee;
+  --c-cyan-dim: rgba(34, 211, 238, 0.12);
 
   --c-t1: #edf2ff;
   --c-t2: #9aaccc;
@@ -173,4 +177,21 @@ textarea.input {
 
 .btn-danger:hover:not(:disabled) {
   background: var(--c-red-dim);
+}
+
+/* ── MARQUEE (Phase 11) ── */
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: marquee-scroll 40s linear infinite;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
 }
