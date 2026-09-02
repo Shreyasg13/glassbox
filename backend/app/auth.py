@@ -24,6 +24,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 12
 # TODO(real-auth): replace with a real user table.
 _DEV_USERS = {
     "admin": {"password": "admin", "role": "admin"},
+    "user": {"password": "user", "role": "viewer"},
 }
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)

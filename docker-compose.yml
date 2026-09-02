@@ -7,6 +7,7 @@ services:
     restart: unless-stopped
     environment:
       GLASSBOX_JWT_SECRET: ${GLASSBOX_JWT_SECRET:?set a real secret in .env}
+      CORS_ALLOWED_ORIGINS: https://${APP_DOMAIN:?set in .env}
       GLASSBOX_DB_PATH: /data/glassbox.db
       BACKEND_SOURCE_PATH: /backend-source
       TRADING_STORAGE_PATH: /data/trading-storage
