@@ -22,7 +22,7 @@ services:
       WEB_CONCURRENCY: ${BACKEND_WORKERS:-2}
     volumes:
       - ./backend-source:/backend-source:ro
-      - ./trading-storage:/data/trading-storage:ro
+      - ./trading-storage:/data/trading-storage
       - glassbox-db:/data
     expose:
       - "8000"

@@ -112,6 +112,38 @@ No registry, no CI needed for this — add GitHub Actions later (build +
 `gcloud compute ssh ... -- 'cd glassbox && git pull && docker compose up -d --build'`)
 once the manual flow is stable and you want push-to-deploy.
 
+## 6b. Daily market-data refresh (cron)
+
+`./trading-storage` is bind-mounted read-write into the backend container
+at `/data/trading-storage`. A host crontab entry runs the refresh script
+inside that container once per weekday, after US market close:
+
+```
+0 22 * * 1-5 cd /home/shrey/glassbox && /usr/bin/docker compose exec -T backend python -m app.scripts.update_daily_data >> /home/shrey/glassbox/logs/daily_sync.log 2>&1
+```
+
+(`22:00 UTC` = 5pm ET; weekdays only. Registered via `crontab -e` / the
+append pattern `(crontab -l 2>/dev/null; echo '<line>') | crontab -` so an
+existing crontab isn't clobbered.)
+
+What it does: for each of the 15 tracked symbols, fetches the last ~10 days
+from yfinance, merges into the existing full-history parquet file by date
+(existing history is never dropped — the script refuses to write if the
+merged row count would be lower or the earliest date would shift), recomputes
+`RSI`/`MA_10..200`/`Volatility`/`Volume_MA` over the full series, and writes
+back atomically (temp file + `os.replace`).
+
+- **Check it ran**: `ssh ... 'tail -50 ~/glassbox/logs/daily_sync.log'` or
+  `crontab -l` to confirm the entry is still registered.
+- **Run it manually**: `docker compose exec -T backend python -m app.scripts.update_daily_data`
+- **Schema note**: the parquet files this reads/writes use a different
+  column set than `backend-source/live_trading/LIVE_DATA_CONNECTOR.py`
+  produces (that script's `DataStorageManager` writes to a different,
+  nested path entirely) — `update_daily_data.py` targets the exact schema
+  the running backend (`app/data_source.py`) actually reads, verified
+  directly against the live parquet files rather than assumed from the
+  legacy script.
+
 ## 7. Claude via Vertex AI instead of the direct Anthropic API (optional)
 
 If you'd rather keep LLM billing entirely inside your GCP project: GCP's
