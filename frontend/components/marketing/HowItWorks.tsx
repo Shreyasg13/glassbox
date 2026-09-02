@@ -46,7 +46,7 @@ export function HowItWorks() {
       <div className="grid grid-cols-1 gap-sp5 md:grid-cols-3">
         {cards.map((c, i) => (
           <Reveal key={c.number} delayMs={i * 120}>
-            <div className="glass-panel h-full p-sp5">
+            <div className="glass-panel h-full p-sp5 transition-all duration-200 ease-glass hover:-translate-y-1 hover:border-border2 hover:shadow-lg2">
               <div className="mono mb-sp4 text-[11px] font-bold text-t3">{c.number}</div>
               <div className={`mb-sp4 grid h-[38px] w-[38px] place-items-center rounded-r2 text-[18px] ${c.iconClass}`}>
                 {c.icon}

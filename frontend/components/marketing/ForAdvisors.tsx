@@ -45,7 +45,7 @@ export function ForAdvisors() {
       <div className="mb-sp8 grid grid-cols-1 gap-sp5 md:grid-cols-3">
         {benefits.map((b, i) => (
           <Reveal key={b.title} delayMs={i * 100}>
-            <div className="glass-panel h-full p-sp5">
+            <div className="glass-panel h-full p-sp5 transition-all duration-200 ease-glass hover:-translate-y-1 hover:border-border2 hover:shadow-lg2">
               <h3 className="mb-sp2 text-[14.5px] font-bold text-t1">{b.title}</h3>
               <p className="text-[13px] leading-relaxed text-t2">{b.body}</p>
             </div>
@@ -56,7 +56,7 @@ export function ForAdvisors() {
       <div className="grid grid-cols-1 gap-sp5 md:grid-cols-2">
         {testimonials.map((t, i) => (
           <Reveal key={t.name} delayMs={i * 100}>
-            <div className="glass-panel-raised h-full p-sp5">
+            <div className="glass-panel-raised h-full p-sp5 transition-all duration-200 ease-glass hover:-translate-y-1 hover:shadow-lg2">
               <div className="mb-sp3 text-[13px] text-gold">★★★★★</div>
               <p className="mb-sp5 text-[13.5px] leading-relaxed text-t1">&ldquo;{t.text}&rdquo;</p>
               <div className="flex items-center gap-sp3">

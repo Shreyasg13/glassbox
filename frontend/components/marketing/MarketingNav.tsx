@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 const links = [
@@ -10,6 +11,29 @@ const links = [
 ];
 
 export function MarketingNav() {
+  const [active, setActive] = useState<string | null>(null);
+
+  useEffect(() => {
+    const ids = links.map((l) => l.href.slice(1));
+    const sections = ids
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => el !== null);
+    if (sections.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length > 0) {
+          setActive(`#${visible[0].target.id}`);
+        }
+      },
+      { rootMargin: "-45% 0px -45% 0px", threshold: 0 }
+    );
+
+    sections.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <nav className="glass-nav sticky top-0 z-50 flex items-center gap-sp6 px-sp6 py-sp3 md:px-sp10">
       <Link href="/" className="flex items-center gap-sp2">
@@ -26,9 +50,16 @@ export function MarketingNav() {
           <a
             key={l.href}
             href={l.href}
-            className="text-[13px] font-medium text-t2 transition-colors hover:text-t1"
+            className={`relative text-[13px] font-medium transition-colors ${
+              active === l.href ? "text-teal" : "text-t2 hover:text-t1"
+            }`}
           >
             {l.label}
+            <span
+              className={`absolute -bottom-1 left-0 h-[2px] w-full origin-left rounded-full bg-teal transition-transform duration-200 ease-glass ${
+                active === l.href ? "scale-x-100" : "scale-x-0"
+              }`}
+            />
           </a>
         ))}
       </div>

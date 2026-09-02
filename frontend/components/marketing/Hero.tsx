@@ -48,7 +48,7 @@ export function Hero() {
       </Reveal>
 
       <Reveal delayMs={150}>
-        <div className="glass-panel-raised overflow-hidden">
+        <div className="glass-panel-raised overflow-hidden transition-all duration-300 ease-glass hover:-translate-y-1 hover:shadow-lg2">
           <div className="flex items-center justify-between border-b border-border p-sp4">
             <span className="text-[12px] font-semibold text-t2">Live verification — illustrative</span>
             <div className="flex items-center gap-sp2 rounded-r4 bg-raised px-sp3 py-1 text-[11px] font-semibold text-t2">
@@ -85,7 +85,7 @@ export function Hero() {
               {evidenceRows.map((row) => (
                 <div
                   key={row.label}
-                  className="flex items-center justify-between rounded-r1 border border-border bg-bg2 px-sp3 py-sp2"
+                  className="flex items-center justify-between rounded-r1 border border-border bg-bg2 px-sp3 py-sp2 transition-colors duration-150 hover:border-border2 hover:bg-panel2"
                 >
                   <span className="text-[12.5px] text-t2">{row.label}</span>
                   <div className="text-right">

@@ -125,13 +125,15 @@ function SidebarLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <Link
       href={item.href}
-      className={`relative flex items-center gap-sp3 rounded-r2 px-sp3 py-2 text-[13px] font-medium transition-colors ${
-        active ? "bg-teal-dim font-semibold text-teal" : "text-t2 hover:bg-panel hover:text-t1"
+      className={`relative flex items-center gap-sp3 rounded-r2 px-sp3 py-2 text-[13px] font-medium transition-all duration-150 ${
+        active ? "bg-teal-dim font-semibold text-teal" : "text-t2 hover:translate-x-0.5 hover:bg-panel hover:text-t1"
       }`}
     >
-      {active && (
-        <span className="absolute left-0 top-1/2 h-[16px] w-[3px] -translate-y-1/2 rounded-r1 bg-teal shadow-teal" />
-      )}
+      <span
+        className={`absolute left-0 top-1/2 h-[16px] w-[3px] -translate-y-1/2 rounded-r1 bg-teal shadow-teal transition-opacity duration-150 ${
+          active ? "opacity-100" : "opacity-0"
+        }`}
+      />
       <span className="w-[18px] text-center opacity-80">{item.icon}</span>
       {item.label}
     </Link>

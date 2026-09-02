@@ -72,8 +72,10 @@ export function Pricing() {
         {tiers.map((t, i) => (
           <Reveal key={t.name} delayMs={i * 100}>
             <div
-              className={`relative flex h-full flex-col p-sp5 ${
-                t.popular ? "glass-panel-accent border-teal/30" : "glass-panel"
+              className={`relative flex h-full flex-col p-sp5 transition-all duration-200 ease-glass hover:-translate-y-1 ${
+                t.popular
+                  ? "glass-panel-accent border-teal/30 hover:shadow-lg2"
+                  : "glass-panel hover:border-border2 hover:shadow-lg2"
               }`}
             >
               {t.popular && (
