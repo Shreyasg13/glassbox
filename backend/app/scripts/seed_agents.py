@@ -202,7 +202,7 @@ def _seed_agents() -> dict[str, str]:
                 "role": spec["role"],
                 "type": "llm",
                 "provider": "gemini",
-                "model": "gemini-2.0-flash",
+                "model": "gemini-flash-latest",
                 "params": _LLM_PARAMS,
                 "system_prompt": spec["system_prompt"],
                 "tools": [],
