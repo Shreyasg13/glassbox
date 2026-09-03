@@ -250,3 +250,13 @@ textarea.input {
     animation: none;
   }
 }
+
+/* ── SPEAKING INDICATOR (voice narration) ── */
+@keyframes speak-wave {
+  0%, 100% { height: 4px; }
+  50% { height: 14px; }
+}
+.animate-speak-wave {
+  height: 4px;
+  animation: speak-wave 0.9s ease-in-out infinite;
+}

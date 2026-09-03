@@ -1,4 +1,9 @@
+"use client";
+
+import { useState } from "react";
 import { Reveal } from "@/components/Reveal";
+import { SpeakingIndicator } from "@/components/SpeakingIndicator";
+import { useLensVoice } from "@/lib/useLensVoice";
 
 const evidenceRows = [
   { label: "Debt / Equity Ratio", value: "1.78", color: "text-teal", source: "FMP API · 2 hr ago" },
@@ -6,7 +11,23 @@ const evidenceRows = [
   { label: "Beta vs S&P 500", value: "1.22", color: "text-t2", source: "Twelve Data · Live" },
 ];
 
+const DEMO_NARRATION =
+  "Apple Incorporated, ticker AAPL, score 8.4. Debt to equity ratio 1.78. Altman Z-Score 6.24, very low risk. " +
+  "Beta versus S&P 500 is 1.22. Auditor A6: narrative matches raw API, zero discrepancies found.";
+const DEMO_VOICE_ID = "am_michael";
+
 export function Hero() {
+  // "use client" required for this hook -- the surrounding file was
+  // previously a plain server-safe component; this is the reason the
+  // directive was added at the top.
+  const voice = useLensVoice();
+  const [playing, setPlaying] = useState(false);
+
+  function handleListen() {
+    if (!voice.enabled) voice.toggle();
+    setPlaying(true);
+    voice.speak("hero-demo", DEMO_NARRATION, DEMO_VOICE_ID, () => setPlaying(false));
+  }
   return (
     <div className="grid grid-cols-1 items-center gap-sp8 px-sp6 py-sp10 md:px-sp10 lg:grid-cols-2 lg:py-sp10">
       <Reveal>
@@ -70,7 +91,7 @@ export function Hero() {
                   <div className="text-[9px] text-t3">Score</div>
                 </div>
               </div>
-              <div>
+              <div className="flex-1">
                 <div className="text-[15px] font-bold text-t1">Apple Inc. — AAPL</div>
                 <div className="mt-sp1 flex items-center gap-sp3 text-[11px] text-t3">
                   <span>NASDAQ · Technology</span>
@@ -79,7 +100,18 @@ export function Hero() {
                   </span>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={handleListen}
+                aria-label="Listen to this verification"
+                className="flex shrink-0 items-center gap-sp2 rounded-r2 border border-border2 bg-bg2 px-sp3 py-sp2 text-[11px] font-semibold text-t2 transition-colors hover:border-teal hover:text-teal"
+              >
+                {playing ? <SpeakingIndicator /> : "🔊"} Listen
+              </button>
             </div>
+            {voice.unavailable && (
+              <p className="mono mb-sp3 text-center text-[11px] text-t4">Voice playback unavailable right now.</p>
+            )}
 
             <div className="flex flex-col gap-sp2">
               {evidenceRows.map((row) => (

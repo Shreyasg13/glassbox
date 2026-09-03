@@ -1,6 +1,21 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
+import { useLensVoice } from "@/lib/useLensVoice";
+import { SpeakingIndicator } from "@/components/SpeakingIndicator";
+
+// Neutral narrator voice for signal rows -- these aren't tied to a
+// Strategy Lens persona, so there's no per-row voiceId to pick from;
+// reusing one of the confirmed-real Kokoro voice ids already used
+// elsewhere (see components/marketing/lensData.ts) rather than
+// introducing an unverified new one.
+const NARRATOR_VOICE_ID = "am_michael";
+
+function signalSentence(s: Signal): string {
+  const price = s.current_price != null ? `at $${s.current_price.toFixed(2)}` : "";
+  const conf = s.confidence != null ? `, ${s.confidence.toFixed(0)} percent confidence` : "";
+  return `${s.symbol}: ${s.signal} ${price}${conf}.`;
+}
 
 export type Signal = {
   symbol: string;
@@ -31,10 +46,22 @@ const signalColor: Record<string, string> = {
 
 /**
  * One signal row. Memoized so a 3s broadcast tick only re-renders rows
- * whose symbol/signal/price actually changed, not the whole list.
+ * whose symbol/signal/price actually changed, not the whole list --
+ * `isSpeaking` is included in the comparison since that's the one prop
+ * that legitimately changes independent of the signal data itself.
  */
 const SignalRow = memo(
-  function SignalRow({ s }: { s: Signal }) {
+  function SignalRow({
+    s,
+    voiceEnabled,
+    isSpeaking,
+    onSpeak,
+  }: {
+    s: Signal;
+    voiceEnabled: boolean;
+    isSpeaking: boolean;
+    onSpeak: (s: Signal) => void;
+  }) {
     return (
       <li className="flex items-center justify-between rounded-r1 border border-border bg-bg2 px-sp3 py-sp2 text-[13px]">
         <span className="mono font-semibold text-t1">{s.symbol}</span>
@@ -43,13 +70,25 @@ const SignalRow = memo(
           {s.current_price != null ? `$${s.current_price.toFixed(2)}` : ""}
         </span>
         <span className="text-t3">{s.confidence != null ? `${s.confidence.toFixed(0)}%` : ""}</span>
+        {voiceEnabled && (
+          <button
+            type="button"
+            onClick={() => onSpeak(s)}
+            aria-label={`Listen to ${s.symbol} signal`}
+            className="ml-sp2 grid h-[22px] w-[22px] shrink-0 place-items-center rounded-r1 text-t3 transition-colors hover:text-teal"
+          >
+            {isSpeaking ? <SpeakingIndicator /> : "🔊"}
+          </button>
+        )}
       </li>
     );
   },
   (prev, next) =>
     prev.s.symbol === next.s.symbol &&
     prev.s.signal === next.s.signal &&
-    prev.s.current_price === next.s.current_price
+    prev.s.current_price === next.s.current_price &&
+    prev.voiceEnabled === next.voiceEnabled &&
+    prev.isSpeaking === next.isSpeaking
 );
 
 export function SignalTicker({ initialSignals = [] }: { initialSignals?: Signal[] }) {
@@ -57,6 +96,15 @@ export function SignalTicker({ initialSignals = [] }: { initialSignals?: Signal[
   const [state, setState] = useState<ConnState>("connecting");
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voice = useLensVoice();
+  const [speakingSymbol, setSpeakingSymbol] = useState<string | null>(null);
+
+  function handleSpeak(s: Signal) {
+    setSpeakingSymbol(s.symbol);
+    voice.speak(`signal-${s.symbol}`, signalSentence(s), NARRATOR_VOICE_ID, () =>
+      setSpeakingSymbol((cur) => (cur === s.symbol ? null : cur))
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -105,15 +153,33 @@ export function SignalTicker({ initialSignals = [] }: { initialSignals?: Signal[
         <h2 className="text-[13px] font-bold uppercase tracking-wide text-t3">
           Live Signals
         </h2>
-        <span className="flex items-center gap-sp2 text-[11px] font-semibold text-t3">
-          <span
-            className={`h-[7px] w-[7px] rounded-full ${
-              state === "open" ? "bg-teal" : state === "connecting" ? "bg-gold" : "bg-red"
+        <div className="flex items-center gap-sp3">
+          <button
+            type="button"
+            onClick={voice.toggle}
+            aria-pressed={voice.enabled}
+            className={`flex items-center gap-1 rounded-r4 border px-sp2 py-[3px] text-[10.5px] font-semibold transition-colors ${
+              voice.enabled
+                ? "border-teal/30 bg-teal-dim text-teal"
+                : "border-border text-t3 hover:border-border2 hover:text-t2"
             }`}
-          />
-          {state === "open" ? "Connected" : state === "connecting" ? "Connecting…" : "Reconnecting…"}
-        </span>
+          >
+            🔊 Voice {voice.enabled ? "on" : "off"}
+          </button>
+          <span className="flex items-center gap-sp2 text-[11px] font-semibold text-t3">
+            <span
+              className={`h-[7px] w-[7px] rounded-full ${
+                state === "open" ? "bg-teal" : state === "connecting" ? "bg-gold" : "bg-red"
+              }`}
+            />
+            {state === "open" ? "Connected" : state === "connecting" ? "Connecting…" : "Reconnecting…"}
+          </span>
+        </div>
       </div>
+
+      {voice.enabled && voice.unavailable && (
+        <p className="mono mb-sp3 text-center text-[11px] text-t4">Voice playback unavailable right now.</p>
+      )}
 
       {signals.length === 0 ? (
         <p className="py-sp6 text-center text-[13px] text-t3">
@@ -122,7 +188,13 @@ export function SignalTicker({ initialSignals = [] }: { initialSignals?: Signal[
       ) : (
         <ul className="flex flex-col gap-sp2">
           {signals.map((s) => (
-            <SignalRow key={s.symbol} s={s} />
+            <SignalRow
+              key={s.symbol}
+              s={s}
+              voiceEnabled={voice.enabled}
+              isSpeaking={speakingSymbol === s.symbol}
+              onSpeak={handleSpeak}
+            />
           ))}
         </ul>
       )}
