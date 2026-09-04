@@ -54,7 +54,7 @@ export function Hero() {
           <span className="text-teal">Trust the data.</span>
         </h1>
         <p className="mb-sp8 max-w-[500px] text-[17px] leading-[1.7] text-t2">
-          Glass Box shows you exactly why every risk score is what it is — the raw institutional
+          Glass Box shows you exactly why every risk score is what it is: the raw institutional
           data, the formula, and an independent audit before you see any number. No black box. No
           hallucinations displayed unchecked.
         </p>
@@ -84,7 +84,7 @@ export function Hero() {
       <Reveal delayMs={150}>
         <div className="glass-panel-raised overflow-hidden transition-all duration-300 ease-glass hover:-translate-y-1 hover:shadow-lg2">
           <div className="flex items-center justify-between border-b border-border p-sp4">
-            <span className="text-[12px] font-semibold text-t2">Live verification — illustrative</span>
+            <span className="text-[12px] font-semibold text-t2">Live verification · illustrative</span>
             <div className="flex items-center gap-sp2 rounded-r4 bg-raised px-sp3 py-1 text-[11px] font-semibold text-t2">
               <span className="h-[6px] w-[6px] rounded-full bg-teal" />
               A6 Auditor active
@@ -100,7 +100,7 @@ export function Hero() {
                 </div>
               </div>
               <div className="flex-1">
-                <div className="text-[15px] font-bold text-t1">Apple Inc. — AAPL</div>
+                <div className="text-[15px] font-bold text-t1">Apple Inc. · AAPL</div>
                 <div className="mt-sp1 flex items-center gap-sp3 text-[11px] text-t3">
                   <span>NASDAQ · Technology</span>
                   <span className="flex items-center gap-1 rounded-r1 bg-teal-dim px-sp2 py-[2px] text-teal">

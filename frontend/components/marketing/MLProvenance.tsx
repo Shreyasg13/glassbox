@@ -4,13 +4,13 @@ const items = [
   {
     icon: "🏛",
     title: "Institutional sources",
-    body: "FMP + Twelve Data — the same feeds funds pay for, never scraped aggregators.",
+    body: "FMP + Twelve Data: the same feeds funds pay for, never scraped aggregators.",
     tag: "30 yrs history",
   },
   {
     icon: "🧮",
     title: "Deterministic core",
-    body: "Risk math (Altman Z, D/E, beta) is formula-based and reproducible — no model guesswork on the numbers.",
+    body: "Risk math (Altman Z, D/E, beta) is formula-based and reproducible, no model guesswork on the numbers.",
     tag: "auditable",
   },
   {
@@ -22,7 +22,7 @@ const items = [
   {
     icon: "🛡",
     title: "Audit layer",
-    body: "A6 checks every narrative against raw data. Weekly error rate published — nothing hidden.",
+    body: "A6 checks every narrative against raw data. Weekly error rate published, nothing hidden.",
     tag: "0 shown to users",
   },
 ];
@@ -36,7 +36,7 @@ export function MLProvenance() {
             Trusted Data · Trained Models
           </div>
           <h2 className="mb-sp2 text-[32px] font-extrabold leading-tight tracking-tight text-t1">
-            What the models learned — and from where
+            What the models learned, and from where
           </h2>
           <p className="text-[15px] text-t2">
             Transparency isn&apos;t only about the audit. It&apos;s about what went in. Here&apos;s the provenance

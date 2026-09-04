@@ -83,7 +83,7 @@ export function StepPortfolio({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && addTicker()}
-          placeholder="Type ticker + press Enter — e.g. AAPL"
+          placeholder="Type ticker + press Enter (e.g. AAPL)"
           className="mono flex-1 rounded-r1 border border-border2 bg-bg2 px-sp3 py-sp2 text-[14px] font-bold uppercase text-teal outline-none focus:border-teal focus:shadow-[0_0_0_3px_rgba(13,204,170,.1)]"
         />
         <button
@@ -109,7 +109,7 @@ export function StepPortfolio({
 
       <div className="flex items-center gap-1 text-[11.5px] text-t3">
         <span className="font-semibold text-green">✓</span>
-        {tickers.length} holdings detected — Glass Box will verify all in the next step
+        {tickers.length} holdings detected. Glass Box will verify all in the next step
       </div>
     </div>
   );

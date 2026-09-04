@@ -3,7 +3,7 @@ import { Reveal } from "@/components/Reveal";
 const benefits = [
   {
     title: "An evidence trail your clients can see",
-    body: "When a client asks \"why does it say that?\", point to the exact API response and the audit that checked it — not a black-box score.",
+    body: "When a client asks \"why does it say that?\", point to the exact API response and the audit that checked it, not a black-box score.",
   },
   {
     title: "Compliance-ready by default",
@@ -17,14 +17,14 @@ const benefits = [
 
 const testimonials = [
   {
-    text: "Finally — a platform that shows me where the number came from. My clients ask 'why does it say that?' and I can now point to the exact API response. That's career-defining trust-building.",
+    text: "Finally, a platform that shows me where the number came from. My clients ask 'why does it say that?' and I can now point to the exact API response. That's career-defining trust-building.",
     initials: "MD",
     color: "bg-teal-dim text-teal",
     name: "M. Donovan",
     role: "Fee-only RIA · New Jersey",
   },
   {
-    text: "The Discrepancy Rate widget changed how my clients think about AI. Instead of 'is this reliable?' they now ask 'what's the error rate this week?' That's a fundamentally different — and better — conversation.",
+    text: "The Discrepancy Rate widget changed how my clients think about AI. Instead of 'is this reliable?' they now ask 'what's the error rate this week?' That's a fundamentally different, and better, conversation.",
     initials: "PR",
     color: "bg-gold-dim text-gold",
     name: "P. Ramirez",

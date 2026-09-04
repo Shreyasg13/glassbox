@@ -87,7 +87,7 @@ export function MarketingNav() {
         Sign In
       </Link>
       <Link href="/login" className="btn btn-primary">
-        Try Free — No card
+        Try Free · No card
       </Link>
     </nav>
   );

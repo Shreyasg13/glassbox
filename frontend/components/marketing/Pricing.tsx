@@ -9,7 +9,7 @@ const tiers = [
     period: "forever · no credit card needed",
     features: [
       { on: true, label: "5 stock verifications per day" },
-      { on: true, label: "Full Evidence Path — raw data visible" },
+      { on: true, label: "Full Evidence Path · raw data visible" },
       { on: true, label: "A6 Auditor confirmation badge" },
       { on: true, label: "Discrepancy Rate dashboard" },
       { on: false, label: "Portfolio Glass Box Score" },
@@ -28,8 +28,8 @@ const tiers = [
     features: [
       { on: true, label: "200 verifications per month" },
       { on: true, label: "Portfolio Glass Box Score" },
-      { on: true, label: "Crisis Alerts — real-time" },
-      { on: true, label: "Stress Test — historical crisis simulator" },
+      { on: true, label: "Crisis Alerts · real-time" },
+      { on: true, label: "Stress Test · historical crisis simulator" },
       { on: true, label: "Weekly Discrepancy Report email" },
       { on: true, label: "Broker import via SnapTrade" },
     ],
@@ -49,7 +49,7 @@ const tiers = [
       { on: true, label: "API access for custom integrations" },
       { on: true, label: "Multi-client portfolio management" },
       { on: true, label: "Compliance audit log export" },
-      { on: true, label: "30-day free trial — no risk" },
+      { on: true, label: "30-day free trial · no risk" },
     ],
     cta: "Start 30-day Trial",
     ctaClass: "btn-ghost",

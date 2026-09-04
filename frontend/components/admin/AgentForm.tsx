@@ -41,7 +41,7 @@ function FallbackModelsInput({ value, onChange }: { value: string[]; onChange: (
               add();
             }
           }}
-          placeholder="e.g. gemini-3.8-flash — press Enter to add"
+          placeholder="e.g. gemini-3.8-flash (press Enter to add)"
         />
         <button type="button" onClick={add} className="btn btn-ghost shrink-0">
           + Add

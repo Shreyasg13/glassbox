@@ -11,7 +11,7 @@ const posts = [
     icon: "⟲",
     title: "How Agent A6 audits Agent A5",
     excerpt:
-      "A walkthrough of the verification step that runs before any narrative reaches your screen — and what happens when it disagrees.",
+      "A walkthrough of the verification step that runs before any narrative reaches your screen, and what happens when it disagrees.",
   },
   {
     icon: "ƒ",

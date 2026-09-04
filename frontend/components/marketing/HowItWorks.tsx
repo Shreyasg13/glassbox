@@ -2,16 +2,16 @@ import { Reveal } from "@/components/Reveal";
 
 const cards = [
   {
-    number: "01 — FETCH",
+    number: "01 · FETCH",
     icon: "⬇",
     iconClass: "bg-teal-dim text-teal",
     title: "Agent A1 pulls institutional data",
-    body: "Debt-to-equity, Altman Z-Score, free cash flow, 30 years of history — directly from Financial Modeling Prep's institutional API. Twelve Data provides real-time technicals. No aggregators, no intermediaries.",
+    body: "Debt-to-equity, Altman Z-Score, free cash flow, 30 years of history, directly from Financial Modeling Prep's institutional API. Twelve Data provides real-time technicals. No aggregators, no intermediaries.",
     tag: "A1 Data Fetcher · A2 Technical Analyzer · A3 Sentiment Scanner",
     tagClass: "text-teal",
   },
   {
-    number: "02 — EXPLAIN",
+    number: "02 · EXPLAIN",
     icon: "✎",
     iconClass: "bg-gold-dim text-gold",
     title: "Agent A5 translates to plain English",
@@ -20,11 +20,11 @@ const cards = [
     tagClass: "text-gold",
   },
   {
-    number: "03 — AUDIT",
+    number: "03 · AUDIT",
     icon: "✓",
     iconClass: "bg-green-dim text-green",
     title: "Agent A6 audits before you see it",
-    body: "The Auditor cross-checks the narrative against raw API data. If anything doesn't match, it's flagged and corrected before display. You only see verified output — and we publish the error rate publicly, every week.",
+    body: "The Auditor cross-checks the narrative against raw API data. If anything doesn't match, it's flagged and corrected before display. You only see verified output, and we publish the error rate publicly, every week.",
     tag: "A6 Auditor · A7 Compliance Monitor",
     tagClass: "text-green",
   },
@@ -40,7 +40,7 @@ export function HowItWorks() {
         <h2 className="mb-sp8 max-w-[560px] text-[32px] font-extrabold leading-tight tracking-tight text-t1">
           Not AI magic.
           <br />
-          AI math — audited.
+          AI math. Audited.
         </h2>
       </Reveal>
       <div className="grid grid-cols-1 gap-sp5 md:grid-cols-3">

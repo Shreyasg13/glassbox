@@ -17,7 +17,7 @@ export default function ChoosePage() {
             <h2 className="mb-sp2 text-[15.5px] font-bold text-t1">Explore with sample data</h2>
             <p className="text-[13px] leading-relaxed text-t2">
               See the live dashboard, agent signals, and reports right away using illustrative
-              sample data — no setup required.
+              sample data. No setup required.
             </p>
           </div>
           <Link href="/dashboard" className="btn btn-primary mt-auto justify-center">
@@ -32,7 +32,7 @@ export default function ChoosePage() {
           <div>
             <h2 className="mb-sp2 text-[15.5px] font-bold text-t1">Connect your data</h2>
             <p className="text-[13px] leading-relaxed text-t2">
-              Add your tickers, connect a broker, and set your alert preferences — a 4-step
+              Add your tickers, connect a broker, and set your alert preferences in a 4-step
               onboarding flow.
             </p>
           </div>

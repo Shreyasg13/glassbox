@@ -202,7 +202,7 @@ export function StrategyLenses() {
           </h2>
           <p className="text-[15px] leading-relaxed text-t2">
             Each lens is pretrained on a legendary investor&apos;s documented strategy and reads your holdings for
-            growth and risk — every view traces back to the same audited data. Lenses inform; they never advise.
+            growth and risk. Every view traces back to the same audited data. Lenses inform; they never advise.
           </p>
         </div>
       </Reveal>
@@ -236,7 +236,7 @@ export function StrategyLenses() {
               <span className="font-semibold" style={{ color: `var(--c-${active.color})` }}>
                 {active.inspiredName}
               </span>
-              &apos;s lens — illustrative
+              &apos;s lens · illustrative
             </div>
           )}
         </div>
@@ -423,7 +423,7 @@ export function StrategyLenses() {
                 {active.code}
               </div>
               <div className="text-[12px] font-extrabold text-t1">
-                {active.inspiredName} — {active.title}
+                {active.inspiredName} · {active.title}
               </div>
             </div>
             <p className="min-h-[60px] text-[13px] italic leading-relaxed text-t1">
@@ -468,7 +468,7 @@ export function StrategyLenses() {
       <div className="mx-auto mt-sp8 max-w-[960px] rounded-r3 border border-gold/20 bg-gold-dim p-sp4 text-[11.5px] leading-relaxed text-t2">
         <b className="text-gold">⚠ Important:</b> Glass Box is a financial research and data-verification tool. It
         does <b>not</b> constitute investment advice; all scores are informational. The Strategy Lenses are{" "}
-        <b>original AI archetypes</b> that study the publicly documented philosophies of well-known investors —
+        <b>original AI archetypes</b> that study the publicly documented philosophies of well-known investors,
         named as <b>inspiration only</b>. Glass Box is <b>not affiliated with, endorsed by, or representing</b> any
         named investor or firm, and portraits are original illustrations, <b>not likenesses</b>. Track-record
         figures are historical facts about each investor&apos;s public record, not a promise of Glass Box

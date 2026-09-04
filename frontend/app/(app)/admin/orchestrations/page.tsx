@@ -26,7 +26,7 @@ export default function OrchestrationsListPage() {
       {isLoading && <p className="text-[13px] text-t3">Loading…</p>}
       {error && <p className="text-[13px] font-semibold text-red">Failed to load orchestrations.</p>}
       {data && data.length === 0 && (
-        <p className="text-[13px] text-t3">No orchestrations yet — create one to get started.</p>
+        <p className="text-[13px] text-t3">No orchestrations yet. Create one to get started.</p>
       )}
 
       <div className="grid grid-cols-1 gap-sp3 md:grid-cols-2 lg:grid-cols-3">

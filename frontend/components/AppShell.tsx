@@ -116,6 +116,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             MARKET OPEN
           </div>
           <ThemeToggle />
+          {/* Always visible regardless of viewport -- the sidebar's own
+              sign-out (below) is desktop-only (md:flex), so this is the
+              one sign-out control every page and every screen size can
+              reach. See admin/layout.tsx, which used to have its own
+              separate always-visible sign-out button -- removed in favor
+              of this one so there's a single, global, non-duplicated
+              control rather than one that only happened to be reachable
+              from admin pages. */}
+          {token && (
+            <button
+              onClick={() => {
+                logout();
+                router.push("/");
+              }}
+              className="btn btn-ghost text-[12px]"
+            >
+              Sign Out
+            </button>
+          )}
         </div>
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-sp5 py-sp6">{children}</main>
       </div>

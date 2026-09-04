@@ -77,7 +77,7 @@ export function StepVerify({ tickers }: { tickers: string[] }) {
           </div>
           <div className="flex-1">
             <div className="mb-1 text-[15px] font-extrabold text-t1">
-              {m.name} — {m.ticker}
+              {m.name} · {m.ticker}
             </div>
             <div className="flex flex-wrap items-center gap-sp2">
               <span className="text-[12px] text-t3">NASDAQ · Technology</span>

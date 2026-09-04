@@ -24,8 +24,8 @@ export function ScoreFeedback() {
           <div>
             <h3 className="mb-sp1 text-[16px] font-bold text-t1">Was this verification useful?</h3>
             <p className="max-w-[380px] text-[12.5px] leading-relaxed text-t3">
-              Your rating helps us track how useful the evidence trail actually is — logged locally in this demo,
-              not yet wired to a live trust-score pipeline.
+              Your rating helps us track how useful the evidence trail actually is. It&apos;s logged locally in
+              this demo, not yet wired to a live trust-score pipeline.
             </p>
           </div>
           <div>
@@ -48,7 +48,7 @@ export function ScoreFeedback() {
             </div>
             {submitted && (
               <div className="mono mt-sp2 text-[11px] font-semibold text-teal">
-                ✓ Thanks — {rating}/5 recorded for this session.
+                ✓ Thanks! {rating}/5 recorded for this session.
               </div>
             )}
           </div>

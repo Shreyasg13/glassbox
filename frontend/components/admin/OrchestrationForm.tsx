@@ -103,7 +103,7 @@ export function OrchestrationForm({ initial }: { initial: OrchestrationConfig })
           <span className="mb-sp2 block text-[12px] font-semibold text-t3">Agents</span>
           <div className="flex flex-col gap-sp2 rounded-r2 border border-border bg-bg2 p-sp3">
             {(agents ?? []).length === 0 && (
-              <p className="text-[12px] text-t3">No agents yet — create one first.</p>
+              <p className="text-[12px] text-t3">No agents yet. Create one first.</p>
             )}
             {agents?.map((a) => (
               <label key={a.id} className="flex items-center gap-sp2 text-[13px] text-t1">

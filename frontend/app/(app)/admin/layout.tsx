@@ -6,6 +6,11 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { ProviderHealthStrip } from "@/components/admin/ProviderHealthStrip";
 
+// Sign-out lives in AppShell's top bar now (always visible, every page,
+// every viewport) -- this layout used to have its own separate sign-out
+// button here, which only happened to be reachable from admin pages
+// since AppShell's sidebar (the other sign-out) is desktop-only.
+
 const tabs = [
   { href: "/admin/agents", label: "Agents" },
   { href: "/admin/orchestrations", label: "Orchestrations" },
@@ -14,7 +19,7 @@ const tabs = [
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { token, role, loading, logout } = useAuth();
+  const { token, role, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -31,7 +36,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="flex flex-col gap-sp5">
       <ProviderHealthStrip />
-      <div className="flex items-center justify-between border-b border-border pb-sp3">
+      <div className="border-b border-border pb-sp3">
         <nav className="flex gap-sp5">
           {tabs.map((t) => (
             <Link
@@ -45,9 +50,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </Link>
           ))}
         </nav>
-        <button className="btn btn-ghost" onClick={logout}>
-          Sign Out
-        </button>
       </div>
       {children}
     </div>

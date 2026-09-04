@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Glass Box",
-  description: "Multi-agent trading system — glass UI",
+  description: "Multi-agent trading system · glass UI",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
