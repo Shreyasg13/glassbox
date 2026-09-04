@@ -47,11 +47,22 @@ class TrackAgentsResponse(BaseModel):
 # ---- /api/agent-performance ----
 
 class AgentPerformance(BaseModel):
+    """Real per-agent call stats, computed from the llm_calls log
+    (db.get_agent_performance) -- not a trading win-rate. This system
+    doesn't yet link a past BUY/SELL/HOLD signal to its later real-world
+    outcome (that's a genuinely separate, harder feature -- see
+    docs/PROJECT_STATUS.md's roadmap), so these fields describe agent
+    call reliability/volume, which IS real and measured, not signal
+    profitability, which isn't measured yet. Earlier field names here
+    (score/win_rate/avg_impact) implied the latter while this endpoint
+    actually returned a hardcoded mock -- fixed to be honest about what
+    it measures now that it's real data."""
+
     name: str
-    score: float
-    win_rate: float
-    decisions: int
-    avg_impact: float
+    call_count: int
+    success_rate: float  # 0-100, percent of calls with status "ok"
+    avg_duration_ms: Optional[float] = None
+    last_active_at: Optional[str] = None
 
 
 # ---- /api/holdings ----

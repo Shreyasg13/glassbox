@@ -221,6 +221,51 @@ def list_llm_calls() -> List[Dict[str, Any]]:
     return _list(llm_calls_table)
 
 
+def get_agent_performance() -> List[Dict[str, Any]]:
+    """Real per-agent call stats aggregated from llm_calls -- replaces
+    an earlier hardcoded 3-agent mock at this same call site
+    (data_source.AGENT_PERFORMANCE). Deliberately only exposes call
+    volume/reliability/latency, not a trading win-rate: this system
+    doesn't link a past signal to its later real-world outcome, so a
+    "win_rate" field would either be fabricated or require a genuinely
+    separate feature (see docs/PROJECT_STATUS.md's roadmap) -- reporting
+    a number we don't actually have would be worse than not having it.
+
+    Public endpoint (routers/data.py, no auth) -- deliberately excludes
+    estimated_cost_usd and error detail, which stay admin-only via the
+    existing /api/admin/llm-calls, so this stays safe to expose without
+    leaking real operational cost/error internals to unauthenticated
+    visitors.
+    """
+    agent_names = {a["id"]: a.get("name", a["id"]) for a in _list(agents_table)}
+    calls = _list(llm_calls_table)
+
+    by_agent: Dict[str, List[Dict[str, Any]]] = {}
+    for call in calls:
+        agent_id = call.get("agent_id")
+        if not agent_id:
+            continue
+        by_agent.setdefault(agent_id, []).append(call)
+
+    results = []
+    for agent_id, agent_calls in by_agent.items():
+        total = len(agent_calls)
+        ok_count = sum(1 for c in agent_calls if c.get("status") == "ok")
+        durations = [c["duration_ms"] for c in agent_calls if c.get("duration_ms") is not None]
+        started_ats = [c["started_at"] for c in agent_calls if c.get("started_at")]
+        results.append(
+            {
+                "name": agent_names.get(agent_id, agent_id),
+                "call_count": total,
+                "success_rate": round(100 * ok_count / total, 1) if total else 0.0,
+                "avg_duration_ms": round(sum(durations) / len(durations), 1) if durations else None,
+                "last_active_at": max(started_ats) if started_ats else None,
+            }
+        )
+    results.sort(key=lambda r: r["call_count"], reverse=True)
+    return results
+
+
 # ---- Daily report narratives (Phase 5) ----
 
 def create_report_narrative(data: Dict[str, Any]) -> Dict[str, Any]:

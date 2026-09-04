@@ -155,13 +155,6 @@ TRACK2_AGENTS = [
     {"name": "Personal Context", "score": 74, "win_rate": 60, "decisions": 35, "avg_impact": 0.8, "color": "#66bb6a"},
 ]
 
-AGENT_PERFORMANCE = [
-    {"name": "Quantitative Strategist", "score": 78, "win_rate": 62, "decisions": 45, "avg_impact": 1.2},
-    {"name": "Risk Manager", "score": 85, "win_rate": 71, "decisions": 52, "avg_impact": 0.8},
-    {"name": "Value Investor", "score": 72, "win_rate": 58, "decisions": 38, "avg_impact": 1.5},
-]
-
-
 def _load_trained_params() -> Dict[str, Any]:
     params_file = TRADING_STORAGE_PATH / "training_results" / "trained_params.json"
     if params_file.exists():

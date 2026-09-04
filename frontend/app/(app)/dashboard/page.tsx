@@ -1,5 +1,6 @@
-import { GlassPanel } from "@/components/GlassPanel";
 import { SignalTicker, type Signal } from "@/components/SignalTicker";
+import { PortfolioOverviewPanel, type HoldingsData } from "@/components/dashboard/PortfolioOverviewPanel";
+import { AgentPerformancePanel, type AgentPerformance } from "@/components/dashboard/AgentPerformancePanel";
 import { apiUrl } from "@/lib/api";
 
 /**
@@ -19,20 +20,40 @@ async function getInitialSignals(): Promise<Signal[]> {
   }
 }
 
+async function getHoldings(): Promise<HoldingsData | null> {
+  try {
+    const res = await fetch(apiUrl("/api/holdings"), { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as HoldingsData;
+  } catch {
+    return null;
+  }
+}
+
+async function getAgentPerformance(): Promise<AgentPerformance[]> {
+  try {
+    const res = await fetch(apiUrl("/api/agent-performance"), { cache: "no-store" });
+    if (!res.ok) return [];
+    return (await res.json()) as AgentPerformance[];
+  } catch {
+    return [];
+  }
+}
+
 export default async function DashboardPage() {
-  const initialSignals = await getInitialSignals();
+  const [initialSignals, holdings, agentPerformance] = await Promise.all([
+    getInitialSignals(),
+    getHoldings(),
+    getAgentPerformance(),
+  ]);
 
   return (
     <div className="grid grid-cols-1 gap-sp5 lg:grid-cols-3">
-      <GlassPanel variant="accent" className="lg:col-span-2">
-        <h1 className="mb-sp2 text-[20px] font-extrabold text-t1">Portfolio Overview</h1>
-        <p className="text-[13px] text-t3">
-          Server-rendered shell. Wire this panel to <code className="mono">/api/holdings</code> and{" "}
-          <code className="mono">/api/track1/data</code> once the FastAPI gateway is running.
-        </p>
-      </GlassPanel>
-
+      <PortfolioOverviewPanel data={holdings} />
       <SignalTicker initialSignals={initialSignals} />
+      <div className="lg:col-span-3">
+        <AgentPerformancePanel data={agentPerformance} />
+      </div>
     </div>
   );
 }

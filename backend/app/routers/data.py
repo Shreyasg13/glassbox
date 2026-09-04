@@ -7,9 +7,11 @@ actual (blocking, parquet/pandas-touching) read off the event loop via
 `asyncio.to_thread` inside `get_or_compute_async`, closing a gap where
 these handlers previously ran that I/O directly inline.
 
-`/api/track1/agents`, `/api/track2/agents`, and `/api/agent-performance`
-return static in-memory constants with no I/O -- there's nothing to
-cache there, so they're left as-is.
+`/api/track1/agents` and `/api/track2/agents` return static in-memory
+constants with no I/O -- there's nothing to cache there, so they're left
+as-is. `/api/agent-performance` used to be a third one (a hardcoded
+3-agent mock) but now queries real data via db.get_agent_performance()
+-- see that function's docstring for what it does and doesn't measure.
 """
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from typing import List
 from fastapi import APIRouter
 
 from .. import data_source as ds
+from .. import db
 from ..cache import hot_read_cache
 from ..models import (
     AgentPerformance,
@@ -66,7 +69,7 @@ async def api_track2_agents():
 
 @router.get("/agent-performance", response_model=List[AgentPerformance])
 async def api_agent_performance():
-    return ds.AGENT_PERFORMANCE
+    return db.get_agent_performance()
 
 
 @router.get("/holdings", response_model=HoldingsResponse)
