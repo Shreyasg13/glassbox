@@ -9,6 +9,12 @@ import { LensPortrait } from "./lensPortrait";
 
 const AUTOPLAY_MS = 4200;
 const TYPE_MS_PER_CHAR = 18;
+// Safety net for the voice-driven autoplay pacing below: if a persona's
+// speech never fires its "ended" callback for some reason (network hang,
+// a browser quirk), this forces the carousel to advance anyway rather
+// than getting stuck on one card indefinitely. Generous relative to how
+// long any of these story quotes actually take to read aloud.
+const MAX_SPEECH_WAIT_MS = 25_000;
 
 function growthColor(growth: number): string {
   if (growth >= 70) return "text-green";
@@ -31,6 +37,8 @@ function barBg(colorClass: string): string {
 export function StrategyLenses() {
   const reduceMotion = useReducedMotion();
   const [filter, setFilter] = useState<"all" | LensFilter>("all");
+  const [ticker, setTicker] = useState("AAPL");
+  const [verifiedTicker, setVerifiedTicker] = useState<string | null>(null);
   const [cur, setCur] = useState(0);
   const [autoplay, setAutoplay] = useState(true);
   const [typedText, setTypedText] = useState("");
@@ -38,6 +46,15 @@ export function StrategyLenses() {
   const dragStartX = useRef<number | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const voice = useLensVoice();
+  // Read inside the speech-end callback below instead of `autoplay`
+  // directly, so toggling autoplay off mid-speech doesn't tear down and
+  // restart the in-flight voice.speak() call (which the effect's own
+  // dependency array would do if `autoplay` were listed there) -- it
+  // only needs to affect whether the NEXT advance happens.
+  const autoplayRef = useRef(autoplay);
+  useEffect(() => {
+    autoplayRef.current = autoplay;
+  }, [autoplay]);
 
   const view = filter === "all" ? LENS_PERSONAS : LENS_PERSONAS.filter((a) => a.cls === filter);
   const active: LensPersona | undefined = view[cur];
@@ -70,22 +87,42 @@ export function StrategyLenses() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id, reduceMotion]);
 
-  // voice playback, loosely synced with the typewriter above -- starts
-  // around the same time the text starts revealing, no word-level sync
+  // Voice playback, loosely synced with the typewriter above -- starts
+  // around the same time the text starts revealing, no word-level sync.
+  // When autoplay is on AND voice is enabled, this is also what drives
+  // advancing to the next card -- on speech end, not on a fixed timer,
+  // so narration is never cut off mid-sentence by the carousel moving on.
   useEffect(() => {
     if (!active || !voice.enabled) return;
-    voice.speak(active.id, active.story, active.voiceId);
+    let settled = false;
+    const safety = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      if (autoplayRef.current) setCur((c) => (c + 1) % view.length);
+    }, MAX_SPEECH_WAIT_MS);
+    voice.speak(active.id, active.story, active.voiceId, () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(safety);
+      if (autoplayRef.current) setCur((c) => (c + 1) % view.length);
+    });
+    return () => {
+      settled = true;
+      clearTimeout(safety);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id, voice.enabled]);
 
-  // autoplay
+  // Fixed-interval autoplay -- only when voice is OFF. With voice on, the
+  // effect above drives advancement (waits for speech to actually finish
+  // instead of a timer that doesn't know how long the narration takes).
   useEffect(() => {
-    if (!autoplay || view.length <= 1) return;
+    if (!autoplay || view.length <= 1 || voice.enabled) return;
     const id = setInterval(() => {
       setCur((c) => (c + 1) % view.length);
     }, AUTOPLAY_MS);
     return () => clearInterval(id);
-  }, [autoplay, view.length]);
+  }, [autoplay, view.length, voice.enabled]);
 
   // keyboard nav
   useEffect(() => {
@@ -148,6 +185,41 @@ export function StrategyLenses() {
             Each lens is pretrained on a legendary investor&apos;s documented strategy and reads your holdings for
             growth and risk — every view traces back to the same audited data. Lenses inform; they never advise.
           </p>
+        </div>
+      </Reveal>
+
+      {/* Relocated from the Hero demo card's ticker/Verify row -- same
+          illustrative framing (no real backend lookup), now tied to
+          whichever lens is active so the section reads as interactive
+          rather than a passive scrolling carousel. */}
+      <Reveal delayMs={80}>
+        <div className="glass-panel-raised mx-auto mt-sp6 max-w-[440px] overflow-hidden">
+          <div className="flex gap-sp3 border-b border-border p-sp4">
+            <input
+              className="input"
+              value={ticker}
+              onChange={(e) => setTicker(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === "Enter" && setVerifiedTicker(ticker.trim())}
+              placeholder="Ticker symbol…"
+            />
+            <button
+              type="button"
+              className="btn btn-primary shrink-0"
+              onClick={() => setVerifiedTicker(ticker.trim())}
+              disabled={!ticker.trim()}
+            >
+              Verify →
+            </button>
+          </div>
+          {verifiedTicker && active && (
+            <div className="p-sp3 text-center text-[12px] text-t2">
+              Reading <span className="mono font-bold text-t1">{verifiedTicker}</span> through{" "}
+              <span className="font-semibold" style={{ color: `var(--c-${active.color})` }}>
+                {active.inspiredName}
+              </span>
+              &apos;s lens — illustrative
+            </div>
+          )}
         </div>
       </Reveal>
 

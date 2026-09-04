@@ -84,11 +84,6 @@ export function Hero() {
             </div>
           </div>
 
-          <div className="flex gap-sp3 border-b border-border p-sp4">
-            <input className="input" defaultValue="AAPL" placeholder="Ticker symbol…" readOnly />
-            <button className="btn btn-primary shrink-0">Verify →</button>
-          </div>
-
           <div className="p-sp5">
             <div className="mb-sp5 flex items-center gap-sp4">
               <div className="grid h-[64px] w-[64px] shrink-0 place-items-center rounded-full border-2 border-teal/40">

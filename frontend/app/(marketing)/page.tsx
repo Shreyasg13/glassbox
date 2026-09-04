@@ -12,10 +12,10 @@ export default function LandingPage() {
   return (
     <>
       <Hero />
+      <StrategyLenses />
       <DiscrepancyBand />
       <HowItWorks />
       <MLProvenance />
-      <StrategyLenses />
       <ScoreFeedback />
       <ForAdvisors />
       <Pricing />
