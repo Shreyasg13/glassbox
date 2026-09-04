@@ -10,7 +10,7 @@ export default function OrchestrationsListPage() {
   const { token } = useAuth();
   const { data, isLoading, error } = useQuery({
     queryKey: ["orchestrations"],
-    queryFn: () => apiFetch<OrchestrationConfig[]>("/admin/orchestrations", { token: token ?? undefined }),
+    queryFn: () => apiFetch<OrchestrationConfig[]>("/api/admin/orchestrations", { token: token ?? undefined }),
     enabled: !!token,
   });
 

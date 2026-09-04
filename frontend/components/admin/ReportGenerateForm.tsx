@@ -47,7 +47,7 @@ export function ReportGenerateForm() {
       </div>
 
       <JobOutputPanel
-        startUrl="/reports/generate"
+        startUrl="/api/reports/generate"
         showInput={false}
         runLabel="Generate Report"
         buildBody={() => ({

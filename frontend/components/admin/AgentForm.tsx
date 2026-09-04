@@ -83,13 +83,13 @@ export function AgentForm({ initial }: { initial: AgentConfig }) {
     mutationFn: async () => {
       const payload = { ...agent, provider: agent.type === "llm" ? agent.provider : null };
       if (isEdit && agent.id) {
-        return apiFetch<AgentConfig>(`/admin/agents/${agent.id}`, {
+        return apiFetch<AgentConfig>(`/api/admin/agents/${agent.id}`, {
           method: "PUT",
           body: JSON.stringify(payload),
           token: token ?? undefined,
         });
       }
-      return apiFetch<AgentConfig>("/admin/agents", {
+      return apiFetch<AgentConfig>("/api/admin/agents", {
         method: "POST",
         body: JSON.stringify(payload),
         token: token ?? undefined,
@@ -105,7 +105,7 @@ export function AgentForm({ initial }: { initial: AgentConfig }) {
   const remove = useMutation({
     mutationFn: async () => {
       if (!agent.id) return;
-      await apiFetch(`/admin/agents/${agent.id}`, { method: "DELETE", token: token ?? undefined });
+      await apiFetch(`/api/admin/agents/${agent.id}`, { method: "DELETE", token: token ?? undefined });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agents"] });
@@ -295,7 +295,7 @@ export function AgentForm({ initial }: { initial: AgentConfig }) {
         <div className="glass-panel p-sp5">
           <h2 className="mb-sp4 text-[13px] font-bold uppercase tracking-wide text-t3">Test Run</h2>
           <JobOutputPanel
-            startUrl={`/admin/agents/${agent.id}/test-run`}
+            startUrl={`/api/admin/agents/${agent.id}/test-run`}
             buildBody={(input) => ({ input })}
             inputPlaceholder="Ask this agent something to verify it runs end-to-end…"
           />

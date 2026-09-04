@@ -13,7 +13,7 @@ export default function ReportsPage() {
 
   const { data } = useQuery({
     queryKey: ["report-narratives"],
-    queryFn: () => apiFetch<DailyReportNarrative[]>("/reports/narratives", { token: token ?? undefined }),
+    queryFn: () => apiFetch<DailyReportNarrative[]>("/api/reports/narratives", { token: token ?? undefined }),
     enabled: isAdmin,
   });
 

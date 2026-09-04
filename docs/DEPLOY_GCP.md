@@ -5,9 +5,14 @@ Caddy (auto-HTTPS) + optional self-hosted Ollama. Everything in the stack —
 Caddy, Docker, FastAPI, Next.js, SQLite, Ollama — is open source; GCP is just
 where the containers run, not a dependency you're locked into.
 
-Two subdomains (`app.yourdomain.com` for the UI, `api.yourdomain.com` for the
-API) rather than path-based routing on one domain — the frontend's own
-`/admin/*` pages collide with the backend's `/admin/*` API prefix otherwise.
+Single domain, path-based routing (`deploy/Caddyfile`) — the backend's
+`/admin` and `/reports` API routers live under `/api/admin` and
+`/api/reports` specifically so they don't collide with the frontend's own
+`/admin/*` and `/reports/*` pages at those exact paths. Everything under
+`/api/*`, `/auth/*`, `/health`, or `/ws/*` goes to the backend; everything
+else goes to the frontend. (An earlier version of this deploy used two
+subdomains — `app.` / `api.` — to sidestep the collision instead; that's
+no longer necessary now that the colliding backend prefixes were renamed.)
 
 ## 0. Prerequisites
 
@@ -44,8 +49,10 @@ gcloud compute instances describe glassbox-vm --zone=us-central1-a \
   --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
 ```
 
-Create two DNS A records (`app.yourdomain.com`, `api.yourdomain.com`) pointing
-at that IP before starting Caddy — it needs both resolving to issue TLS certs.
+Create one DNS A record (`yourdomain.com`) pointing at that IP before
+starting Caddy — it needs to resolve to issue a TLS cert. (Any registrar
+works, including free dynamic-DNS style ones like DuckDNS as long as the
+VM's IP is static, which a GCP Compute Engine external IP is by default.)
 
 ## 2. Install Docker on the VM
 
@@ -68,7 +75,7 @@ git clone <this-repo-url> glassbox   # or however you're hosting it
 cd glassbox
 git clone https://github.com/Shreyasg13/multi-agent-trading-system backend-source
 cp .env.example .env
-nano .env   # fill in APP_DOMAIN, API_DOMAIN, PUBLIC_API_URL, PUBLIC_WS_URL,
+nano .env   # fill in APP_DOMAIN, PUBLIC_API_URL, PUBLIC_WS_URL,
             # GLASSBOX_JWT_SECRET (openssl rand -hex 32), any provider keys
 ```
 
@@ -88,18 +95,18 @@ docker compose up -d --build
 docker compose --profile local-llm up -d --build
 ```
 
-Caddy will request Let's Encrypt certs for both domains automatically on
+Caddy will request a Let's Encrypt cert for the domain automatically on
 first boot — check `docker compose logs caddy -f` if a cert doesn't issue
 (usually a DNS propagation delay).
 
 ## 5. Verify
 
 ```bash
-curl -s https://api.yourdomain.com/health
+curl -s https://yourdomain.com/health
 # {"status":"ok"}
 ```
 
-Then open `https://app.yourdomain.com` in a browser.
+Then open `https://yourdomain.com` in a browser.
 
 ## 6. Updating
 

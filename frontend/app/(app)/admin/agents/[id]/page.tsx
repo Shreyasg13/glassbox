@@ -13,7 +13,7 @@ export default function EditAgentPage() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["agents", id],
-    queryFn: () => apiFetch<AgentConfig>(`/admin/agents/${id}`, { token: token ?? undefined }),
+    queryFn: () => apiFetch<AgentConfig>(`/api/admin/agents/${id}`, { token: token ?? undefined }),
     enabled: !!token && !!id,
   });
 

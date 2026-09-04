@@ -64,7 +64,7 @@ export function useJobRun(token: string | null) {
       stopPolling();
       pollRef.current = setInterval(async () => {
         try {
-          const s = await apiFetch<JobStatus>(`/admin/jobs/${jobId}`, {
+          const s = await apiFetch<JobStatus>(`/api/admin/jobs/${jobId}`, {
             token: token ?? undefined,
           });
           if (s.status === "done" || s.status === "error") {

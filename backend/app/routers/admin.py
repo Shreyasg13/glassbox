@@ -2,8 +2,14 @@
 orchestration-run, job polling, and provider health (Phase 5).
 
 Phase 6: every mutation is rate-limited (rate_limit.py) and written to
-the audit log (db.log_audit), and /admin/audit-log + /admin/llm-calls
+the audit log (db.log_audit), and /api/admin/audit-log + /api/admin/llm-calls
 expose that history + the LLM cost/latency log to the admin dashboard.
+
+Prefix is /api/admin, not /admin -- the frontend's own /admin/* pages
+(Agent Factory UI) live at that exact path, so under single-domain
+path-based routing (see deploy/Caddyfile) a bare /admin prefix here
+would collide with them. Joining the /api convention already used by
+data.py/monte_carlo.py/tts.py sidesteps that.
 """
 from __future__ import annotations
 
@@ -30,7 +36,7 @@ from ..providers.factory import get_provider
 from ..rate_limit import rate_limit_admin_mutations
 
 router = APIRouter(
-    prefix="/admin",
+    prefix="/api/admin",
     tags=["admin"],
     dependencies=[Depends(require_admin), Depends(rate_limit_admin_mutations)],
 )

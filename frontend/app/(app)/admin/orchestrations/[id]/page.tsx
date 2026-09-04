@@ -14,7 +14,7 @@ export default function EditOrchestrationPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["orchestrations", id],
     queryFn: () =>
-      apiFetch<OrchestrationConfig>(`/admin/orchestrations/${id}`, { token: token ?? undefined }),
+      apiFetch<OrchestrationConfig>(`/api/admin/orchestrations/${id}`, { token: token ?? undefined }),
     enabled: !!token && !!id,
   });
 

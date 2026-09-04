@@ -40,9 +40,9 @@ but no such Flask route exists in `DASHBOARD_PRO.py` either. Not ported;
 documented as a known gap in the Phase 1 build notes.
 
 FastAPI adds everything Flask never had: JWT auth, the Agent Factory
-(`/admin/*`), the LLM provider layer, background jobs + WebSocket push for
-long-running work, request tracing, rate limiting, and the audit log /
-cost-latency dashboard (`/admin/audit-log`, `/admin/llm-calls`).
+(`/api/admin/*`), the LLM provider layer, background jobs + WebSocket push
+for long-running work, request tracing, rate limiting, and the audit log /
+cost-latency dashboard (`/api/admin/audit-log`, `/api/admin/llm-calls`).
 
 ## 2. Safe to retire
 

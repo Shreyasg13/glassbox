@@ -60,7 +60,7 @@ function LLMCallsTable() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["llm-calls", offset],
     queryFn: () =>
-      apiFetch<PaginatedLLMCalls>(`/admin/llm-calls?limit=${PAGE_SIZE}&offset=${offset}`, {
+      apiFetch<PaginatedLLMCalls>(`/api/admin/llm-calls?limit=${PAGE_SIZE}&offset=${offset}`, {
         token: token ?? undefined,
       }),
     enabled: !!token,
@@ -127,7 +127,7 @@ function AuditLogTable() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["audit-log", offset],
     queryFn: () =>
-      apiFetch<PaginatedAuditLog>(`/admin/audit-log?limit=${PAGE_SIZE}&offset=${offset}`, {
+      apiFetch<PaginatedAuditLog>(`/api/admin/audit-log?limit=${PAGE_SIZE}&offset=${offset}`, {
         token: token ?? undefined,
       }),
     enabled: !!token,

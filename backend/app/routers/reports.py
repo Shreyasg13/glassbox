@@ -28,7 +28,10 @@ from ..auth import TokenPayload, require_admin
 from ..llm_call_logging import complete_with_logging
 from ..models import DailyReportNarrative, JobAccepted, ReportGenerateRequest
 
-router = APIRouter(prefix="/reports", tags=["reports"])
+# /api/reports, not /reports -- the frontend's own /reports/* pages live
+# at that exact path; under single-domain path-based routing (see
+# deploy/Caddyfile) a bare /reports prefix here would collide with them.
+router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
 def _build_prompt(report_date: str, report_data: list, live_signals: dict) -> str:

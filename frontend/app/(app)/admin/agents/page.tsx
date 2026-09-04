@@ -10,7 +10,7 @@ export default function AgentsListPage() {
   const { token } = useAuth();
   const { data, isLoading, error } = useQuery({
     queryKey: ["agents"],
-    queryFn: () => apiFetch<AgentConfig[]>("/admin/agents", { token: token ?? undefined }),
+    queryFn: () => apiFetch<AgentConfig[]>("/api/admin/agents", { token: token ?? undefined }),
     enabled: !!token,
   });
 

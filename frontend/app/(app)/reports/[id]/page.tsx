@@ -9,10 +9,10 @@ import type { DailyReportNarrative } from "@/lib/types";
 export default function ReportDetailPage() {
   const { id } = useParams<{ id: string }>();
 
-  // No auth required per contract — /reports/narratives/{id} is public.
+  // No auth required per contract — /api/reports/narratives/{id} is public.
   const { data, isLoading, error } = useQuery({
     queryKey: ["report-narrative", id],
-    queryFn: () => apiFetch<DailyReportNarrative>(`/reports/narratives/${id}`),
+    queryFn: () => apiFetch<DailyReportNarrative>(`/api/reports/narratives/${id}`),
     enabled: !!id,
   });
 

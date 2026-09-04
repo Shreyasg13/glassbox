@@ -11,7 +11,7 @@ export function ProviderHealthStrip() {
   const { token } = useAuth();
   const { data } = useQuery({
     queryKey: ["provider-health"],
-    queryFn: () => apiFetch<ProviderHealth[]>("/admin/providers/health", { token: token ?? undefined }),
+    queryFn: () => apiFetch<ProviderHealth[]>("/api/admin/providers/health", { token: token ?? undefined }),
     refetchInterval: 15_000,
     enabled: !!token,
   });

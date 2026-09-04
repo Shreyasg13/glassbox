@@ -20,20 +20,20 @@ export function OrchestrationForm({ initial }: { initial: OrchestrationConfig })
 
   const { data: agents } = useQuery({
     queryKey: ["agents"],
-    queryFn: () => apiFetch<AgentConfig[]>("/admin/agents", { token: token ?? undefined }),
+    queryFn: () => apiFetch<AgentConfig[]>("/api/admin/agents", { token: token ?? undefined }),
     enabled: !!token,
   });
 
   const save = useMutation({
     mutationFn: async () => {
       if (isEdit && orch.id) {
-        return apiFetch<OrchestrationConfig>(`/admin/orchestrations/${orch.id}`, {
+        return apiFetch<OrchestrationConfig>(`/api/admin/orchestrations/${orch.id}`, {
           method: "PUT",
           body: JSON.stringify(orch),
           token: token ?? undefined,
         });
       }
-      return apiFetch<OrchestrationConfig>("/admin/orchestrations", {
+      return apiFetch<OrchestrationConfig>("/api/admin/orchestrations", {
         method: "POST",
         body: JSON.stringify(orch),
         token: token ?? undefined,
@@ -49,7 +49,7 @@ export function OrchestrationForm({ initial }: { initial: OrchestrationConfig })
   const remove = useMutation({
     mutationFn: async () => {
       if (!orch.id) return;
-      await apiFetch(`/admin/orchestrations/${orch.id}`, {
+      await apiFetch(`/api/admin/orchestrations/${orch.id}`, {
         method: "DELETE",
         token: token ?? undefined,
       });
@@ -189,7 +189,7 @@ export function OrchestrationForm({ initial }: { initial: OrchestrationConfig })
         <div className="glass-panel p-sp5">
           <h2 className="mb-sp4 text-[13px] font-bold uppercase tracking-wide text-t3">Run Now</h2>
           <JobOutputPanel
-            startUrl={`/admin/orchestrations/${orch.id}/run`}
+            startUrl={`/api/admin/orchestrations/${orch.id}/run`}
             buildBody={(input) => (input ? { input } : {})}
             showInput
             inputPlaceholder="Optional context to pass into this run…"
