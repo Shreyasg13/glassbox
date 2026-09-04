@@ -3,38 +3,55 @@ generation (not each browser's own SpeechSynthesis voices) so every
 persona sounds the same for every visitor, and so each of the 8 personas
 can have a genuinely distinct assigned voice.
 
-Provider chain: Hugging Face's hosted Inference API running the
+Provider chain: Hugging Face's Inference Providers running the
 open-source Kokoro-82M model (free, no per-request cost), falling
-through to ElevenLabs (paid) on any failure. Pattern verified against a
-real, working implementation at github.com/Shreyasg13/Portfolio_Website
-(netlify/functions/_shared/tts.mjs) -- same provider order, same
-retry-on-cold-start idea, same graceful "not configured" contract as
-this project's own LLM providers (app/providers/*.py).
+through to ElevenLabs (paid) on any failure.
 
-TWO THINGS VERIFIED LIVE, WORTH KNOWING BEFORE TOUCHING THIS FILE:
+THIS FILE WAS REWRITTEN ONCE ALREADY AFTER A REAL, LIVE-VERIFIED BUG --
+worth knowing before touching it again:
 
-1. The endpoint. The reference repo's code comments implied the legacy
-   `api-inference.huggingface.co/models/{model}` hostname; a live request
-   to it during this build returned nothing (connection reset/unreachable).
-   `https://router.huggingface.co/hf-inference/models/{model}` DID
-   respond (401 without a token, which confirms the route exists) --
-   Hugging Face has evidently migrated routing since the reference repo
-   was written. This module uses the router hostname.
+The original implementation hand-rolled raw HTTP against
+`router.huggingface.co/hf-inference/models/{model}`. Once a real
+HUGGINGFACE_API_KEY was actually available to test with, every call
+403'd with "Model not supported by provider hf-inference" -- Kokoro-82M
+is not served by the `hf-inference` provider at all. Querying the
+model's own provider mapping directly:
 
-2. Voice selection is UNVERIFIED. Kokoro-82M's own model card
-   (huggingface.co/hexgrad/Kokoro-82M) documents usage only via the
-   local `kokoro` PyPI package (`pipeline(text, voice='af_heart')`), not
-   via the hosted Inference API -- there's no confirmation the hosted
-   endpoint's request handler actually respects a `parameters.voice`
-   field the way this code sends it. This was not verifiable without a
-   real HUGGINGFACE_API_KEY (every unauthenticated probe correctly 401s).
-   If the hosted endpoint ignores `parameters.voice`, every persona will
-   still get real speech -- just from Kokoro's handler-default voice
-   instead of a distinct one per persona. That's a degraded-but-working
-   outcome, not a broken one; if it turns out to happen, the ElevenLabs
-   fallback (which DOES support per-request voice_id, verified in the
-   reference repo's own working code) becomes the practical way to get
-   genuinely distinct voices, at the cost of needing that paid key too.
+    curl https://huggingface.co/api/models/hexgrad/Kokoro-82M\
+?expand[]=inferenceProviderMapping -H "Authorization: Bearer $HF_TOKEN"
+    -> {"fal-ai": {"status":"live", ...}, "deepinfra": {"status":"live", ...}}
+
+So `hf-inference` was simply never a valid provider for this model --
+the original build's every attempt to reach it (including the earlier
+"connection reset" on the legacy `api-inference.huggingface.co` host)
+was doomed regardless of hostname, because the *provider*, not the
+*host*, was wrong.
+
+Fix: use Hugging Face's own `huggingface_hub` Python client instead of
+hand-rolled REST. Their routing/provider layer changes over time (as
+just demonstrated) and the official client is the thing that's kept in
+sync with it -- guessing raw endpoint shapes is how the original bug
+happened. `provider="fal-ai"` is used because it's the one provider
+confirmed live for this exact model+task from BOTH the model's own
+`inferenceProviderMapping` AND huggingface_hub's own provider-support
+matrix (`deepinfra` appears in the former but not the latter's
+text_to_speech column, so it's not a client-usable path even though the
+model card lists it).
+
+VERIFIED LIVE with a real key (not simulated): a real ~134KB WAV file
+came back for `AsyncInferenceClient(provider="fal-ai").text_to_speech(
+text, model="hexgrad/Kokoro-82M", extra_body={"voice": "am_michael"})`.
+The `extra_body={"voice": ...}` parameter shape is HF's own documented
+pattern for this exact model (huggingface.co/docs/huggingface_hub ->
+InferenceClient.text_to_speech "With Extra Parameters" example uses
+`hexgrad/Kokoro-82M` + `extra_body={"voice": "af_nicole"}` verbatim) --
+so unlike the previous version, voice selection is now confirmed to
+work, not just hoped to work.
+
+fal-ai's serverless backend can cold-start slow: the first real test
+call took long enough that a naive 30s timeout would have failed it as
+a false negative (it succeeded once given ~90s). HF_TIMEOUT_S below
+reflects that, not a guess.
 
 Real, confirmed-valid Kokoro-82M voice IDs used for persona assignment
 (from https://huggingface.co/hexgrad/Kokoro-82M/raw/main/VOICES.md,
@@ -48,45 +65,57 @@ quality grading (am_michael, am_fenrir).
 """
 from __future__ import annotations
 
-import asyncio
 import os
 from typing import Optional, Tuple
 
 import httpx
+from huggingface_hub import AsyncInferenceClient
 
 HF_MODEL = "hexgrad/Kokoro-82M"
-HF_ROUTER_URL = f"https://router.huggingface.co/hf-inference/models/{HF_MODEL}"
+HF_PROVIDER = "fal-ai"
+HF_TIMEOUT_S = 90.0
 ELEVENLABS_URL_TMPL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
 MAX_CHARS = 800
 
 TTSResult = Tuple[bytes, str]  # (audio_bytes, content_type)
 
 
+def _sniff_audio_content_type(data: bytes) -> str:
+    """huggingface_hub's text_to_speech() returns raw bytes with no
+    content-type header attached -- sniff the magic bytes so the browser
+    <audio> element gets an accurate MIME type rather than a guessed one.
+    """
+    if data[:4] == b"RIFF":
+        return "audio/wav"
+    if data[:4] == b"fLaC":
+        return "audio/flac"
+    if data[:3] == b"ID3" or data[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"):
+        return "audio/mpeg"
+    return "audio/mpeg"
+
+
 async def _try_hugging_face(text: str, voice_id: str) -> Optional[TTSResult]:
     hf_token = os.environ.get("HUGGINGFACE_API_KEY")
     if not hf_token:
         return None
-    headers = {"Authorization": f"Bearer {hf_token}", "Content-Type": "application/json"}
-    body = {"inputs": text, "parameters": {"voice": voice_id}}
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            resp = await client.post(HF_ROUTER_URL, headers=headers, json=body)
-            # Free/serverless-backed models can cold-start and report 503
-            # with an estimated wait; one short retry covers most of that.
-            if resp.status_code == 503:
-                await asyncio.sleep(3.0)
-                resp = await client.post(HF_ROUTER_URL, headers=headers, json=body)
-            if resp.status_code != 200:
-                return None
-            content_type = resp.headers.get("content-type", "audio/flac")
-            if "audio" not in content_type and "octet-stream" not in content_type:
-                # A 200 with a JSON body (e.g. a queued/loading response
-                # shape some HF handlers use) is not audio -- treat as a
-                # miss rather than returning garbage bytes as "audio".
-                return None
-            return resp.content, content_type
-        except httpx.HTTPError:
-            return None
+    client = AsyncInferenceClient(provider=HF_PROVIDER, api_key=hf_token, timeout=HF_TIMEOUT_S)
+    try:
+        audio = await client.text_to_speech(text, model=HF_MODEL, extra_body={"voice": voice_id})
+    except Exception:
+        # Broad catch is deliberate here, matching this file's existing
+        # policy: any provider failure means "try the next provider / report
+        # unavailable", never surface a provider-specific stack trace or
+        # error string to the public /api/tts endpoint. (Verified live
+        # during this fix: a real call succeeds and returns real audio --
+        # a 402 "monthly included credits depleted" from Hugging Face's
+        # own billing is an account-level quota limit, not a code defect;
+        # this same catch-all correctly turns that into a clean
+        # "unavailable" response rather than a crash either way.)
+        return None
+    if not audio:
+        return None
+    audio_bytes = bytes(audio)
+    return audio_bytes, _sniff_audio_content_type(audio_bytes)
 
 
 async def _try_eleven_labs(text: str, voice_id: str) -> Optional[TTSResult]:
