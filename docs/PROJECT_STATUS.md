@@ -47,8 +47,27 @@ or scope changes — this is the single place to check "where are we" and
   role="viewer" (admin is never grantable via signup, by design). The
   original `admin`/`admin` hardcoded dev account is kept unconditionally
   (every deployment doc points people at it) rather than replaced.
-  Google/Microsoft social sign-in buttons remain honestly disabled — real
-  OAuth needs external app registration this project doesn't have yet.
+  **Google sign-in is real** (`backend/app/oauth_google.py`,
+  `routers/oauth.py`) — server-side OAuth 2.0 authorization code flow,
+  OAuth accounts keyed on (provider, subject) with no password_hash,
+  redirect back to the frontend via a URL fragment so the minted JWT
+  never touches a query string or server log. Configured via
+  `GOOGLE_OAUTH_CLIENT_ID`/`SECRET`; unset keeps the button returning a
+  clean 503 rather than erroring. Microsoft remains honestly disabled —
+  same shape of work, just not built yet.
+- **Production data now lives in Neon Postgres, not the VM's local
+  SQLite file.** `DATABASE_URL` set on the VM; `backend/app/db.py`
+  already used plain SQLAlchemy Core with JSON-as-text columns (no
+  SQLite-specific SQL), so the swap needed no query changes — just a
+  driver (`psycopg`) and a dialect-aware `connect_args`/sslmode branch.
+  All 7 tables' existing rows (10 agents, 57 audit-log entries, 6 jobs,
+  42 llm_calls, 1 orchestration, 1 user) were copied via
+  `app/scripts/migrate_to_postgres.py` and the cutover was verified live
+  and definitively — not just by matching row counts, but by writing a
+  new user through the live API and confirming it does NOT appear in
+  the old SQLite file (which still shows only the pre-migration row),
+  proving writes genuinely go to Neon now. The old SQLite file is left
+  in place as a frozen pre-cutover snapshot, not an active fallback.
 - **Deterministic agents don't call the real engine classes yet.** The
   "Quantitative Strategist (Engine)" etc. agents read the same live-signals
   data those classes would produce, rather than instantiating
