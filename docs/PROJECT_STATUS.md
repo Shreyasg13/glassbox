@@ -4,14 +4,15 @@ Living document. Update this whenever a phase completes, a bug is found,
 or scope changes — this is the single place to check "where are we" and
 "what's next" without re-deriving it from chat history.
 
-**Last updated:** 2026-09-02
+**Last updated:** 2026-09-04
 
 ## Live deployment
 
 | | |
 |---|---|
-| App | https://app.34.46.231.153.sslip.io |
-| API | https://api.34.46.231.153.sslip.io (`/docs` for OpenAPI) |
+| App | https://glassbox-portfolio-review.duckdns.org |
+| API | same domain, path-routed (`/api/*`, `/auth/*`, `/health`, `/ws/*` -- see `deploy/Caddyfile`) |
+| Database | Neon Postgres (`console.neon.tech`, org `spring-hill-60129601`, `neondb` / `production` branch) |
 | Source | `github.com/Shreyasg13/glassbox` (private, `main` branch) |
 | Host | GCP VM `instance-20260902-033025`, project `project-f015cf71-9e01-4a2a-8f5`, zone `us-central1-a` |
 | Admin login | `admin` / `admin` (still hardcoded — real signup exists now, but self-serve accounts can never be admin) |
@@ -38,6 +39,28 @@ or scope changes — this is the single place to check "where are we" and
 | 8 | Agent-run history / knowledge base foundation | 📋 Planned |
 | 9 | External news/market-factor integration | 📋 Planned — blocked on a news API key decision |
 | 10 | Admin heuristic/formula panel | 📋 Planned |
+
+## Next wave: platform depth (roadmap, 2026-09-04)
+
+Six workstreams identified from a product-direction discussion, each
+verified against the real codebase (not assumed) before being listed
+here. None started yet -- this is the prioritization list, not a
+progress log. Update each row's status as work begins/lands.
+
+| # | What | Current state (verified) | What it needs | Status |
+|---|---|---|---|---|
+| 1 | **Real agent performance/"journey" stats** -- which agents' signals were actually right, per user, over time | `/api/agent-performance` exists but returns `ds.AGENT_PERFORMANCE`, a **hardcoded 3-agent mock** (`data_source.py`) -- not derived from any real data. The real signal (agent calls, cost, latency, outcomes) already exists in `llm_calls`/`audit_log` (Neon) via Phase 6's observability work | Overlaps directly with **Phase 8** (`PHASE_7_10_AUDIT_KNOWLEDGE_PLAN.md`) -- read that plan before starting this so the two don't diverge | 📋 Planned |
+| 2 | **Per-user agent subscription** -- user picks which agents run their reports; only subscribed agents run | Does not exist. Every orchestration currently runs its full fixed agent list for everyone | New `user_agent_subscriptions` table/column, an admin+user-facing UI, and an `orchestration.py` filter respecting it | 📋 Planned |
+| 3 | **13F institutional filing data** | **Does not exist anywhere in this codebase** -- confirmed by a full-repo search, zero real matches | SEC EDGAR publishes 13F filings via a free public API (no key needed) -- feasible without a paid data vendor, but is a real new ETL pipeline (quarterly filings, CIK-to-ticker mapping, storage schema) | 📋 Planned, not started |
+| 4 | **Simulated test-user cohort** (5 users w/ sessions, for QA/demo) | Does not exist. `/auth/signup` can create real accounts, but nothing seeds a cohort with distinct portfolios/agent activity to observe | A seed script (`app/scripts/`, same pattern as `seed_agents.py`) creating 5 accounts + distinct holdings, so dashboard/agent behavior can be eyeballed per simulated user | 📋 Planned |
+| 5 | **Real broker portfolio import** (Robinhood, Schwab, etc.) | The broker-connect icons on the marketing/onboarding UI are illustrative only -- no real OAuth/import wired to any broker. Notably, `Pricing.tsx`'s own copy already promises **"Broker import via SnapTrade"** on the Standard tier -- SnapTrade is a broker-aggregator API built for exactly this (one integration covers many brokers) rather than building Robinhood/Schwab/etc. individually. Robinhood has no official public API at all (unofficial/reverse-engineered access is ToS-risk territory); Schwab has a real developer API but requires app approval | A SnapTrade (or equivalent aggregator) developer account + API key -- external signup, same pattern as DuckDNS/Neon/Google OAuth this session | 📋 Planned, blocked on account creation |
+| 6 | **Expose already-built API endpoints with zero UI** | `/api/track1/agents`, `/api/track2/agents`, `/api/monte-carlo` all exist, work, and have **no frontend consumer anywhere** (confirmed: zero matches in `frontend/`) | Smallest, cheapest item on this list -- just UI work against endpoints that already exist and work | 📋 Planned, quick win |
+
+Not on this list because already answered directly, not planned work:
+**10 years of price history is real** -- verified live on the VM, AAPL's
+own parquet file spans 2016-01-04 to the present (2,523 rows), with RSI/
+moving-averages/volatility already computed columns. The gap is 13F
+data specifically (row 3), not historical price depth generally.
 
 ## Known gaps (disclosed, not oversights)
 
