@@ -1,6 +1,8 @@
 import { SignalTicker, type Signal } from "@/components/SignalTicker";
 import { PortfolioOverviewPanel, type HoldingsData } from "@/components/dashboard/PortfolioOverviewPanel";
 import { AgentPerformancePanel, type AgentPerformance } from "@/components/dashboard/AgentPerformancePanel";
+import { TrackComparisonPanel, type TrackAgentsData } from "@/components/dashboard/TrackComparisonPanel";
+import { StressTestPanel } from "@/components/dashboard/StressTestPanel";
 import { apiUrl } from "@/lib/api";
 
 /**
@@ -40,19 +42,35 @@ async function getAgentPerformance(): Promise<AgentPerformance[]> {
   }
 }
 
+async function getTrackAgents(track: "track1" | "track2"): Promise<TrackAgentsData | null> {
+  try {
+    const res = await fetch(apiUrl(`/api/${track}/agents`), { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as TrackAgentsData;
+  } catch {
+    return null;
+  }
+}
+
 export default async function DashboardPage() {
-  const [initialSignals, holdings, agentPerformance] = await Promise.all([
+  const [initialSignals, holdings, agentPerformance, track1, track2] = await Promise.all([
     getInitialSignals(),
     getHoldings(),
     getAgentPerformance(),
+    getTrackAgents("track1"),
+    getTrackAgents("track2"),
   ]);
 
   return (
     <div className="grid grid-cols-1 gap-sp5 lg:grid-cols-3">
       <PortfolioOverviewPanel data={holdings} />
       <SignalTicker initialSignals={initialSignals} />
-      <div className="lg:col-span-3">
+      <div className="lg:col-span-2">
         <AgentPerformancePanel data={agentPerformance} />
+      </div>
+      <StressTestPanel />
+      <div className="lg:col-span-3">
+        <TrackComparisonPanel track1={track1} track2={track2} />
       </div>
     </div>
   );
