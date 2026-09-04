@@ -175,6 +175,20 @@ async def get_current_user(token: str | None = Depends(oauth2_scheme)) -> TokenP
     return decode_token(token)
 
 
+async def get_current_user_optional(token: str | None = Depends(oauth2_scheme)) -> Optional[TokenPayload]:
+    """Soft auth for endpoints that are public but personalize when a
+    valid token happens to be present (e.g. /api/holdings filtering to
+    the caller's own watchlist) -- returns None rather than raising on
+    a missing OR invalid/expired token, since these endpoints must keep
+    serving the shared/global view to anonymous demo visitors either way."""
+    if token is None:
+        return None
+    try:
+        return decode_token(token)
+    except HTTPException:
+        return None
+
+
 async def require_admin(user: TokenPayload = Depends(get_current_user)) -> TokenPayload:
     if user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")

@@ -63,7 +63,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="grid grid-cols-1 gap-sp5 lg:grid-cols-3">
-      <PortfolioOverviewPanel data={holdings} />
+      <PortfolioOverviewPanel initialData={holdings} />
       <SignalTicker initialSignals={initialSignals} />
       <div className="lg:col-span-2">
         <AgentPerformancePanel data={agentPerformance} />

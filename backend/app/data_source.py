@@ -45,7 +45,6 @@ STOCK_INFO: Dict[str, Dict[str, Any]] = {
     "JNJ": {"name": "Johnson & Johnson", "sector": "Healthcare", "beta": 0.70},
     "V": {"name": "Visa Inc.", "sector": "Financials", "beta": 0.95},
 }
-TARGET_WEIGHTS = {symbol: 100 / 15 for symbol in STOCK_INFO}
 
 
 def live_signals_source_paths() -> List[Path]:
@@ -173,13 +172,25 @@ def _load_parquet_row(symbol: str):
     return pd.read_parquet(parquet_file)
 
 
-def get_holdings() -> Dict[str, Any]:
+def get_holdings(tickers: Optional[List[str]] = None) -> Dict[str, Any]:
+    """tickers: an authenticated user's own watchlist (see
+    routers/data.py's api_holdings), filtering the returned universe down
+    to just those symbols with weights re-normalized to the subset --
+    None (the default, and always the case for unauthenticated/demo
+    requests) returns the full 15-symbol universe, preserving the
+    original shared behavior exactly."""
     trained_params = _load_trained_params()
     holdings: List[Dict[str, Any]] = []
     total_win_rate = 0.0
     best_performer = {"symbol": "-", "return": -999.0}
 
-    for symbol, info in STOCK_INFO.items():
+    universe = list(STOCK_INFO.items())
+    if tickers:
+        wanted = {t.upper() for t in tickers}
+        universe = [(s, info) for s, info in universe if s in wanted]
+    equal_weight = 100 / len(universe) if universe else 0.0
+
+    for symbol, info in universe:
         params = trained_params.get(symbol, {})
         df = _load_parquet_row(symbol)
 
@@ -215,7 +226,7 @@ def get_holdings() -> Dict[str, Any]:
             "symbol": symbol,
             "name": info["name"],
             "sector": info["sector"],
-            "weight": TARGET_WEIGHTS.get(symbol, 6.67),
+            "weight": equal_weight,
             "signal": signal,
             "win_rate": round(win_rate, 1),
             "sharpe": round(sharpe, 2),
@@ -247,7 +258,7 @@ def get_holdings() -> Dict[str, Any]:
         "holdings": holdings,
         "summary": {
             "total_symbols": len(holdings),
-            "avg_win_rate": round(total_win_rate / len(holdings), 1),
+            "avg_win_rate": round(total_win_rate / len(holdings), 1) if holdings else 0.0,
             "best_performer": best_performer["symbol"],
             "best_return": round(best_performer["return"], 2),
             "portfolio_beta": round(sum(h["beta"] * h["weight"] / 100 for h in holdings), 2),

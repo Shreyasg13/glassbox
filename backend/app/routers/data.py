@@ -15,12 +15,13 @@ as-is. `/api/agent-performance` used to be a third one (a hardcoded
 """
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from .. import data_source as ds
 from .. import db
+from ..auth import TokenPayload, get_current_user_optional
 from ..cache import hot_read_cache
 from ..models import (
     AgentPerformance,
@@ -73,9 +74,24 @@ async def api_agent_performance():
 
 
 @router.get("/holdings", response_model=HoldingsResponse)
-async def api_holdings():
+async def api_holdings(user: Optional[TokenPayload] = Depends(get_current_user_optional)):
+    """Public (no auth required, same as every other endpoint in this
+    file) -- but personalizes to the caller's own watchlist when a
+    valid token IS present and that user has one set (see
+    app/scripts/seed_demo_users.py for how those get populated).
+    Anonymous/demo requests, and any account with no watchlist set
+    (every real signup today), see the same full shared universe this
+    endpoint always returned -- this is additive, not a behavior change
+    for existing callers."""
+    user_tickers: Optional[List[str]] = None
+    if user is not None:
+        row = db.get_user_by_username(user.sub)
+        if row:
+            user_tickers = row.get("tickers") or None
+
+    cache_key = "holdings:" + (",".join(sorted(user_tickers)) if user_tickers else "global")
     return await hot_read_cache.get_or_compute_async(
-        "holdings", ds.live_signals_source_paths(), ds.get_holdings
+        cache_key, ds.live_signals_source_paths(), lambda: ds.get_holdings(tickers=user_tickers)
     )
 
 

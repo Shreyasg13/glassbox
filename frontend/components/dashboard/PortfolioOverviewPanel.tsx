@@ -1,4 +1,9 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { GlassPanel } from "@/components/GlassPanel";
+import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 export type Holding = {
   symbol: string;
@@ -41,7 +46,36 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
   );
 }
 
-export function PortfolioOverviewPanel({ data }: { data: HoldingsData | null }) {
+/**
+ * `initialData` is server-fetched (see app/(app)/dashboard/page.tsx) so
+ * the panel paints instantly -- but that server-side fetch has no
+ * access to the browser's auth token (it lives in localStorage,
+ * client-only), so it can only ever see the shared/global universe,
+ * never a personalized one. Same shape of problem SignalTicker already
+ * solves for live signals: render the server-fetched default first,
+ * then re-fetch client-side once mounted (now WITH the token) and swap
+ * in the personalized result if the logged-in user has a watchlist set
+ * (see routers/data.py's api_holdings + seed_demo_users.py).
+ */
+export function PortfolioOverviewPanel({ initialData }: { initialData: HoldingsData | null }) {
+  const { token } = useAuth();
+  const [data, setData] = useState<HoldingsData | null>(initialData);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    apiFetch<HoldingsData>("/api/holdings", { token })
+      .then((personalized) => {
+        if (!cancelled) setData(personalized);
+      })
+      .catch(() => {
+        // keep showing the server-fetched default on failure
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   if (!data || data.holdings.length === 0) {
     return (
       <GlassPanel variant="accent" className="lg:col-span-2">
@@ -87,7 +121,7 @@ export function PortfolioOverviewPanel({ data }: { data: HoldingsData | null }) 
                 <td className={`py-sp2 pr-sp3 font-semibold ${signalColor[h.signal] ?? "text-t2"}`}>
                   {h.signal}
                 </td>
-                <td className="mono py-sp2 pr-sp3 text-t2">{(h.weight * 100).toFixed(1)}%</td>
+                <td className="mono py-sp2 pr-sp3 text-t2">{h.weight.toFixed(1)}%</td>
                 <td className="mono py-sp2 pr-sp3 text-t2">{h.win_rate.toFixed(0)}%</td>
                 <td className="mono py-sp2 text-t2">
                   ${h.current_price.toFixed(2)}

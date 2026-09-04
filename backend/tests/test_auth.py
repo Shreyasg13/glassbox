@@ -155,3 +155,22 @@ def test_oauth_login_disambiguates_username_collision_with_password_account():
     auth.signup("taken@example.com", "correct-horse")
     identity = auth.oauth_login("google", "sub-456", "taken@example.com")
     assert identity.sub == "taken@example.com+google"
+
+
+async def test_get_current_user_optional_returns_none_when_no_token():
+    assert await auth.get_current_user_optional(token=None) is None
+
+
+async def test_get_current_user_optional_returns_none_on_invalid_token():
+    """Regression guard: /api/holdings (the caller of this dependency)
+    must keep serving the shared/global view rather than 401ing when a
+    stale/malformed token happens to be sent by an otherwise-anonymous
+    request."""
+    assert await auth.get_current_user_optional(token="not-a-real-jwt") is None
+
+
+async def test_get_current_user_optional_returns_identity_for_valid_token():
+    identity = auth.signup("shreyash", "correct-horse")
+    token = auth.create_access_token(identity)
+    result = await auth.get_current_user_optional(token=token)
+    assert result == identity

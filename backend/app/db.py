@@ -326,6 +326,10 @@ def list_llm_calls_page(limit: int = 50, offset: int = 0) -> Tuple[List[Dict[str
 # accounts in app/auth.py's _DEV_USERS -- see that module for how the two
 # are reconciled at authentication time) ----
 
+def list_users() -> List[Dict[str, Any]]:
+    return _list(users_table)
+
+
 def create_user(data: Dict[str, Any]) -> Dict[str, Any]:
     return _create(users_table, data)
 
