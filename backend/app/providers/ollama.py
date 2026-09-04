@@ -35,6 +35,7 @@ class OllamaProvider(BaseProvider):
         max_tokens: int,
         system: Optional[str],
         on_token: Optional[OnToken],
+        retry: bool = True,  # unused -- Ollama has no fallback-chain caller today
     ) -> str:
         payload = {
             "model": model,

@@ -52,7 +52,11 @@ async def run_llm_agent(agent: AgentConfig, input: str, job_id: Optional[str]) -
         if job_id:
             await jobs.token(job_id, piece)
 
-    text = await complete_with_logging(
+    async def _on_fallback(candidate: str, reason: str) -> None:
+        if job_id:
+            await jobs.log(job_id, f"agent '{agent.name}': trying model '{candidate}' ({reason})")
+
+    text, model_used = await complete_with_logging(
         agent.provider,
         agent.model,
         input,
@@ -62,8 +66,10 @@ async def run_llm_agent(agent: AgentConfig, input: str, job_id: Optional[str]) -
         top_p=params.top_p,
         max_tokens=params.max_tokens,
         on_token=_on_token,
+        fallback_models=agent.fallback_models,
+        on_fallback=_on_fallback,
     )
-    return {"agent": agent.name, "type": "llm", "provider": agent.provider, "model": agent.model, "output": text}
+    return {"agent": agent.name, "type": "llm", "provider": agent.provider, "model": model_used, "output": text}
 
 
 async def run_agent(agent: AgentConfig, input: str, *, job_id: Optional[str] = None) -> Dict[str, Any]:

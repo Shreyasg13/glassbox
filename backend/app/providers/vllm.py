@@ -33,6 +33,7 @@ class VLLMProvider(BaseProvider):
         max_tokens: int,
         system: Optional[str],
         on_token: Optional[OnToken],
+        retry: bool = True,  # unused -- vLLM has no fallback-chain caller today
     ) -> str:
         messages = []
         if system:

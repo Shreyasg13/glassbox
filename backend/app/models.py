@@ -190,6 +190,14 @@ class AgentConfig(BaseModel):
     type: AgentType
     provider: Optional[Provider] = None
     model: Optional[str] = None
+    fallback_models: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Ordered backup models tried in sequence if `model` is rate-limited/quota-exhausted. "
+            "Currently only honored by the gemini provider (its per-tier RPM/TPM/RPD ceilings make "
+            "single-model exhaustion routine on a free-tier key); other providers ignore this list."
+        ),
+    )
     params: AgentParams = Field(default_factory=AgentParams)
     system_prompt: Optional[str] = None
     tools: List[str] = Field(default_factory=list)

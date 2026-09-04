@@ -19,6 +19,7 @@ export type AgentConfig = {
   type: AgentType;
   provider?: Provider | null;
   model?: string | null;
+  fallback_models: string[];
   params: AgentParams;
   system_prompt?: string | null;
   tools: string[];
@@ -106,6 +107,7 @@ export function emptyAgent(): AgentConfig {
     type: "deterministic",
     provider: null,
     model: null,
+    fallback_models: [],
     params: { ...DEFAULT_AGENT_PARAMS },
     system_prompt: "",
     tools: [],

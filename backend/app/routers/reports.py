@@ -80,7 +80,7 @@ async def generate_report(body: ReportGenerateRequest, user: TokenPayload = Depe
             await jobs.token(job_id, piece)
 
         await jobs.log(job_id, f"Calling {body.provider}/{body.model}")
-        text = await complete_with_logging(
+        text, model_used = await complete_with_logging(
             body.provider,
             body.model,
             prompt,
@@ -93,7 +93,7 @@ async def generate_report(body: ReportGenerateRequest, user: TokenPayload = Depe
             "id": str(uuid.uuid4()),
             "date": report_date,
             "provider": body.provider,
-            "model": body.model,
+            "model": model_used,
             "narrative": text,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }

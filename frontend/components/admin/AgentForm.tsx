@@ -10,6 +10,67 @@ import { JobOutputPanel } from "./JobOutputPanel";
 
 const PROVIDERS: Provider[] = ["vllm", "ollama", "gemini", "claude"];
 
+/** Add/remove chip list for an ordered string array -- same interaction
+ * pattern as components/onboarding/StepPortfolio.tsx's ticker input,
+ * reused here rather than a single comma-parsed text field: a controlled
+ * input whose value is `array.join(", ")` fights the user every time
+ * they type a trailing comma or space, since the round-trip through
+ * split/trim/filter immediately strips it back out from under them. */
+function FallbackModelsInput({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+  const [draft, setDraft] = useState("");
+
+  function add() {
+    const m = draft.trim();
+    if (m && !value.includes(m)) onChange([...value, m]);
+    setDraft("");
+  }
+  function remove(m: string) {
+    onChange(value.filter((x) => x !== m));
+  }
+
+  return (
+    <div>
+      <div className="flex gap-sp2">
+        <input
+          className="input"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder="e.g. gemini-3.8-flash — press Enter to add"
+        />
+        <button type="button" onClick={add} className="btn btn-ghost shrink-0">
+          + Add
+        </button>
+      </div>
+      {value.length > 0 && (
+        <div className="mt-sp2 flex flex-wrap gap-sp2">
+          {value.map((m, i) => (
+            <span
+              key={m}
+              className="mono flex items-center gap-sp1 rounded-r4 border border-border2 bg-bg2 px-sp3 py-1 text-[11.5px] text-t2"
+            >
+              {i + 1}. {m}
+              <button
+                type="button"
+                onClick={() => remove(m)}
+                aria-label={`Remove ${m}`}
+                className="ml-1 text-t4 hover:text-red"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AgentForm({ initial }: { initial: AgentConfig }) {
   const { token } = useAuth();
   const router = useRouter();
@@ -131,6 +192,21 @@ export function AgentForm({ initial }: { initial: AgentConfig }) {
                 />
               </label>
             </div>
+
+            {agent.provider === "gemini" && (
+              <div className="flex flex-col gap-sp2">
+                <span className="text-[12px] font-semibold text-t3">
+                  Fallback models{" "}
+                  <span className="font-normal text-t4">
+                    (tried in order, only if Model above is rate-limited/quota-exhausted)
+                  </span>
+                </span>
+                <FallbackModelsInput
+                  value={agent.fallback_models}
+                  onChange={(fallback_models) => setAgent({ ...agent, fallback_models })}
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-sp4">
               <label className="flex flex-col gap-sp1 text-[12px] font-semibold text-t3">

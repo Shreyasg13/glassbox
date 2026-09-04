@@ -42,6 +42,7 @@ class ClaudeProvider(BaseProvider):
         max_tokens: int,
         system: Optional[str],
         on_token: Optional[OnToken],
+        retry: bool = True,  # unused -- Claude has no fallback-chain caller today
     ) -> str:
         client = self._client_or_raise()
         if on_token:

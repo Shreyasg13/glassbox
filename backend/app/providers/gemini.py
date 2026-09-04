@@ -46,6 +46,14 @@ class GeminiProvider(BaseProvider):
     BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
     def __init__(self, api_key: Optional[str] = None, **kwargs) -> None:
+        # 30, not the base default of 12: this provider's callers (see
+        # llm_call_logging.py's fallback loop) can try up to ~10 candidate
+        # models in one logical agent turn when an agent has fallback_models
+        # configured -- a fully-exhausted chain on a bad day is ~10
+        # consecutive failures against this ONE shared singleton, which
+        # would trip a threshold of 12 within roughly one turn instead of
+        # after genuinely sustained trouble across many turns.
+        kwargs.setdefault("failure_threshold", 30)
         super().__init__(**kwargs)
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
 
@@ -59,6 +67,7 @@ class GeminiProvider(BaseProvider):
         max_tokens: int,
         system: Optional[str],
         on_token: Optional[OnToken],
+        retry: bool = True,
     ) -> str:
         if not self.api_key:
             raise NotConfiguredError("GEMINI_API_KEY not set")
@@ -82,15 +91,25 @@ class GeminiProvider(BaseProvider):
             },
         }
         url = f"{self.BASE_URL}/models/{model}:generateContent"
+        # When a caller has other fallback models ready to try immediately
+        # (llm_call_logging.py's chain loop passes retry=False for every
+        # non-final candidate), backing off and retrying THIS already-
+        # rate-limited model is strictly worse than moving on: it burns up
+        # to ~36s waiting on a model we're about to abandon anyway, and
+        # risks the whole chain blowing past the orchestration's
+        # agent_timeout_s before ever reaching a model that might work.
+        # retry=True (the default, used for a single model with nothing to
+        # fall back to) keeps the original backoff-and-retry behavior.
+        max_attempts = _MAX_ATTEMPTS if retry else 1
         last_exc: Optional[Exception] = None
         async with httpx.AsyncClient(timeout=None) as client:
-            for attempt in range(1, _MAX_ATTEMPTS + 1):
+            for attempt in range(1, max_attempts + 1):
                 try:
                     resp = await client.post(url, params={"key": self.api_key}, json=payload)
                     resp.raise_for_status()
                 except httpx.HTTPStatusError as exc:
                     status = exc.response.status_code
-                    if status in _RETRYABLE_STATUS and attempt < _MAX_ATTEMPTS:
+                    if status in _RETRYABLE_STATUS and attempt < max_attempts:
                         retry_after = exc.response.headers.get("retry-after")
                         delay = float(retry_after) if retry_after else _BACKOFF_BASE_S[status] * attempt
                         await asyncio.sleep(delay)

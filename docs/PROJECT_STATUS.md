@@ -55,8 +55,20 @@ or scope changes — this is the single place to check "where are we" and
   (`gen-lang-client-0725477037` / "Default Gemini Project"). A 7-agent
   parallel committee run reliably 429s most LLM agents even after three
   real bugs were found and fixed (see below) — this is a quota ceiling,
-  not a code defect. Sequential-mode agent execution would very likely
-  work better on this quota; not yet built.
+  not a code defect. **Partially addressed**: `AgentConfig.fallback_models`
+  now lets a Gemini agent fall through a chain of alternate models when
+  its primary is rate-limited (`app/llm_call_logging.py`), pre-filtered by
+  a local best-effort quota tracker seeded with the user's own AI Studio
+  dashboard numbers (`app/providers/gemini_quota.py`) — the 7 seeded LLM
+  agents ship with a 9-model fallback chain. Still no sequential-mode
+  orchestration fallback (only per-agent model fallback); that remains
+  future work if the fallback chain alone proves insufficient under load.
+- **`HUGGINGFACE_API_KEY` is wired in** (Strategy Lenses voice narration),
+  but the free monthly Inference Providers quota was exhausted during
+  verification (`402 Payment Required`) — the code path is confirmed
+  correct (two real audio files generated successfully before quota ran
+  out), voice output resumes automatically on the monthly reset or if
+  prepaid credits/PRO are added.
 - **A6 Audit Activity feed is currently mockup copy**, not a real running
   check — Phase 7 makes it real.
 - **Live trading data is point-in-time** until the daily cron job's next

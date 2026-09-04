@@ -31,6 +31,7 @@ class LLMProvider(Protocol):
         max_tokens: int = 1024,
         system: Optional[str] = None,
         on_token: Optional[OnToken] = None,
+        retry: bool = True,
     ) -> str: ...
 
     async def health_check(self) -> ProviderHealth: ...
@@ -110,6 +111,13 @@ class BaseProvider:
         system: Optional[str] = None,
         on_token: Optional[OnToken] = None,
         timeout_s: Optional[float] = None,
+        # Passed through as a plain per-call argument, deliberately not
+        # instance state -- get_provider() (factory.py) returns one cached
+        # singleton per provider name, reused by concurrently-running
+        # agents (parallel/committee_vote orchestration modes genuinely
+        # fire several LLM agents at once), so any "retry mode" toggle
+        # living on `self` would race between unrelated concurrent calls.
+        retry: bool = True,
     ) -> str:
         if self._circuit_is_open():
             raise CircuitOpenError(
@@ -126,6 +134,7 @@ class BaseProvider:
                     max_tokens=max_tokens,
                     system=system,
                     on_token=on_token,
+                    retry=retry,
                 ),
                 timeout=timeout_s or self.default_timeout_s,
             )
@@ -169,6 +178,7 @@ class BaseProvider:
         max_tokens: int,
         system: Optional[str],
         on_token: Optional[OnToken],
+        retry: bool = True,
     ) -> str:
         raise NotImplementedError
 

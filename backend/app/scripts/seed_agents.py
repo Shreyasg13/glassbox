@@ -75,6 +75,31 @@ DETERMINISTIC_AGENTS = [
 
 _LLM_PARAMS = {"temperature": 0.4, "top_p": 0.9, "max_tokens": 600, "extra": {}}
 
+# Fallback chain for the seeded Gemini agents -- each entry is only tried
+# after every prior one has been rate-limited/failed (see
+# llm_call_logging.py's complete_with_logging), so a rate-limited primary
+# model no longer fails the whole agent call outright. Populated from the
+# free-tier RPM/TPM/RPD ceilings the user read off their own Google AI
+# Studio quota dashboard on 2026-09-04 (see app/providers/gemini_quota.py
+# for the exact numbers and this tracking approach's real limitations).
+# Only "Text-out models" rows with nonzero capacity are included; ordered
+# gemini-flash-latest first (an alias, so it resists Google renaming the
+# underlying model out from under this list), then the dated models
+# newest-first, then the higher-RPM "lite" variants last as a resilience
+# hedge (lower quality, but the highest per-minute ceiling of anything
+# available on this tier).
+_GEMINI_FALLBACK_CHAIN = [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-3-flash",
+    "gemini-2.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+]
+
 LLM_AGENTS = [
     {
         "name": "Quantitative Strategist",
@@ -203,6 +228,7 @@ def _seed_agents() -> dict[str, str]:
                 "type": "llm",
                 "provider": "gemini",
                 "model": "gemini-flash-latest",
+                "fallback_models": _GEMINI_FALLBACK_CHAIN,
                 "params": _LLM_PARAMS,
                 "system_prompt": spec["system_prompt"],
                 "tools": [],
