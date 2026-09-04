@@ -63,12 +63,23 @@ or scope changes — this is the single place to check "where are we" and
   agents ship with a 9-model fallback chain. Still no sequential-mode
   orchestration fallback (only per-agent model fallback); that remains
   future work if the fallback chain alone proves insufficient under load.
-- **`HUGGINGFACE_API_KEY` is wired in** (Strategy Lenses voice narration),
-  but the free monthly Inference Providers quota was exhausted during
-  verification (`402 Payment Required`) — the code path is confirmed
-  correct (two real audio files generated successfully before quota ran
-  out), voice output resumes automatically on the monthly reset or if
-  prepaid credits/PRO are added.
+- **Voice narration (Strategy Lenses, Hero demo, dashboard signal ticker)
+  is live and working** — `HUGGINGFACE_API_KEY` (a fresh key, prepaid
+  billing) confirmed generating real audio end-to-end via the deployed
+  `/api/tts` endpoint (`200`, real WAV bytes, 2026-09-04). The prior key
+  hit its free monthly quota during verification; that's an account-level
+  limit, unrelated to this one.
+- **Mobile/cross-browser audio playback hardened**: `useLensVoice.ts` now
+  reuses one persistent `<audio>` element (synchronously primed on the
+  first real user click) instead of a fresh `new Audio()` per call — the
+  standard fix for mobile Safari/WebKit's autoplay policy, which blocks
+  `.play()` unless it's directly attributable to a user gesture and an
+  `await fetch(...)` before playback (as this feature's async TTS fetch
+  requires) breaks that attribution on a freshly-created element. Applied
+  at every real click site (voice toggle, per-row speak buttons, Hero's
+  Listen button, Strategy Lenses' card/arrow navigation). Not verified on
+  a real iOS device from this environment — the fix follows the
+  widely-documented pattern, but hasn't been confirmed hands-on.
 - **A6 Audit Activity feed is currently mockup copy**, not a real running
   check — Phase 7 makes it real.
 - **Live trading data is point-in-time** until the daily cron job's next

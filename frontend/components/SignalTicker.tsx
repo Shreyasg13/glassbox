@@ -100,6 +100,12 @@ export function SignalTicker({ initialSignals = [] }: { initialSignals?: Signal[
   const [speakingSymbol, setSpeakingSymbol] = useState<string | null>(null);
 
   function handleSpeak(s: Signal) {
+    // Synchronous, before any async work -- this is a real click, but if
+    // voice was already enabled from a prior session (localStorage) this
+    // may be the first speak() this page load, and the persistent audio
+    // element needs priming before its own internal `await fetch(...)`
+    // breaks the gesture chain on strict mobile browsers.
+    voice.primeAudio();
     setSpeakingSymbol(s.symbol);
     voice.speak(`signal-${s.symbol}`, signalSentence(s), NARRATOR_VOICE_ID, () =>
       setSpeakingSymbol((cur) => (cur === s.symbol ? null : cur))

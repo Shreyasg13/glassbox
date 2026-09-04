@@ -60,9 +60,48 @@ function getServerSnapshot() {
 export function useLensVoice() {
   const enabled = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const [unavailable, setUnavailable] = useState(false);
+  // ONE persistent <audio> element reused for every speak() call, not a
+  // fresh `new Audio()` per call -- required for reliable playback on
+  // mobile Safari/WebKit. Those browsers only allow .play() when it's
+  // attributable to a real user gesture; an element "unlocked" by a
+  // gesture-synchronous play/pause (see primeAudio below) stays unlocked
+  // for ITS OWN lifetime, but a brand-new element created later (e.g.
+  // inside an async fetch callback, or from autoplay's setInterval with
+  // no gesture at all) does not inherit that unlock. Reusing one element
+  // across every call, primed once on the first real click, is the
+  // standard cross-browser fix for this class of bug.
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const primedRef = useRef(false);
   const cacheRef = useRef<Map<string, string>>(new Map()); // speakerId -> object URL
   const requestIdRef = useRef(0);
+
+  function getAudioElement(): HTMLAudioElement {
+    if (!audioRef.current) audioRef.current = new Audio();
+    return audioRef.current;
+  }
+
+  /** Call SYNCHRONOUSLY (no `await` before it) from inside a real click
+   * handler -- priming after an `await` defeats the whole point, since
+   * strict mobile browsers attribute a gesture only to code still on the
+   * original call stack. Idempotent: only actually primes once. */
+  const primeAudio = useCallback(() => {
+    if (primedRef.current) return;
+    primedRef.current = true;
+    try {
+      const el = getAudioElement();
+      const p = el.play();
+      // A source-less element's play() rejects (nothing to play) --
+      // that's fine and expected, the attempt itself is what registers
+      // the gesture-unlock on this element for later, real playback.
+      if (p && typeof p.catch === "function") p.catch(() => {});
+      el.pause();
+    } catch {
+      // Some older WebKit versions throw synchronously here instead of
+      // rejecting a promise -- either way, priming is best-effort; a
+      // failure here just means speak() falls back to whatever the
+      // browser's normal (possibly stricter) autoplay policy allows.
+    }
+  }, []);
 
   // One-time hydration of the module-level store from localStorage --
   // only the first mounted instance on a page actually needs to do this
@@ -75,69 +114,85 @@ export function useLensVoice() {
 
   const toggle = useCallback(() => {
     const next = !sharedEnabled;
-    if (!next) {
+    if (next) {
+      // Turning voice ON is always a direct click -- prime here so the
+      // persistent element is unlocked before any later, possibly
+      // non-gesture-triggered (autoplay) speak() call needs it.
+      primeAudio();
+    } else {
       audioRef.current?.pause();
     }
     setSharedEnabled(next);
-  }, []);
+  }, [primeAudio]);
 
   const stop = useCallback(() => {
     audioRef.current?.pause();
   }, []);
 
-  const speak = useCallback(async (personaId: string, text: string, voiceId: string, onEnded?: () => void) => {
-    audioRef.current?.pause();
-    setUnavailable(false);
+  const speak = useCallback(
+    async (personaId: string, text: string, voiceId: string, onEnded?: () => void) => {
+      const el = getAudioElement();
+      el.pause();
+      // Clear any handlers from a previous speak() call on this shared
+      // element before attaching new ones, so a superseded call's
+      // onEnded can't fire late against the wrong persona/row.
+      el.onended = null;
+      el.onpause = null;
+      setUnavailable(false);
 
-    const cached = cacheRef.current.get(personaId);
-    if (cached) {
-      const audio = new Audio(cached);
-      if (onEnded) {
-        audio.addEventListener("ended", onEnded);
-        audio.addEventListener("pause", onEnded);
+      function playUrl(url: string) {
+        if (onEnded) {
+          el.onended = onEnded;
+          el.onpause = onEnded;
+        }
+        el.src = url;
+        const p = el.play();
+        if (p && typeof p.catch === "function") {
+          p.catch(() => {
+            // Autoplay can still be blocked by the browser even after an
+            // earlier user gesture primed this element (e.g. this call
+            // itself isn't gesture-attributable, such as autoplay's
+            // setInterval-driven advance) -- fail silently, the text is
+            // already visible via the typewriter effect.
+            onEnded?.();
+          });
+        }
       }
-      audioRef.current = audio;
-      audio.play().catch(() => {
-        // Autoplay can still be blocked by the browser even after an
-        // earlier user gesture enabled the toggle -- fail silently,
-        // the text is already visible via the typewriter effect.
-        onEnded?.();
-      });
-      return;
-    }
 
-    const myRequestId = ++requestIdRef.current;
-    try {
-      const res = await fetch(apiUrl("/api/tts"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voice_id: voiceId }),
-      });
-      // A newer request superseded this one (user already moved on) --
-      // drop the result rather than playing stale/out-of-order audio.
-      if (myRequestId !== requestIdRef.current) return;
-      if (!res.ok) {
-        setUnavailable(true);
-        onEnded?.();
+      const cached = cacheRef.current.get(personaId);
+      if (cached) {
+        playUrl(cached);
         return;
       }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      cacheRef.current.set(personaId, url);
-      const audio = new Audio(url);
-      if (onEnded) {
-        audio.addEventListener("ended", onEnded);
-        audio.addEventListener("pause", onEnded);
+
+      const myRequestId = ++requestIdRef.current;
+      try {
+        const res = await fetch(apiUrl("/api/tts"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, voice_id: voiceId }),
+        });
+        // A newer request superseded this one (user already moved on) --
+        // drop the result rather than playing stale/out-of-order audio.
+        if (myRequestId !== requestIdRef.current) return;
+        if (!res.ok) {
+          setUnavailable(true);
+          onEnded?.();
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        cacheRef.current.set(personaId, url);
+        playUrl(url);
+      } catch {
+        if (myRequestId === requestIdRef.current) {
+          setUnavailable(true);
+          onEnded?.();
+        }
       }
-      audioRef.current = audio;
-      audio.play().catch(() => onEnded?.());
-    } catch {
-      if (myRequestId === requestIdRef.current) {
-        setUnavailable(true);
-        onEnded?.();
-      }
-    }
-  }, []);
+    },
+    []
+  );
 
   useEffect(() => {
     return () => {
@@ -146,5 +201,11 @@ export function useLensVoice() {
     };
   }, []);
 
-  return { enabled, toggle, speak, stop, unavailable };
+  // Exposed so consumers can prime synchronously inside their OWN click
+  // handlers too, not just this hook's toggle(). Needed for a real gap:
+  // if voice was already enabled from a previous session (persisted in
+  // localStorage), toggle() never fires this session at all -- the very
+  // first interaction might be clicking a per-row "speak" button
+  // directly, which must still prime before its own async speak() call.
+  return { enabled, toggle, speak, stop, unavailable, primeAudio };
 }

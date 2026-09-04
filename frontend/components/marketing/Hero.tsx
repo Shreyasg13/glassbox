@@ -24,6 +24,12 @@ export function Hero() {
   const [playing, setPlaying] = useState(false);
 
   function handleListen() {
+    // Synchronous priming first -- covers both cases: voice.toggle()
+    // below already primes when turning on, but if voice was already
+    // enabled from a prior session this may be the first speak() this
+    // page load, so priming here too (idempotent) is the only way to
+    // guarantee it happens before speak()'s internal `await fetch(...)`.
+    voice.primeAudio();
     if (!voice.enabled) voice.toggle();
     setPlaying(true);
     voice.speak("hero-demo", DEMO_NARRATION, DEMO_VOICE_ID, () => setPlaying(false));

@@ -102,15 +102,26 @@ export function StrategyLenses() {
     return () => window.removeEventListener("keydown", onKey);
   }, [view.length]);
 
+  // Synchronous priming on every real navigation click -- these trigger
+  // speak() indirectly via the useEffect watching active?.id below, not
+  // directly, but the prime only needs to happen via SOME real user
+  // gesture before the persistent audio element's first playback attempt;
+  // it doesn't need to be in the same tick as speak() itself. Covers the
+  // case where voice was already enabled from a prior session (so the
+  // "Enable voices" toggle's own priming never fires this page load) and
+  // the user's first interaction is clicking a card instead.
   function goTo(i: number) {
+    voice.primeAudio();
     setCur(i);
     setAutoplay(false);
   }
   function next() {
+    voice.primeAudio();
     setCur((c) => (c + 1) % view.length);
     setAutoplay(false);
   }
   function prev() {
+    voice.primeAudio();
     setCur((c) => (c - 1 + view.length) % view.length);
     setAutoplay(false);
   }
