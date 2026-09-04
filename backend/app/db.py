@@ -63,6 +63,13 @@ audit_log_table = Table(
     Column("config", String, nullable=False),  # JSON-encoded AuditLogEntry
 )
 
+users_table = Table(
+    "users",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("config", String, nullable=False),  # JSON-encoded: username, username_lower, password_hash, role, created_at
+)
+
 metadata.create_all(engine)
 
 
@@ -229,3 +236,23 @@ def list_audit_log(limit: int = 50, offset: int = 0) -> Tuple[List[Dict[str, Any
 
 def list_llm_calls_page(limit: int = 50, offset: int = 0) -> Tuple[List[Dict[str, Any]], int]:
     return _list_paginated_sorted(llm_calls_table, limit, offset, "started_at")
+
+
+# ---- Users (real signup/login accounts, distinct from the hardcoded dev
+# accounts in app/auth.py's _DEV_USERS -- see that module for how the two
+# are reconciled at authentication time) ----
+
+def create_user(data: Dict[str, Any]) -> Dict[str, Any]:
+    return _create(users_table, data)
+
+
+def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
+    """Case-insensitive lookup -- every row's config carries a
+    pre-lowercased `username_lower` field precisely so this can be a
+    linear scan without needing a second indexed column at the SQL layer
+    (consistent with this file's existing JSON-blob-per-row pattern)."""
+    target = username.strip().lower()
+    for row in _list(users_table):
+        if row.get("username_lower") == target:
+            return row
+    return None

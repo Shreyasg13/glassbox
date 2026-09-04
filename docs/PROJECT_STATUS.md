@@ -14,8 +14,9 @@ or scope changes — this is the single place to check "where are we" and
 | API | https://api.34.46.231.153.sslip.io (`/docs` for OpenAPI) |
 | Source | `github.com/Shreyasg13/glassbox` (private, `main` branch) |
 | Host | GCP VM `instance-20260902-033025`, project `project-f015cf71-9e01-4a2a-8f5`, zone `us-central1-a` |
-| Admin login | `admin` / `admin` (placeholder — real auth not built) |
-| User login | `user` / `user` (placeholder — real auth not built) |
+| Admin login | `admin` / `admin` (still hardcoded — real signup exists now, but self-serve accounts can never be admin) |
+| Dev viewer login | `user` / `user` (still hardcoded, unchanged) |
+| Signup | `/signup` — real accounts, bcrypt-hashed, role="viewer" always |
 
 ## Phase status
 
@@ -40,8 +41,14 @@ or scope changes — this is the single place to check "where are we" and
 
 ## Known gaps (disclosed, not oversights)
 
-- **Auth is placeholder.** Hardcoded `admin`/`admin` and `user`/`user` dev
-  accounts (`backend/app/auth.py`). No real user table, no password hashing.
+- **Auth is now real for signup/viewer accounts.** `/auth/signup` +
+  `/signup` create genuine bcrypt-hashed accounts in a `users` table
+  (`backend/app/auth.py`, `db.py`) — self-serve accounts are always
+  role="viewer" (admin is never grantable via signup, by design). The
+  original `admin`/`admin` hardcoded dev account is kept unconditionally
+  (every deployment doc points people at it) rather than replaced.
+  Google/Microsoft social sign-in buttons remain honestly disabled — real
+  OAuth needs external app registration this project doesn't have yet.
 - **Deterministic agents don't call the real engine classes yet.** The
   "Quantitative Strategist (Engine)" etc. agents read the same live-signals
   data those classes would produce, rather than instantiating

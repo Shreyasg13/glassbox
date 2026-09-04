@@ -11,6 +11,7 @@ type AuthState = { token: string | null; role: Role | null };
 type AuthContextValue = AuthState & {
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
+  signup: (username: string, password: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -30,11 +31,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const res = await apiFetch<{ access_token: string; token_type: string; role: Role }>(
-      "/auth/login",
-      { method: "POST", body: JSON.stringify({ username, password }) }
-    );
+  const authenticate = useCallback(async (endpoint: "/auth/login" | "/auth/signup", username: string, password: string) => {
+    const res = await apiFetch<{ access_token: string; token_type: string; role: Role }>(endpoint, {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
     const next: AuthState = { token: res.access_token, role: res.role };
     setState(next);
     try {
@@ -43,6 +44,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // storage unavailable, session-only auth still works
     }
   }, []);
+
+  const login = useCallback(
+    (username: string, password: string) => authenticate("/auth/login", username, password),
+    [authenticate]
+  );
+
+  const signup = useCallback(
+    (username: string, password: string) => authenticate("/auth/signup", username, password),
+    [authenticate]
+  );
 
   const logout = useCallback(() => {
     setState({ token: null, role: null });
@@ -54,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ ...state, loading, login, logout }}>
+    <AuthContext.Provider value={{ ...state, loading, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

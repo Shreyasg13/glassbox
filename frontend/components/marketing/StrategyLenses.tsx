@@ -7,7 +7,6 @@ import { useLensVoice } from "@/lib/useLensVoice";
 import { LENS_FILTERS, LENS_PERSONAS, type LensFilter, type LensPersona } from "./lensData";
 import { LensPortrait } from "./lensPortrait";
 
-const AUTOPLAY_MS = 4200;
 const TYPE_MS_PER_CHAR = 18;
 // Safety net for the voice-driven autoplay pacing below: if a persona's
 // speech never fires its "ended" callback for some reason (network hang,
@@ -15,6 +14,11 @@ const TYPE_MS_PER_CHAR = 18;
 // than getting stuck on one card indefinitely. Generous relative to how
 // long any of these story quotes actually take to read aloud.
 const MAX_SPEECH_WAIT_MS = 25_000;
+// Brief pause after the full text is visible (and, if voice is on,
+// narration has finished) before actually sliding to the next card --
+// without this, the transition fires the instant reading/listening
+// ends, which reads as an abrupt cut rather than a settled finish.
+const SETTLE_DELAY_MS = 900;
 
 function growthColor(growth: number): string {
   if (growth >= 70) return "text-green";
@@ -64,65 +68,80 @@ export function StrategyLenses() {
     setCur(0);
   }, [filter]);
 
-  // typewriter effect for the active persona's story
+  // Typewriter + voice narration + autoplay advancement, coordinated in
+  // one effect per active card. Previously these were three separate
+  // effects: typewriter ran on its own fixed per-char timer, voice
+  // narration ran independently, and advancement fired the instant
+  // WHICHEVER of "typewriter done" or "speech done" happened to finish
+  // first (usually speech, since it's not word-synced to the typed
+  // text) -- so the card could visibly slide away while text was still
+  // mid-type, or right as the audio cut off, reading as an abrupt,
+  // "swinging" transition rather than a clean finish. Now advancement
+  // waits for BOTH the full text to be visible AND (if voice is on) the
+  // narration to actually finish, then pauses briefly (SETTLE_DELAY_MS)
+  // before sliding -- so the reader always sees the complete card at
+  // rest for a moment first.
   useEffect(() => {
-    if (typeTimer.current) clearInterval(typeTimer.current);
     if (!active) return;
+    if (typeTimer.current) clearInterval(typeTimer.current);
+
+    let cancelled = false;
+    let typewriterDone = false;
+    let speechDone = !voice.enabled; // nothing to wait for if voice is off
+    let advanceTimer: ReturnType<typeof setTimeout> | null = null;
+    let speechSafety: ReturnType<typeof setTimeout> | null = null;
+
+    function maybeScheduleAdvance() {
+      if (cancelled || !typewriterDone || !speechDone) return;
+      advanceTimer = setTimeout(() => {
+        if (!cancelled && autoplayRef.current) setCur((c) => (c + 1) % view.length);
+      }, SETTLE_DELAY_MS);
+    }
+
     if (reduceMotion) {
       setTypedText(active.story);
-      return;
+      typewriterDone = true;
+    } else {
+      setTypedText("");
+      let i = 0;
+      typeTimer.current = setInterval(() => {
+        i += 1;
+        setTypedText(active.story.slice(0, i));
+        if (i >= active.story.length) {
+          if (typeTimer.current) clearInterval(typeTimer.current);
+          typewriterDone = true;
+          maybeScheduleAdvance();
+        }
+      }, TYPE_MS_PER_CHAR);
     }
-    setTypedText("");
-    let i = 0;
-    typeTimer.current = setInterval(() => {
-      i += 1;
-      setTypedText(active.story.slice(0, i));
-      if (i >= active.story.length && typeTimer.current) {
-        clearInterval(typeTimer.current);
-      }
-    }, TYPE_MS_PER_CHAR);
+
+    if (voice.enabled) {
+      // Safety net: if speech's "ended" callback never fires (network
+      // hang, a browser quirk), force it done anyway rather than
+      // stalling the carousel on this card indefinitely.
+      speechSafety = setTimeout(() => {
+        if (cancelled || speechDone) return;
+        speechDone = true;
+        maybeScheduleAdvance();
+      }, MAX_SPEECH_WAIT_MS);
+      voice.speak(active.id, active.story, active.voiceId, () => {
+        if (cancelled || speechDone) return;
+        speechDone = true;
+        if (speechSafety) clearTimeout(speechSafety);
+        maybeScheduleAdvance();
+      });
+    } else {
+      maybeScheduleAdvance();
+    }
+
     return () => {
+      cancelled = true;
       if (typeTimer.current) clearInterval(typeTimer.current);
+      if (advanceTimer) clearTimeout(advanceTimer);
+      if (speechSafety) clearTimeout(speechSafety);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id, reduceMotion]);
-
-  // Voice playback, loosely synced with the typewriter above -- starts
-  // around the same time the text starts revealing, no word-level sync.
-  // When autoplay is on AND voice is enabled, this is also what drives
-  // advancing to the next card -- on speech end, not on a fixed timer,
-  // so narration is never cut off mid-sentence by the carousel moving on.
-  useEffect(() => {
-    if (!active || !voice.enabled) return;
-    let settled = false;
-    const safety = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      if (autoplayRef.current) setCur((c) => (c + 1) % view.length);
-    }, MAX_SPEECH_WAIT_MS);
-    voice.speak(active.id, active.story, active.voiceId, () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(safety);
-      if (autoplayRef.current) setCur((c) => (c + 1) % view.length);
-    });
-    return () => {
-      settled = true;
-      clearTimeout(safety);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id, voice.enabled]);
-
-  // Fixed-interval autoplay -- only when voice is OFF. With voice on, the
-  // effect above drives advancement (waits for speech to actually finish
-  // instead of a timer that doesn't know how long the narration takes).
-  useEffect(() => {
-    if (!autoplay || view.length <= 1 || voice.enabled) return;
-    const id = setInterval(() => {
-      setCur((c) => (c + 1) % view.length);
-    }, AUTOPLAY_MS);
-    return () => clearInterval(id);
-  }, [autoplay, view.length, voice.enabled]);
+  }, [active?.id, reduceMotion, voice.enabled]);
 
   // keyboard nav
   useEffect(() => {

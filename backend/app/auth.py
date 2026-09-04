@@ -1,31 +1,46 @@
 """JWT auth with role-based access (admin vs viewer).
 
-TODO(real-auth): the credential check below is a single hardcoded dev
-account. Before Phase 6 launch this must be replaced with a real user
-store (hashed passwords, multiple accounts) -- everything else here
-(token issuance, decoding, the require_admin dependency) is meant to
-carry over unchanged.
+Two account sources, checked in order:
+1. `_DEV_USERS` -- the original hardcoded admin/admin and user/user
+   accounts. Kept unconditionally (not gated behind an env var) since
+   this deployment's docs (README, DEPLOY_GCP.md, PROJECT_STATUS.md)
+   all point people at these exact credentials as the known way in --
+   removing them would silently break every one of those instructions.
+2. The real `users` table (app/db.py), populated via POST /auth/signup.
+   Passwords are hashed with bcrypt, never stored or logged in plain
+   text. "admin" and "user" are reserved usernames at signup time
+   specifically so a real signup can never collide with (and
+   confusingly shadow, or be shadowed by) the two dev accounts above.
 """
 from __future__ import annotations
 
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Literal, Optional
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
+from . import db
+
 SECRET_KEY = os.environ.get("GLASSBOX_JWT_SECRET", "dev-only-secret-change-me")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 12
 
-# TODO(real-auth): replace with a real user table.
 _DEV_USERS = {
     "admin": {"password": "admin", "role": "admin"},
     "user": {"password": "user", "role": "viewer"},
 }
+
+# Case-insensitive -- signup already rejects "Admin"/"USER" etc. via the
+# same lowercased comparison used everywhere else in this module.
+RESERVED_USERNAMES = {"admin", "user"}
+
+MIN_USERNAME_LEN = 3
+MIN_PASSWORD_LEN = 6
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
@@ -35,11 +50,64 @@ class TokenPayload(BaseModel):
     role: Literal["admin", "viewer"]
 
 
-def authenticate(username: str, password: str) -> TokenPayload | None:
-    user = _DEV_USERS.get(username)
-    if user is None or user["password"] != password:
+class SignupError(ValueError):
+    """Raised for any signup validation failure -- the router turns this
+    into a 400 with the message as-is (all messages here are already
+    safe to show a user, never leak internals)."""
+
+
+def _hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
+
+
+def _verify_password(password: str, password_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("ascii"))
+    except ValueError:
+        # Malformed stored hash -- treat as a failed verification, not a
+        # server error (should never happen since _hash_password is the
+        # only writer, but a corrupt row must not become an open door).
+        return False
+
+
+def authenticate(username: str, password: str) -> Optional[TokenPayload]:
+    dev_user = _DEV_USERS.get(username)
+    if dev_user is not None:
+        if dev_user["password"] != password:
+            return None
+        return TokenPayload(sub=username, role=dev_user["role"])
+
+    row = db.get_user_by_username(username)
+    if row is None or not _verify_password(password, row["password_hash"]):
         return None
-    return TokenPayload(sub=username, role=user["role"])
+    return TokenPayload(sub=row["username"], role=row["role"])
+
+
+def signup(username: str, password: str) -> TokenPayload:
+    """Creates a real account with role="viewer" (self-serve signup never
+    grants admin -- an admin role is only ever assigned by hand, e.g.
+    directly in the DB or by promoting a user via a future admin-users
+    endpoint). Raises SignupError on any validation failure."""
+    username = username.strip()
+    if len(username) < MIN_USERNAME_LEN:
+        raise SignupError(f"Username must be at least {MIN_USERNAME_LEN} characters")
+    if len(password) < MIN_PASSWORD_LEN:
+        raise SignupError(f"Password must be at least {MIN_PASSWORD_LEN} characters")
+    if username.lower() in RESERVED_USERNAMES:
+        raise SignupError("That username is reserved")
+    if db.get_user_by_username(username) is not None:
+        raise SignupError("That username is already taken")
+
+    row = db.create_user(
+        {
+            "username": username,
+            "username_lower": username.lower(),
+            "password_hash": _hash_password(password),
+            "role": "viewer",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    return TokenPayload(sub=row["username"], role=row["role"])
 
 
 def create_access_token(payload: TokenPayload) -> str:

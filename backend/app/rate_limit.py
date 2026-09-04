@@ -39,6 +39,10 @@ class SlidingWindowLimiter:
 
 _login_limiter = SlidingWindowLimiter(int(os.environ.get("RATE_LIMIT_LOGIN_PER_MIN", "10")))
 _admin_limiter = SlidingWindowLimiter(int(os.environ.get("RATE_LIMIT_ADMIN_PER_MIN", "60")))
+# Separate from login's limiter -- mass account creation is a distinct
+# abuse concern from login brute-forcing, worth its own (tighter) budget
+# rather than sharing login's counter/env var.
+_signup_limiter = SlidingWindowLimiter(int(os.environ.get("RATE_LIMIT_SIGNUP_PER_MIN", "5")))
 
 
 def _client_key(request: Request) -> str:
@@ -47,6 +51,10 @@ def _client_key(request: Request) -> str:
 
 async def rate_limit_login(request: Request) -> None:
     _login_limiter.check(_client_key(request))
+
+
+async def rate_limit_signup(request: Request) -> None:
+    _signup_limiter.check(_client_key(request))
 
 
 async def rate_limit_admin_mutations(request: Request) -> None:
