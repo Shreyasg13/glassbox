@@ -4,19 +4,27 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
+// Absolute "/#section" hrefs, not bare "#section" -- this nav also renders
+// on /login and /signup (see app/login/page.tsx, app/signup/page.tsx), and
+// a bare hash href only ever scrolls within the CURRENT page. From those
+// pages a bare "#how-it-works" just appends the hash to /login with
+// nothing there to scroll to. "/#how-it-works" + next/link's Link (not a
+// plain <a>) navigates to the homepage first when needed, then scrolls --
+// and still does an in-page scroll with no full reload when already on it.
 const links = [
-  { href: "#how-it-works", label: "How it Works" },
-  { href: "#strategy-lenses", label: "Strategy Lenses" },
-  { href: "#for-advisors", label: "For Advisors" },
-  { href: "#pricing", label: "Pricing" },
-  { href: "#blog", label: "Blog" },
+  { href: "/#how-it-works", label: "How it Works" },
+  { href: "/#strategy-lenses", label: "Strategy Lenses" },
+  { href: "/#for-advisors", label: "For Advisors" },
+  { href: "/#pricing", label: "Pricing" },
+  { href: "/#blog", label: "Blog" },
 ];
 
 export function MarketingNav() {
   const [active, setActive] = useState<string | null>(null);
 
   useEffect(() => {
-    const ids = links.map((l) => l.href.slice(1));
+    // hrefs are "/#id" -- strip the leading "/#" (2 chars), not just "#".
+    const ids = links.map((l) => l.href.slice(2));
     const sections = ids
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => el !== null);
@@ -26,7 +34,7 @@ export function MarketingNav() {
       (entries) => {
         const visible = entries.filter((e) => e.isIntersecting);
         if (visible.length > 0) {
-          setActive(`#${visible[0].target.id}`);
+          setActive(`/#${visible[0].target.id}`);
         }
       },
       { rootMargin: "-45% 0px -45% 0px", threshold: 0 }
@@ -49,7 +57,7 @@ export function MarketingNav() {
 
       <div className="hidden items-center gap-sp5 md:flex">
         {links.map((l) => (
-          <a
+          <Link
             key={l.href}
             href={l.href}
             className={`relative text-[13px] font-medium transition-colors ${
@@ -62,7 +70,7 @@ export function MarketingNav() {
                 active === l.href ? "scale-x-100" : "scale-x-0"
               }`}
             />
-          </a>
+          </Link>
         ))}
       </div>
 
