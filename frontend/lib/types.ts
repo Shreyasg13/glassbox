@@ -44,7 +44,7 @@ export type ProviderHealth = {
   checked_at: string;
 };
 
-export type JobKind = "agent_test_run" | "orchestration_run" | "report_generate";
+export type JobKind = "agent_test_run" | "orchestration_run" | "report_generate" | "my_agents_run";
 export type JobState = "queued" | "running" | "done" | "error";
 
 export type JobStatus = {

@@ -18,7 +18,11 @@ from . import db
 from .job_events import broadcaster
 
 
-def new_job(kind: str) -> Dict[str, Any]:
+def new_job(kind: str, owner: Optional[str] = None) -> Dict[str, Any]:
+    """owner: the username that should be allowed to poll this job's
+    status via a non-admin endpoint (routers/me.py's get_my_job) --
+    None for the existing admin-triggered job kinds, which stay
+    reachable only through the admin-gated /api/admin/jobs/{id}."""
     job_id = str(uuid.uuid4())
     job = {
         "job_id": job_id,
@@ -28,6 +32,7 @@ def new_job(kind: str) -> Dict[str, Any]:
         "created_at": datetime.now(timezone.utc).isoformat(),
         "result": None,
         "error": None,
+        "owner": owner,
     }
     db.create_job(job)
     return job

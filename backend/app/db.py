@@ -334,6 +334,18 @@ def create_user(data: Dict[str, Any]) -> Dict[str, Any]:
     return _create(users_table, data)
 
 
+def update_user(user_id: str, patch: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Merges `patch` into the existing row (same read-modify-write
+    pattern as update_llm_call) -- _update() itself replaces the whole
+    JSON blob, so the full existing row must be read first or a partial
+    patch would silently delete every field it didn't mention."""
+    existing = _get(users_table, user_id)
+    if existing is None:
+        return None
+    existing.update(patch)
+    return _update(users_table, user_id, existing)
+
+
 def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
     """Case-insensitive lookup -- every row's config carries a
     pre-lowercased `username_lower` field precisely so this can be a

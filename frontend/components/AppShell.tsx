@@ -12,6 +12,7 @@ const userLinks: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "◈" },
   { href: "/onboarding", label: "Onboarding", icon: "✦" },
   { href: "/reports", label: "Reports", icon: "▤" },
+  { href: "/agents", label: "My Agents", icon: "⚗" },
 ];
 
 const adminLinks: NavItem[] = [

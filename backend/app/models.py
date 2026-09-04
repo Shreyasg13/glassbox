@@ -275,7 +275,7 @@ class PaginatedLLMCalls(BaseModel):
 
 # ---- Background jobs: agent test-run, orchestration run, report generate ----
 
-JobKind = Literal["agent_test_run", "orchestration_run", "report_generate"]
+JobKind = Literal["agent_test_run", "orchestration_run", "report_generate", "my_agents_run"]
 JobState = Literal["queued", "running", "done", "error"]
 
 
@@ -286,6 +286,28 @@ class JobStatus(BaseModel):
     created_at: str
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+
+
+# ---- /api/me (self-service agent subscriptions + personalized run) ----
+
+
+class AgentSummary(BaseModel):
+    """Safe, public-ish subset of AgentConfig for the self-service agent
+    picker -- deliberately excludes system_prompt/provider/model/params,
+    which stay admin-only via /api/admin/agents (that GET is gated by
+    require_admin at the router level, so a plain viewer can't browse
+    them today at all -- this is the non-admin-gated equivalent, minimal
+    fields only)."""
+
+    id: str
+    name: str
+    role: str
+    type: AgentType
+    enabled: bool
+
+
+class AgentSubscriptions(BaseModel):
+    agent_ids: List[str] = Field(default_factory=list)
 
 
 class JobAccepted(BaseModel):

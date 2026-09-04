@@ -17,7 +17,14 @@ const POLL_INTERVAL_MS = 2000;
  * log/token frames with a REST polling fallback in case the socket never
  * opens (mirrors SignalTicker's reconnect-resilience posture).
  */
-export function useJobRun(token: string | null) {
+/**
+ * jobStatusBasePath: which job-status endpoint to poll -- defaults to
+ * the admin one (every existing call site is admin-only), but a
+ * self-service job kind (routers/me.py's my_agents_run) is only
+ * readable via /api/me/jobs/{id}, since that endpoint checks the job's
+ * owner instead of requiring admin role.
+ */
+export function useJobRun(token: string | null, jobStatusBasePath: string = "/api/admin/jobs") {
   const [lines, setLines] = useState<string[]>([]);
   const [streamText, setStreamText] = useState("");
   const [status, setStatus] = useState<JobStatus | null>(null);
@@ -64,7 +71,7 @@ export function useJobRun(token: string | null) {
       stopPolling();
       pollRef.current = setInterval(async () => {
         try {
-          const s = await apiFetch<JobStatus>(`/api/admin/jobs/${jobId}`, {
+          const s = await apiFetch<JobStatus>(`${jobStatusBasePath}/${jobId}`, {
             token: token ?? undefined,
           });
           if (s.status === "done" || s.status === "error") {
@@ -77,7 +84,7 @@ export function useJobRun(token: string | null) {
         }
       }, POLL_INTERVAL_MS);
     },
-    [finish, stopPolling, token]
+    [finish, stopPolling, token, jobStatusBasePath]
   );
 
   const run = useCallback(

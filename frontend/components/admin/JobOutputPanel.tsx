@@ -22,6 +22,7 @@ export function JobOutputPanel({
   inputPlaceholder = "Test input…",
   showInput = true,
   onDone,
+  jobStatusBasePath,
 }: {
   startUrl: string;
   buildBody?: (input: string) => unknown;
@@ -29,10 +30,14 @@ export function JobOutputPanel({
   inputPlaceholder?: string;
   showInput?: boolean;
   onDone?: (result: Record<string, unknown> | null | undefined) => void;
+  /** Defaults to the admin job-status endpoint -- pass "/api/me/jobs" for
+   * a self-service job kind (e.g. startUrl="/api/me/run-report"), which
+   * checks job ownership instead of requiring admin role. */
+  jobStatusBasePath?: string;
 }) {
   const { token } = useAuth();
   const [input, setInput] = useState("");
-  const { run, lines, streamText, status, running } = useJobRun(token);
+  const { run, lines, streamText, status, running } = useJobRun(token, jobStatusBasePath);
 
   async function handleRun() {
     await run(startUrl, buildBody ? buildBody(input) : {});

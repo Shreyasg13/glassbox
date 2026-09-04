@@ -412,7 +412,7 @@ export function StrategyLenses() {
               bottom: "-4px",
               transform: "translate(-50%, calc(100% + 14px))",
               borderColor: `var(--c-${active.color})`,
-              background: "linear-gradient(160deg, rgba(23,32,53,.96), rgba(13,20,34,.96))",
+              background: "var(--c-lens-bubble-bg)",
             }}
           >
             <div className="mb-sp2 flex items-center gap-sp2">
