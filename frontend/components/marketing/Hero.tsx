@@ -14,7 +14,8 @@ const evidenceRows = [
 const DEMO_NARRATION =
   "Apple Incorporated, ticker AAPL, score 8.4. Debt to equity ratio 1.78. Altman Z-Score 6.24, very low risk. " +
   "Beta versus S&P 500 is 1.22. Auditor A6: narrative matches raw API, zero discrepancies found.";
-const DEMO_VOICE_ID = "am_michael";
+const DEMO_ELEVENLABS_VOICE_ID = "pqHfZKP75CvOlQylNhV4"; // Bill -- Value Lens (Buffett)
+const DEMO_KOKORO_VOICE_ID = "am_michael";
 
 export function Hero() {
   // "use client" required for this hook -- the surrounding file was
@@ -32,7 +33,13 @@ export function Hero() {
     voice.primeAudio();
     if (!voice.enabled) voice.toggle();
     setPlaying(true);
-    voice.speak("hero-demo", DEMO_NARRATION, DEMO_VOICE_ID, () => setPlaying(false));
+    voice.speak(
+      "hero-demo",
+      DEMO_NARRATION,
+      DEMO_ELEVENLABS_VOICE_ID,
+      DEMO_KOKORO_VOICE_ID,
+      () => setPlaying(false)
+    );
   }
   return (
     <div className="grid grid-cols-1 items-center gap-sp8 px-sp6 py-sp10 md:px-sp10 lg:grid-cols-2 lg:py-sp10">

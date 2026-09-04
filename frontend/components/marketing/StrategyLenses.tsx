@@ -124,7 +124,7 @@ export function StrategyLenses() {
         speechDone = true;
         maybeScheduleAdvance();
       }, MAX_SPEECH_WAIT_MS);
-      voice.speak(active.id, active.story, active.voiceId, () => {
+      voice.speak(active.id, active.story, active.elevenLabsVoiceId, active.kokoroVoiceId, () => {
         if (cancelled || speechDone) return;
         speechDone = true;
         if (speechSafety) clearTimeout(speechSafety);

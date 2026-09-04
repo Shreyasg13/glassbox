@@ -3,9 +3,25 @@ generation (not each browser's own SpeechSynthesis voices) so every
 persona sounds the same for every visitor, and so each of the 8 personas
 can have a genuinely distinct assigned voice.
 
-Provider chain: Hugging Face's Inference Providers running the
-open-source Kokoro-82M model (free, no per-request cost), falling
-through to ElevenLabs (paid) on any failure.
+Provider chain: ElevenLabs primary (paid, predictable pricing), falling
+through to Hugging Face's Inference Providers running the open-source
+Kokoro-82M model (free tier) on any failure. This order flipped from an
+earlier version of this file (Kokoro primary) after that free tier's
+account-level credit quota was exhausted three times across two
+different keys during real verification -- confirmed each time via a
+live 402 "monthly included credits depleted" response, not a code bug.
+ElevenLabs' paid tier is the reliable path now; Kokoro remains as a
+free fallback if ElevenLabs itself is ever unconfigured/down.
+
+CRITICAL: the two providers use ENTIRELY DIFFERENT VOICE-ID NAMESPACES
+(ElevenLabs: alphanumeric ids like "pNInz6obpgDQGcFmaJgB"; Kokoro:
+short codes like "am_michael") -- passing the same voice_id to both
+was a real, disclosed-but-live limitation in the original version of
+this file (kept as a "future work" note since only Kokoro was
+realistically configured at the time). Now that ElevenLabs is primary,
+that gap would silently break every call if left unfixed, so the
+request/response shape below takes two SEPARATE voice ids, one per
+provider, rather than one overloaded field.
 
 THIS FILE WAS REWRITTEN ONCE ALREADY AFTER A REAL, LIVE-VERIFIED BUG --
 worth knowing before touching it again:
@@ -139,22 +155,20 @@ async def _try_eleven_labs(text: str, voice_id: str) -> Optional[TTSResult]:
             return None
 
 
-async def generate_speech(text: str, voice_id: str) -> Optional[TTSResult]:
+async def generate_speech(text: str, elevenlabs_voice_id: str, kokoro_voice_id: str) -> Optional[TTSResult]:
     """Returns (audio_bytes, content_type) on success, or None if every
     configured provider is unavailable/unconfigured/failed -- callers
     (the /api/tts route) turn None into a clean 503, matching the
     "not configured" contract every other provider in this codebase uses
     rather than raising and surfacing a stack trace to a public endpoint.
 
-    Note: ElevenLabs uses its own voice-id namespace (e.g. "pNInz6obpgDQGcFmaJgB"),
-    entirely different from Kokoro's ("am_michael" etc.) -- a caller
-    falling through to ElevenLabs with a Kokoro voice_id will simply get
-    a 404 from ElevenLabs and fall through to returning None. Wiring a
-    real per-persona ElevenLabs voice mapping is future work for if that
-    key ever gets configured; today this project only has a
-    HUGGINGFACE_API_KEY path realistically available.
+    Takes one voice id per provider (see module docstring for why a
+    single shared id was a real bug waiting to happen) -- ElevenLabs is
+    tried first, Kokoro/Hugging Face as the fallback.
     """
     trimmed = text.strip()[:MAX_CHARS]
     if not trimmed:
         return None
-    return (await _try_hugging_face(trimmed, voice_id)) or (await _try_eleven_labs(trimmed, voice_id))
+    return (await _try_eleven_labs(trimmed, elevenlabs_voice_id)) or (
+        await _try_hugging_face(trimmed, kokoro_voice_id)
+    )

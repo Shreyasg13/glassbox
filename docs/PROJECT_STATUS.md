@@ -71,11 +71,18 @@ or scope changes — this is the single place to check "where are we" and
   orchestration fallback (only per-agent model fallback); that remains
   future work if the fallback chain alone proves insufficient under load.
 - **Voice narration (Strategy Lenses, Hero demo, dashboard signal ticker)
-  is live and working** — `HUGGINGFACE_API_KEY` (a fresh key, prepaid
-  billing) confirmed generating real audio end-to-end via the deployed
-  `/api/tts` endpoint (`200`, real WAV bytes, 2026-09-04). The prior key
-  hit its free monthly quota during verification; that's an account-level
-  limit, unrelated to this one.
+  is live and working, now on ElevenLabs as the primary provider**
+  (`ELEVENLABS_API_KEY`), with Hugging Face/Kokoro-82M as the fallback.
+  This order flipped from an earlier Kokoro-primary version after the
+  free HF tier's account-level credit quota was exhausted three times
+  across two different keys during real verification (confirmed each
+  time via a live `402` — not a code bug). `/api/tts` now takes two
+  separate voice ids per call (`elevenlabs_voice_id`, `kokoro_voice_id`)
+  since the two providers use entirely different id namespaces — all 8
+  Strategy Lens personas were assigned real ElevenLabs voice ids fetched
+  live from `GET /v2/voices` with a real key (`lensData.ts`), not
+  guessed. `generate_speech()` confirmed live end-to-end (real MP3 bytes
+  back from ElevenLabs, 2026-09-04).
 - **Mobile/cross-browser audio playback hardened**: `useLensVoice.ts` now
   reuses one persistent `<audio>` element (synchronously primed on the
   first real user click) instead of a fresh `new Audio()` per call — the

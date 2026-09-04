@@ -5,11 +5,12 @@ import { useLensVoice } from "@/lib/useLensVoice";
 import { SpeakingIndicator } from "@/components/SpeakingIndicator";
 
 // Neutral narrator voice for signal rows -- these aren't tied to a
-// Strategy Lens persona, so there's no per-row voiceId to pick from;
-// reusing one of the confirmed-real Kokoro voice ids already used
-// elsewhere (see components/marketing/lensData.ts) rather than
-// introducing an unverified new one.
-const NARRATOR_VOICE_ID = "am_michael";
+// Strategy Lens persona, so there's no per-row voice id to pick from;
+// reusing the Value Lens (Buffett) persona's confirmed-real voice ids,
+// one per provider (see components/marketing/lensData.ts), rather than
+// introducing unverified new ones.
+const NARRATOR_ELEVENLABS_VOICE_ID = "pqHfZKP75CvOlQylNhV4"; // Bill
+const NARRATOR_KOKORO_VOICE_ID = "am_michael";
 
 function signalSentence(s: Signal): string {
   const price = s.current_price != null ? `at $${s.current_price.toFixed(2)}` : "";
@@ -107,8 +108,12 @@ export function SignalTicker({ initialSignals = [] }: { initialSignals?: Signal[
     // breaks the gesture chain on strict mobile browsers.
     voice.primeAudio();
     setSpeakingSymbol(s.symbol);
-    voice.speak(`signal-${s.symbol}`, signalSentence(s), NARRATOR_VOICE_ID, () =>
-      setSpeakingSymbol((cur) => (cur === s.symbol ? null : cur))
+    voice.speak(
+      `signal-${s.symbol}`,
+      signalSentence(s),
+      NARRATOR_ELEVENLABS_VOICE_ID,
+      NARRATOR_KOKORO_VOICE_ID,
+      () => setSpeakingSymbol((cur) => (cur === s.symbol ? null : cur))
     );
   }
 

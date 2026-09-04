@@ -130,7 +130,13 @@ export function useLensVoice() {
   }, []);
 
   const speak = useCallback(
-    async (personaId: string, text: string, voiceId: string, onEnded?: () => void) => {
+    async (
+      personaId: string,
+      text: string,
+      elevenLabsVoiceId: string,
+      kokoroVoiceId: string,
+      onEnded?: () => void
+    ) => {
       const el = getAudioElement();
       el.pause();
       // Clear any handlers from a previous speak() call on this shared
@@ -170,7 +176,11 @@ export function useLensVoice() {
         const res = await fetch(apiUrl("/api/tts"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, voice_id: voiceId }),
+          body: JSON.stringify({
+            text,
+            elevenlabs_voice_id: elevenLabsVoiceId,
+            kokoro_voice_id: kokoroVoiceId,
+          }),
         });
         // A newer request superseded this one (user already moved on) --
         // drop the result rather than playing stale/out-of-order audio.

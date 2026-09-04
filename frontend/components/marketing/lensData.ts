@@ -35,12 +35,14 @@ export type LensPersona = {
   risk: number;
   story: string;
   look: LensLook;
-  // Kokoro-82M voice id (see backend/app/tts.py) -- verified real IDs
-  // from huggingface.co/hexgrad/Kokoro-82M/raw/main/VOICES.md, fetched
-  // directly rather than guessed. All 8 personas are archetypes of real
-  // men, hence an all-male voice set; the two `lead: true` personas got
-  // the two highest-graded voices per that file's own quality grading.
-  voiceId: string;
+  // Two voice ids -- ElevenLabs (primary, see backend/app/tts.py) and
+  // Kokoro-82M/Hugging Face (fallback). Both are real ids fetched live
+  // from each provider's own API, not guessed -- ElevenLabs via
+  // GET /v2/voices with a real key, Kokoro from
+  // huggingface.co/hexgrad/Kokoro-82M/raw/main/VOICES.md. All 8 personas
+  // are archetypes of real men, hence an all-male voice set.
+  elevenLabsVoiceId: string;
+  kokoroVoiceId: string;
 };
 
 export const LENS_FILTERS: { value: "all" | LensFilter; label: string }[] = [
@@ -80,7 +82,8 @@ export const LENS_PERSONAS: LensPersona[] = [
       glassCol: "#8a6a2a",
       mouth: "warm",
     },
-    voiceId: "am_michael",
+    elevenLabsVoiceId: "pqHfZKP75CvOlQylNhV4", // Bill -- Wise, Mature, Balanced
+    kokoroVoiceId: "am_michael",
   },
   {
     id: "lyn",
@@ -108,7 +111,8 @@ export const LENS_PERSONAS: LensPersona[] = [
       tie: "#0DB87A",
       mouth: "warm",
     },
-    voiceId: "am_puck",
+    elevenLabsVoiceId: "iP95p4xoKVk53GoZ742B", // Chris -- Charming, Down-to-Earth
+    kokoroVoiceId: "am_puck",
   },
   {
     id: "gri",
@@ -136,7 +140,8 @@ export const LENS_PERSONAS: LensPersona[] = [
       tie: "#0DCCAA",
       mouth: "confident",
     },
-    voiceId: "am_fenrir",
+    elevenLabsVoiceId: "pNInz6obpgDQGcFmaJgB", // Adam -- Dominant, Firm
+    kokoroVoiceId: "am_fenrir",
   },
   {
     id: "dal",
@@ -165,7 +170,8 @@ export const LENS_PERSONAS: LensPersona[] = [
       glassCol: "#5a3a8a",
       mouth: "neutral",
     },
-    voiceId: "bm_george",
+    elevenLabsVoiceId: "onwK4e9ZLuTAKqWW03F9", // Daniel -- Steady Broadcaster
+    kokoroVoiceId: "bm_george",
   },
   {
     id: "sim",
@@ -193,7 +199,8 @@ export const LENS_PERSONAS: LensPersona[] = [
       facialHair: "beard",
       mouth: "confident",
     },
-    voiceId: "bm_fable",
+    elevenLabsVoiceId: "N2lVS1w4EtoT3dr4eOWO", // Callum -- Husky Trickster
+    kokoroVoiceId: "bm_fable",
   },
   {
     id: "eng",
@@ -222,7 +229,8 @@ export const LENS_PERSONAS: LensPersona[] = [
       glassCol: "#2a6a8a",
       mouth: "neutral",
     },
-    voiceId: "am_eric",
+    elevenLabsVoiceId: "cjVigY5qzO86Huf0OWal", // Eric -- Smooth, Trustworthy
+    kokoroVoiceId: "am_eric",
   },
   {
     id: "sha",
@@ -251,7 +259,8 @@ export const LENS_PERSONAS: LensPersona[] = [
       facialHair: "beard",
       mouth: "confident",
     },
-    voiceId: "am_onyx",
+    elevenLabsVoiceId: "SOYHLrjzK2X1ezoPC6cr", // Harry -- Fierce Warrior
+    kokoroVoiceId: "am_onyx",
   },
   {
     id: "sor",
@@ -281,6 +290,7 @@ export const LENS_PERSONAS: LensPersona[] = [
       glassCol: "#8a3a3a",
       mouth: "confident",
     },
-    voiceId: "bm_lewis",
+    elevenLabsVoiceId: "JBFqnCBsd6RMkjVDRZzb", // George -- Warm, Captivating Storyteller
+    kokoroVoiceId: "bm_lewis",
   },
 ];
