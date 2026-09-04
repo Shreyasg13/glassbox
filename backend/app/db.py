@@ -9,6 +9,23 @@ SQLite's check_same_thread=False lets the same connection be reused across
 the threadpool FastAPI dispatches sync endpoints on; Postgres needs no such
 override and Neon requires TLS, so sslmode=require is added if the caller's
 DATABASE_URL didn't already specify one.
+
+pool_pre_ping=True on the Postgres branch is not a defensive guess -- it
+fixes a real failure hit during the first live Google OAuth test after
+this app's Neon cutover: the backend sat idle for a few minutes, Neon's
+pooled (PgBouncer) endpoint silently closed the backend connection on
+its side, and the next query through SQLAlchemy's pool (which still
+considered that connection valid) failed with
+`psycopg.OperationalError: consuming input failed: SSL connection has
+been closed unexpectedly` -- a 500 on an otherwise-correct request, not
+an OAuth bug. pre_ping issues a cheap liveness check before handing out
+a pooled connection and transparently reconnects on failure instead of
+surfacing it to the caller -- SQLAlchemy's own documented fix for
+exactly this class of problem (docs.sqlalchemy.org/en/20/core/pooling.html
+-> "Disconnect Handling - Pessimistic"). pool_recycle=280 additionally
+retires any connection older than that outright, comfortably under
+Neon's own pooled-connection idle window, as a second line of defense
+pre_ping alone doesn't cover (a connection can go stale between pings).
 """
 from __future__ import annotations
 
@@ -26,13 +43,21 @@ DB_PATH = Path(os.environ.get("GLASSBOX_DB_PATH", str(Path(__file__).parent / "g
 _env_url = os.environ.get("DATABASE_URL")
 DATABASE_URL = _env_url if _env_url else f"sqlite:///{DB_PATH}"
 
-if DATABASE_URL.startswith("sqlite"):
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-else:
-    _url = make_url(DATABASE_URL)
-    if "sslmode" not in _url.query:
-        _url = _url.update_query_dict({"sslmode": "require"})
-    engine = create_engine(_url)
+
+def build_engine(database_url: str):
+    """Extracted from module scope so the dialect-branching logic can be
+    exercised directly in tests (app/db.py's engine otherwise binds at
+    import time -- see test_auth.py's docstring -- so this is the one
+    piece of that logic worth making independently testable)."""
+    if database_url.startswith("sqlite"):
+        return create_engine(database_url, connect_args={"check_same_thread": False})
+    url = make_url(database_url)
+    if "sslmode" not in url.query:
+        url = url.update_query_dict({"sslmode": "require"})
+    return create_engine(url, pool_pre_ping=True, pool_recycle=280)
+
+
+engine = build_engine(DATABASE_URL)
 metadata = MetaData()
 
 agents_table = Table(
