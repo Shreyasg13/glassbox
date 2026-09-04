@@ -12,6 +12,9 @@ type AuthContextValue = AuthState & {
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   signup: (username: string, password: string) => Promise<void>;
+  /** Stores a token already minted server-side (Google OAuth callback) --
+   * no API call, unlike login/signup. See app/oauth/complete/page.tsx. */
+  completeOAuth: (token: string, role: Role) => void;
   logout: () => void;
 };
 
@@ -55,6 +58,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [authenticate]
   );
 
+  const completeOAuth = useCallback((token: string, role: Role) => {
+    const next: AuthState = { token, role };
+    setState(next);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // storage unavailable, session-only auth still works
+    }
+  }, []);
+
   const logout = useCallback(() => {
     setState({ token: null, role: null });
     try {
@@ -65,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ ...state, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ ...state, loading, login, signup, completeOAuth, logout }}>
       {children}
     </AuthContext.Provider>
   );

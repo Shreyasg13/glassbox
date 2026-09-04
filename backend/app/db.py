@@ -270,3 +270,14 @@ def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
         if row.get("username_lower") == target:
             return row
     return None
+
+
+def get_user_by_oauth(provider: str, subject: str) -> Optional[Dict[str, Any]]:
+    """Identity for OAuth accounts is keyed on (provider, subject) --
+    the provider's own stable user id -- not on email/username, since
+    those can change; see auth.oauth_login for how a username is picked
+    on first login."""
+    for row in _list(users_table):
+        if row.get("oauth_provider") == provider and row.get("oauth_subject") == subject:
+            return row
+    return None

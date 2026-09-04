@@ -24,8 +24,15 @@ def _fake_user_store(monkeypatch):
         store[row["username_lower"]] = row
         return row
 
+    def fake_get_user_by_oauth(provider: str, subject: str):
+        for row in store.values():
+            if row.get("oauth_provider") == provider and row.get("oauth_subject") == subject:
+                return row
+        return None
+
     monkeypatch.setattr(auth.db, "get_user_by_username", fake_get_user_by_username)
     monkeypatch.setattr(auth.db, "create_user", fake_create_user)
+    monkeypatch.setattr(auth.db, "get_user_by_oauth", fake_get_user_by_oauth)
     return store
 
 
@@ -108,3 +115,43 @@ def test_login_via_db_user_can_get_a_real_jwt():
     decoded = auth.decode_token(token)
     assert decoded.sub == "shreyash"
     assert decoded.role == "viewer"
+
+
+def test_oauth_login_creates_a_viewer_account_keyed_by_email():
+    identity = auth.oauth_login("google", "sub-123", "shreyash@example.com")
+    assert identity == auth.TokenPayload(sub="shreyash@example.com", role="viewer")
+
+
+def test_oauth_login_is_idempotent_on_provider_and_subject():
+    """Second login from the same Google account must return the same
+    user, not create a duplicate row -- identity is keyed on
+    (provider, subject), not on username/email, since email can change."""
+    first = auth.oauth_login("google", "sub-123", "shreyash@example.com")
+    second = auth.oauth_login("google", "sub-123", "shreyash@example.com")
+    assert first == second
+
+
+def test_oauth_login_stores_no_password_hash(_fake_user_store):
+    auth.oauth_login("google", "sub-123", "shreyash@example.com")
+    stored = _fake_user_store["shreyash@example.com"]
+    assert stored["password_hash"] is None
+    assert stored["oauth_provider"] == "google"
+    assert stored["oauth_subject"] == "sub-123"
+
+
+def test_oauth_account_cannot_log_in_with_a_password():
+    """Regression test: password_hash=None on OAuth-only accounts must
+    be rejected cleanly by authenticate(), not crash bcrypt.checkpw()
+    with a None argument."""
+    auth.oauth_login("google", "sub-123", "shreyash@example.com")
+    assert auth.authenticate("shreyash@example.com", "anything") is None
+
+
+def test_oauth_login_disambiguates_username_collision_with_password_account():
+    """Extremely unlikely edge case (a password-signup account already
+    claimed the exact email an OAuth login wants as a username) --
+    must disambiguate rather than silently take over the existing
+    account or crash."""
+    auth.signup("taken@example.com", "correct-horse")
+    identity = auth.oauth_login("google", "sub-456", "taken@example.com")
+    assert identity.sub == "taken@example.com+google"

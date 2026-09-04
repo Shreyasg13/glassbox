@@ -1,6 +1,6 @@
 """JWT auth with role-based access (admin vs viewer).
 
-Two account sources, checked in order:
+Three account sources:
 1. `_DEV_USERS` -- the original hardcoded admin/admin and user/user
    accounts. Kept unconditionally (not gated behind an env var) since
    this deployment's docs (README, DEPLOY_GCP.md, PROJECT_STATUS.md)
@@ -11,6 +11,11 @@ Two account sources, checked in order:
    text. "admin" and "user" are reserved usernames at signup time
    specifically so a real signup can never collide with (and
    confusingly shadow, or be shadowed by) the two dev accounts above.
+3. OAuth accounts (Google for now, see oauth_login below and
+   routers/oauth.py) -- also rows in the `users` table, distinguished by
+   having oauth_provider/oauth_subject set and password_hash=None. Those
+   accounts can never log in via the password form (authenticate() below
+   guards against that explicitly).
 """
 from __future__ import annotations
 
@@ -78,7 +83,9 @@ def authenticate(username: str, password: str) -> Optional[TokenPayload]:
         return TokenPayload(sub=username, role=dev_user["role"])
 
     row = db.get_user_by_username(username)
-    if row is None or not _verify_password(password, row["password_hash"]):
+    # row["password_hash"] is None for OAuth-only accounts (see oauth_login)
+    # -- reject rather than crash on the bcrypt call below.
+    if row is None or not row.get("password_hash") or not _verify_password(password, row["password_hash"]):
         return None
     return TokenPayload(sub=row["username"], role=row["role"])
 
@@ -105,6 +112,40 @@ def signup(username: str, password: str) -> TokenPayload:
             "password_hash": _hash_password(password),
             "role": "viewer",
             "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    return TokenPayload(sub=row["username"], role=row["role"])
+
+
+def oauth_login(provider: str, subject: str, email: str) -> TokenPayload:
+    """Finds or creates a user for a completed OAuth exchange (called
+    from routers/oauth.py after the provider confirms the identity).
+    Identity is keyed on (provider, subject) -- the provider's own
+    stable user id -- not on email, since email can change or be
+    reused; email is only used to pick a human-readable username on
+    first login. Always role="viewer", same self-serve rule as password
+    signup -- an OAuth login can never grant admin either."""
+    row = db.get_user_by_oauth(provider, subject)
+    if row is not None:
+        return TokenPayload(sub=row["username"], role=row["role"])
+
+    username = email
+    if username.lower() in RESERVED_USERNAMES or db.get_user_by_username(username) is not None:
+        # Extremely unlikely (a password-signup account already claimed
+        # this exact email as a username) -- disambiguate rather than
+        # silently take over or crash.
+        username = f"{email}+{provider}"
+
+    row = db.create_user(
+        {
+            "username": username,
+            "username_lower": username.lower(),
+            "password_hash": None,
+            "role": "viewer",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "oauth_provider": provider,
+            "oauth_subject": subject,
+            "email": email,
         }
     )
     return TokenPayload(sub=row["username"], role=row["role"])

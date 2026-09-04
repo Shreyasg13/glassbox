@@ -8,6 +8,12 @@ services:
     environment:
       GLASSBOX_JWT_SECRET: ${GLASSBOX_JWT_SECRET:?set a real secret in .env}
       CORS_ALLOWED_ORIGINS: https://${APP_DOMAIN:?set in .env}
+      # Also used directly (not just for CORS) to build the Google OAuth
+      # redirect_uri and the post-login redirect back to the frontend --
+      # see routers/oauth.py's _app_origin().
+      APP_DOMAIN: ${APP_DOMAIN:?set in .env}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
       GLASSBOX_DB_PATH: /data/glassbox.db
       # Set to a Postgres/Neon URL to run against that instead of the
       # SQLite file above (see backend/app/db.py) -- unset stays SQLite.

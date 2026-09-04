@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
@@ -18,6 +18,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Backend redirects here with ?oauth_error=1 if the Google OAuth flow
+  // failed (see routers/oauth.py's fail_redirect) -- surface it once,
+  // then clean the query string so a refresh doesn't re-show it.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("oauth_error")) {
+      setError("Google sign-in failed. Please try again.");
+      window.history.replaceState(null, "", "/login");
+    }
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
