@@ -139,7 +139,8 @@ export default function MyAgentsPage() {
         <JobOutputPanel
           startUrl="/api/me/run-report"
           jobStatusBasePath="/api/me/jobs"
-          showInput={false}
+          buildBody={(input) => ({ input })}
+          inputPlaceholder="Which ticker should this report analyze? e.g. AAPL"
           runLabel="Run My Report"
         />
       </GlassPanel>
