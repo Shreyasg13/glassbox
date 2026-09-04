@@ -1,8 +1,14 @@
-"""SQLite-backed storage for the Agent Factory (Phase 4).
+"""SQLAlchemy Core storage for the Agent Factory (Phase 4).
 
-Placeholder persistence: SQLite via SQLAlchemy Core, file at
-backend/app/glassbox.db. Swapping to Postgres later only means
-changing DATABASE_URL and the engine's connect args.
+SQLite by default (file at backend/app/glassbox.db, or GLASSBOX_DB_PATH).
+Set DATABASE_URL directly (e.g. Neon's "postgresql+psycopg://..." connection
+string) to run against Postgres instead -- plain SQLAlchemy Core throughout,
+JSON stored as text columns rather than SQLite-specific JSON1 functions, so
+no query changes are needed either way. connect_args differs per dialect:
+SQLite's check_same_thread=False lets the same connection be reused across
+the threadpool FastAPI dispatches sync endpoints on; Postgres needs no such
+override and Neon requires TLS, so sslmode=require is added if the caller's
+DATABASE_URL didn't already specify one.
 """
 from __future__ import annotations
 
@@ -14,11 +20,19 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import Column, String, Boolean, create_engine, MetaData, Table, select, delete, update, insert
+from sqlalchemy.engine import make_url
 
 DB_PATH = Path(os.environ.get("GLASSBOX_DB_PATH", str(Path(__file__).parent / "glassbox.db")))
-DATABASE_URL = f"sqlite:///{DB_PATH}"
+_env_url = os.environ.get("DATABASE_URL")
+DATABASE_URL = _env_url if _env_url else f"sqlite:///{DB_PATH}"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    _url = make_url(DATABASE_URL)
+    if "sslmode" not in _url.query:
+        _url = _url.update_query_dict({"sslmode": "require"})
+    engine = create_engine(_url)
 metadata = MetaData()
 
 agents_table = Table(
