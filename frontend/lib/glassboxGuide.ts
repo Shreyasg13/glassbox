@@ -52,6 +52,14 @@ export const GUIDE_METRIC_EXPLANATIONS: Record<string, string> = {
   "Beta vs S&P 500": "Measures how strongly the stock has historically moved relative to the broader market.",
   "A6 Verified": "GlassBox independently checked the generated analysis against the underlying evidence.",
   "Evidence Chain": "Shows where the numbers came from so the result can be inspected rather than blindly trusted.",
+  // Dashboard/reports terms -- same deterministic-glossary pattern,
+  // reused via GuideHint (GuideBubble.tsx) rather than duplicated copy.
+  "Portfolio Beta": "How strongly your combined holdings have historically moved relative to the broader market, weighted by position size.",
+  "Win Rate": "The percentage of a backtest's historical trades that were profitable. A track-record statistic, not a prediction.",
+  "Agent Success Rate": "The percentage of this agent's calls that completed without error -- a reliability measure, not a trading win-rate. GlassBox doesn't yet link a past signal to its later real-world outcome.",
+  "Monte Carlo Simulation": "A real random-walk simulation seeded from this portfolio's own historical daily-return distribution -- not a canned scenario.",
+  "Percentile Band": "The 5th-to-95th percentile range across all simulated outcomes: a plausible spread, not a forecast of what will happen.",
+  "Prob. of Profit": "The share of simulated paths that ended above today's value, based purely on historical volatility.",
 };
 
 export function guidePortfolioMessage(holdingCount: number): string {

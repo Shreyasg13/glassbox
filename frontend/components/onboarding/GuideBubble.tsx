@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLensVoice } from "@/lib/useLensVoice";
 import { GLASSBOX_GUIDE } from "@/lib/glassboxGuide";
 
@@ -132,5 +132,39 @@ export function GuideBubble({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Small, accessible click-to-reveal explanation, reused across the
+ * dashboard/reports pages -- same pattern StepVerify's onboarding
+ * metric tooltips already established (extracted here so it's not
+ * duplicated per page). A real <button>, not a hover-only div, so it's
+ * keyboard-operable; role="tooltip" + aria-expanded for screen readers.
+ * Deliberately doesn't speak -- these are quick inline glossary hints,
+ * not Guide messages, so they don't carry the voice controls above.
+ */
+export function GuideHint({ label, explanation }: { label: string; explanation: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label={`What is ${label}?`}
+        className="ml-1 inline-grid h-4 w-4 place-items-center rounded-full border border-border2 text-[9px] font-bold text-t3 hover:border-teal hover:text-teal"
+      >
+        ?
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          className="absolute left-1/2 top-full z-10 mt-1 w-[200px] -translate-x-1/2 rounded-r2 border border-border2 bg-panel2 p-sp3 text-left text-[11px] leading-relaxed text-t2 shadow-lg2"
+        >
+          {explanation}
+        </span>
+      )}
+    </span>
   );
 }

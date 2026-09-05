@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { GUIDE_METRIC_EXPLANATIONS } from "@/lib/glassboxGuide";
+import { GuideHint } from "./GuideBubble";
 
 type Metric = {
   ticker: string;
@@ -24,35 +25,12 @@ const mockMetrics: Record<string, Metric> = {
   TSLA: { ticker: "TSLA", name: "Tesla Inc.", score: 5.8, risk: "Moderate", de: 3.21, zscore: 2.88, beta: 2.1, price: "$218.90", change: "-1.8%" },
 };
 
-/** Small, accessible click-to-reveal explanation -- per spec, tooltips/
- * popovers rather than permanent paragraphs. Keyboard-operable (a real
- * <button>, not a hover-only div) and backed by GUIDE_METRIC_EXPLANATIONS'
- * deterministic copy, same voice as the rest of GlassBox Guide. */
+/** Thin wrapper over the shared GuideHint (GuideBubble.tsx) -- looks up
+ * this step's deterministic explanation by metric label. */
 function MetricHint({ metric }: { metric: string }) {
-  const [open, setOpen] = useState(false);
   const explanation = GUIDE_METRIC_EXPLANATIONS[metric];
   if (!explanation) return null;
-  return (
-    <span className="relative inline-block">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-label={`What is ${metric}?`}
-        className="ml-1 inline-grid h-4 w-4 place-items-center rounded-full border border-border2 text-[9px] font-bold text-t3 hover:border-teal hover:text-teal"
-      >
-        ?
-      </button>
-      {open && (
-        <span
-          role="tooltip"
-          className="absolute left-1/2 top-full z-10 mt-1 w-[200px] -translate-x-1/2 rounded-r2 border border-border2 bg-panel2 p-sp3 text-left text-[11px] leading-relaxed text-t2 shadow-lg2"
-        >
-          {explanation}
-        </span>
-      )}
-    </span>
-  );
+  return <GuideHint label={metric} explanation={explanation} />;
 }
 
 export function StepVerify({ tickers }: { tickers: string[] }) {

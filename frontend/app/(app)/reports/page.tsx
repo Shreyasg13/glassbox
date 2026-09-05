@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { GlassPanel } from "@/components/GlassPanel";
+import { GuideBubble } from "@/components/onboarding/GuideBubble";
 import type { DailyReportNarrative } from "@/lib/types";
 
 export default function ReportsPage() {
@@ -20,6 +21,10 @@ export default function ReportsPage() {
   return (
     <div className="flex flex-col gap-sp5">
       <h1 className="text-[18px] font-bold text-t1">Daily Reports</h1>
+      <GuideBubble
+        compact
+        message="Each report is LLM-narrated, then independently checked by the A6 auditor before you see it. The charts below each one show the same underlying data the narrative describes."
+      />
 
       {!isAdmin && (
         <GlassPanel>

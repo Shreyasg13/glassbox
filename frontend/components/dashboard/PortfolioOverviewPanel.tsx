@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { GlassPanel } from "@/components/GlassPanel";
+import { GuideHint } from "@/components/onboarding/GuideBubble";
+import { GUIDE_METRIC_EXPLANATIONS } from "@/lib/glassboxGuide";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -37,11 +40,14 @@ const signalColor: Record<string, string> = {
   HOLD: "text-t3",
 };
 
-function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
+function Stat({ label, value, color, hint }: { label: string; value: string; color?: string; hint?: string }) {
   return (
     <div>
       <div className={`mono text-[20px] font-extrabold ${color ?? "text-t1"}`}>{value}</div>
-      <div className="text-[10.5px] uppercase tracking-wide text-t3">{label}</div>
+      <div className="text-[10.5px] uppercase tracking-wide text-t3">
+        {label}
+        {hint && <GuideHint label={label} explanation={hint} />}
+      </div>
     </div>
   );
 }
@@ -91,16 +97,30 @@ export function PortfolioOverviewPanel({ initialData }: { initialData: HoldingsD
     <GlassPanel variant="accent" className="lg:col-span-2">
       <div className="mb-sp5 flex items-center justify-between">
         <h1 className="text-[20px] font-extrabold text-t1">Portfolio Overview</h1>
-        <span className="text-[10.5px] text-t3">
-          {summary.data_source} · {summary.data_date}
-        </span>
+        <div className="flex items-center gap-sp3">
+          <span className="text-[10.5px] text-t3">
+            {summary.data_source} · {summary.data_date}
+          </span>
+          <Link href="/onboarding" className="text-[11px] font-semibold text-teal hover:underline">
+            Connect brokerage →
+          </Link>
+        </div>
       </div>
 
       <div className="mb-sp5 grid grid-cols-2 gap-sp4 sm:grid-cols-4">
         <Stat label="Holdings" value={String(summary.total_symbols)} />
-        <Stat label="Avg Win Rate" value={`${summary.avg_win_rate.toFixed(0)}%`} color="text-teal" />
+        <Stat
+          label="Avg Win Rate"
+          value={`${summary.avg_win_rate.toFixed(0)}%`}
+          color="text-teal"
+          hint={GUIDE_METRIC_EXPLANATIONS["Win Rate"]}
+        />
         <Stat label="Best Performer" value={summary.best_performer} color="text-gold" />
-        <Stat label="Portfolio Beta" value={summary.portfolio_beta.toFixed(2)} />
+        <Stat
+          label="Portfolio Beta"
+          value={summary.portfolio_beta.toFixed(2)}
+          hint={GUIDE_METRIC_EXPLANATIONS["Portfolio Beta"]}
+        />
       </div>
 
       <div className="overflow-x-auto">

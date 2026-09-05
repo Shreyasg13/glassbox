@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { GlassPanel } from "@/components/GlassPanel";
+import { GuideBubble } from "@/components/onboarding/GuideBubble";
 import { PortfolioValueChart } from "@/components/reports/PortfolioValueChart";
 import { SignalBreakdownChart } from "@/components/reports/SignalBreakdownChart";
 import type { DailyReportNarrative } from "@/lib/types";
@@ -29,6 +30,10 @@ export default function ReportDetailPage() {
           {data.provider} · {data.model}
         </span>
       </div>
+      <GuideBubble
+        compact
+        message="Instead of asking you to trust this narrative, GlassBox exposes the data behind it below and independently checked the result before you saw it."
+      />
       <GlassPanel variant="raised">
         <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-t1">{data.narrative}</p>
       </GlassPanel>

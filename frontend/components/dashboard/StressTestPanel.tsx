@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from "react";
 import { GlassPanel } from "@/components/GlassPanel";
+import { GuideHint } from "@/components/onboarding/GuideBubble";
+import { GUIDE_METRIC_EXPLANATIONS } from "@/lib/glassboxGuide";
 import { apiFetch, ApiError } from "@/lib/api";
 
 type MonteCarloResult = {
@@ -110,7 +112,10 @@ export function StressTestPanel() {
             </div>
             <div>
               <div className="mono text-[16px] font-extrabold text-red">${result.percentile_5.toFixed(0)}</div>
-              <div className="text-[10.5px] uppercase tracking-wide text-t3">5th percentile</div>
+              <div className="text-[10.5px] uppercase tracking-wide text-t3">
+                5th percentile
+                <GuideHint label="Percentile Band" explanation={GUIDE_METRIC_EXPLANATIONS["Percentile Band"]} />
+              </div>
             </div>
             <div>
               <div className="mono text-[16px] font-extrabold text-teal">${result.percentile_95.toFixed(0)}</div>
@@ -118,7 +123,10 @@ export function StressTestPanel() {
             </div>
             <div>
               <div className="mono text-[16px] font-extrabold text-gold">{result.prob_profit.toFixed(0)}%</div>
-              <div className="text-[10.5px] uppercase tracking-wide text-t3">Prob. of profit</div>
+              <div className="text-[10.5px] uppercase tracking-wide text-t3">
+                Prob. of profit
+                <GuideHint label="Prob. of Profit" explanation={GUIDE_METRIC_EXPLANATIONS["Prob. of Profit"]} />
+              </div>
             </div>
           </div>
         </>
