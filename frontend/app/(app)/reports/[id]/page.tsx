@@ -4,6 +4,8 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { GlassPanel } from "@/components/GlassPanel";
+import { PortfolioValueChart } from "@/components/reports/PortfolioValueChart";
+import { SignalBreakdownChart } from "@/components/reports/SignalBreakdownChart";
 import type { DailyReportNarrative } from "@/lib/types";
 
 export default function ReportDetailPage() {
@@ -30,6 +32,15 @@ export default function ReportDetailPage() {
       <GlassPanel variant="raised">
         <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-t1">{data.narrative}</p>
       </GlassPanel>
+
+      <div className="grid grid-cols-1 gap-sp5 lg:grid-cols-2">
+        <PortfolioValueChart />
+        <SignalBreakdownChart />
+      </div>
+      <p className="text-[10.5px] text-t3">
+        Charts reflect the latest available data, not necessarily a frozen snapshot from this
+        report&apos;s exact generation date.
+      </p>
     </div>
   );
 }
