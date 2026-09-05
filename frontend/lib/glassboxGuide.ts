@@ -77,3 +77,21 @@ export const GUIDE_DASHBOARD_WELCOME =
 export const ONBOARDING_STATE_KEY = "glassbox_onboarding_state";
 export const ONBOARDING_COMPLETE_KEY = "glassbox_onboarding_complete";
 export const DASHBOARD_WELCOME_SEEN_KEY = "glassbox_dashboard_welcome_seen";
+
+/**
+ * Where to send the browser right after a successful login/signup/OAuth
+ * callback. First login (onboarding never completed) goes straight into
+ * the GlassBox Guide-led wizard -- the whole point of this feature is
+ * that it's the first thing a new user sees, not something they have to
+ * discover via a separate /choose menu. A returning user who already
+ * completed onboarding keeps the existing /choose landing (sample data
+ * vs. redo setup) -- that behavior predates this feature and isn't part
+ * of the bug this fixes.
+ */
+export function postLoginRedirect(): "/onboarding" | "/choose" {
+  try {
+    return localStorage.getItem(ONBOARDING_COMPLETE_KEY) === "1" ? "/choose" : "/onboarding";
+  } catch {
+    return "/choose";
+  }
+}

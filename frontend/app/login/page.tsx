@@ -9,6 +9,7 @@ import { GlassPanel } from "@/components/GlassPanel";
 import { MarketingNav } from "@/components/marketing/MarketingNav";
 import { SocialSignIn } from "@/components/auth/SocialSignIn";
 import { PasswordField } from "@/components/auth/PasswordField";
+import { postLoginRedirect } from "@/lib/glassboxGuide";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -35,7 +36,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await login(username, password);
-      router.push("/choose");
+      router.push(postLoginRedirect());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {

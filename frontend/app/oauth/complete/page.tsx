@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { postLoginRedirect } from "@/lib/glassboxGuide";
 import type { Role } from "@/lib/types";
 
 /**
@@ -31,7 +32,7 @@ export default function OAuthCompletePage() {
       // Clear the fragment from history so a back-navigation or a copied
       // URL never re-exposes the token.
       window.history.replaceState(null, "", "/oauth/complete");
-      router.replace("/choose");
+      router.replace(postLoginRedirect());
     } else {
       router.replace("/login?oauth_error=1");
     }

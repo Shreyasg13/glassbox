@@ -44,13 +44,18 @@ export function GuideAvatar({ size = 38 }: { size?: number }) {
 
 /**
  * A contextual Guide message -- text always visible (per spec, voice is
- * an enhancement, never a dependency); a speaker button lets the user
- * opt in to hearing it, reusing the same ElevenLabs/Kokoro chain and
- * shared enabled-toggle every other voice feature in this app already
- * uses. Never autoplays -- speaking only ever happens from this
- * explicit click, and stop() fires on unmount so navigating away cuts
- * it off cleanly (the `key`-driven remount from step to step in
- * OnboardingFlow already causes this unmount naturally).
+ * an enhancement, never a dependency). Two distinct controls, both
+ * real: a persistent mute/enable toggle showing current state (spec
+ * explicitly requires "clear mute/enable controls", not just an
+ * implicit one), and a one-click "hear this" action that turns voice on
+ * if it's currently off and speaks either way (same convenience
+ * pattern Hero.tsx's Listen button already uses: `if (!voice.enabled)
+ * voice.toggle()` before speaking, rather than requiring a separate
+ * prior toggle before the button even appears). Never autoplays --
+ * speaking only ever happens from an explicit click, and stop() fires
+ * on unmount so navigating away cuts it off cleanly (the `key`-driven
+ * remount from step to step in OnboardingFlow already causes this
+ * unmount naturally).
  */
 export function GuideBubble({
   message,
@@ -73,36 +78,57 @@ export function GuideBubble({
 
   function handleSpeak() {
     voice.primeAudio();
+    if (!voice.enabled) voice.toggle();
     voice.speak(GLASSBOX_GUIDE.id, message, GUIDE_ELEVENLABS_VOICE_ID, GUIDE_KOKORO_VOICE_ID);
+  }
+
+  function handleToggleVoice() {
+    voice.primeAudio();
+    if (voice.enabled) voice.stop();
+    voice.toggle();
   }
 
   return (
     <div className={`flex gap-sp3 ${compact ? "items-center" : "items-start"}`}>
       <GuideAvatar size={compact ? 30 : 38} />
       <div className="flex-1">
-        {!compact && (
-          <div className="mb-0.5 flex items-center gap-sp2">
-            <span className="text-[12px] font-extrabold text-t1">{GLASSBOX_GUIDE.name}</span>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-t3">
-              {GLASSBOX_GUIDE.role}
-            </span>
-          </div>
-        )}
+        <div className="mb-0.5 flex items-center justify-between gap-sp2">
+          {!compact ? (
+            <div className="flex items-center gap-sp2">
+              <span className="text-[12px] font-extrabold text-t1">{GLASSBOX_GUIDE.name}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-t3">
+                {GLASSBOX_GUIDE.role}
+              </span>
+            </div>
+          ) : (
+            <span />
+          )}
+          <button
+            type="button"
+            onClick={handleToggleVoice}
+            aria-pressed={voice.enabled}
+            aria-label={voice.enabled ? "Turn off GlassBox Guide voice" : "Turn on GlassBox Guide voice"}
+            title={voice.enabled ? "Voice on" : "Voice off"}
+            className={`shrink-0 rounded-r4 border px-sp2 py-0.5 text-[10px] font-semibold ${
+              voice.enabled ? "border-teal/30 text-teal" : "border-border2 text-t4"
+            }`}
+          >
+            {voice.enabled ? "🔊 Voice on" : "🔈 Voice off"}
+          </button>
+        </div>
         <div className="flex items-start gap-sp2">
           <p className={`flex-1 text-t2 ${compact ? "text-[12px]" : "text-[13px] leading-relaxed"}`}>
             {message}
           </p>
-          {voice.enabled && (
-            <button
-              type="button"
-              onClick={handleSpeak}
-              aria-label="Hear this from GlassBox Guide"
-              title="Hear this"
-              className="shrink-0 text-[13px] text-t3 hover:text-teal"
-            >
-              🔊
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleSpeak}
+            aria-label="Hear this from GlassBox Guide"
+            title="Hear this"
+            className="shrink-0 text-[13px] text-t3 hover:text-teal"
+          >
+            ▶
+          </button>
         </div>
       </div>
     </div>
