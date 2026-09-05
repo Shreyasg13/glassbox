@@ -1,20 +1,63 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StepIndicator } from "./StepIndicator";
 import { StepConcern } from "./StepConcern";
 import { StepPortfolio } from "./StepPortfolio";
 import { StepVerify } from "./StepVerify";
 import { StepAlerts } from "./StepAlerts";
+import { GuideAvatar, GuideBubble } from "./GuideBubble";
 import { initialOnboardingState, type OnboardingState } from "./types";
+import {
+  GLASSBOX_GUIDE,
+  GUIDE_INTRO_MESSAGE,
+  GUIDE_STEP_MESSAGES,
+  GUIDE_CONCERN_ACK,
+  GUIDE_ALERTS_RECOMMENDATION,
+  GUIDE_COMPLETE_MESSAGE,
+  guidePortfolioMessage,
+  ONBOARDING_STATE_KEY,
+  ONBOARDING_COMPLETE_KEY,
+} from "@/lib/glassboxGuide";
 
 const LAST_STEP = 3;
 
+type Persisted = { step: number; state: OnboardingState };
+
 export function OnboardingFlow() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
+  // -1 = the Guide intro screen, 0-3 = the real steps.
+  const [step, setStep] = useState(-1);
   const [state, setState] = useState<OnboardingState>(initialOnboardingState);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Resume in-progress onboarding on refresh -- the only source of
+  // truth for this (there's no backend onboarding endpoint at all yet;
+  // see complete()'s TODO below), so this isn't competing with
+  // anything, just filling a real gap.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ONBOARDING_STATE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Persisted;
+        setStep(parsed.step);
+        setState(parsed.state);
+      }
+    } catch {
+      // malformed/inaccessible storage -- start fresh from the intro
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(ONBOARDING_STATE_KEY, JSON.stringify({ step, state }));
+    } catch {
+      // best-effort -- a refresh mid-flow just restarts in that case
+    }
+  }, [hydrated, step, state]);
 
   function patch(next: Partial<OnboardingState>) {
     setState((prev) => ({ ...prev, ...next }));
@@ -22,46 +65,139 @@ export function OnboardingFlow() {
 
   async function complete() {
     // TODO: POST `state` to /api/onboarding once the FastAPI gateway exposes it.
+    try {
+      localStorage.setItem(ONBOARDING_COMPLETE_KEY, "1");
+      localStorage.removeItem(ONBOARDING_STATE_KEY);
+    } catch {
+      // best-effort
+    }
     router.push("/dashboard");
   }
 
+  if (step === LAST_STEP + 1) {
+    return (
+      <div className="mx-auto flex max-w-[440px] flex-col items-center gap-sp5 rounded-r4 border border-border2 bg-panel p-sp8 text-center shadow-lg2">
+        <div
+          className="grid h-[56px] w-[56px] place-items-center rounded-full text-[22px] font-black"
+          style={{ background: "var(--c-teal-dim)", color: "var(--c-teal)", border: "2px solid var(--c-teal)" }}
+        >
+          ✓
+        </div>
+        <div className="text-[16px] font-extrabold text-t1">GlassBox is ready</div>
+        <GuideBubble message={GUIDE_COMPLETE_MESSAGE} compact />
+        <div className="grid w-full grid-cols-1 gap-sp2 rounded-r2 border border-border bg-bg2 p-sp4 text-[12.5px] text-t2 sm:grid-cols-3">
+          <div>
+            <div className="mono text-[18px] font-extrabold text-teal">{state.tickers.length}</div>
+            <div className="text-[10.5px] uppercase tracking-wide text-t3">Holdings monitored</div>
+          </div>
+          <div>
+            <div className="mono text-[18px] font-extrabold text-teal">
+              {Object.values(state.alertTypes).filter(Boolean).length}
+            </div>
+            <div className="text-[10.5px] uppercase tracking-wide text-t3">Alert types active</div>
+          </div>
+          <div>
+            <div className="mono text-[18px] font-extrabold text-teal">On</div>
+            <div className="text-[10.5px] uppercase tracking-wide text-t3">Verification enabled</div>
+          </div>
+        </div>
+        <button type="button" onClick={complete} className="btn btn-primary px-sp6 py-sp3">
+          Open Dashboard →
+        </button>
+      </div>
+    );
+  }
+
+  if (step === -1) {
+    return (
+      <div className="mx-auto flex max-w-[440px] flex-col items-center gap-sp5 rounded-r4 border border-border2 bg-panel p-sp8 text-center shadow-lg2">
+        <GuideAvatar size={56} />
+        <div>
+          <div className="mb-1 text-[13px] font-extrabold uppercase tracking-wide text-teal">
+            {GLASSBOX_GUIDE.name}
+          </div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-t3">
+            {GLASSBOX_GUIDE.role}
+          </div>
+        </div>
+        <p className="text-[14px] leading-relaxed text-t2">&ldquo;{GUIDE_INTRO_MESSAGE}&rdquo;</p>
+        <button
+          type="button"
+          onClick={() => setStep(0)}
+          className="btn btn-primary px-sp6 py-sp3"
+        >
+          Get Started →
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="mx-auto max-w-[640px] rounded-r4 border border-border2 bg-panel shadow-lg2">
-      <div className="p-sp6 pb-0">
-        <StepIndicator step={step} />
+    <div className="mx-auto grid max-w-[880px] grid-cols-1 gap-sp5 lg:grid-cols-[220px_1fr]">
+      <div className="hidden lg:block">
+        <div className="sticky top-sp5 rounded-r3 border border-border bg-panel p-sp4">
+          <GuideBubble key={step} message={GUIDE_STEP_MESSAGES[step as 0 | 1 | 2 | 3]} />
+          {step === 0 && state.concern && (
+            <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-teal">
+              {GUIDE_CONCERN_ACK[state.concern]}
+            </p>
+          )}
+          {step === 1 && (
+            <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-teal">
+              {guidePortfolioMessage(state.tickers.length)}
+            </p>
+          )}
+          {step === 3 && (
+            <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-t3">
+              {GUIDE_ALERTS_RECOMMENDATION}
+            </p>
+          )}
+        </div>
       </div>
 
-      <div className="px-sp6 py-sp4">
-        {step === 0 && (
-          <StepConcern value={state.concern} onChange={(concern) => patch({ concern })} />
-        )}
-        {step === 1 && (
-          <StepPortfolio
-            connectedBroker={state.connectedBroker}
-            onConnectBroker={(connectedBroker) => patch({ connectedBroker })}
-            tickers={state.tickers}
-            onTickersChange={(tickers) => patch({ tickers })}
-          />
-        )}
-        {step === 2 && <StepVerify tickers={state.tickers} />}
-        {step === 3 && <StepAlerts state={state} onChange={patch} />}
-      </div>
+      <div className="rounded-r4 border border-border2 bg-panel shadow-lg2">
+        {/* Compact Guide message for tablet/mobile -- stacked above the
+            form, never side-by-side (spec: no side-by-side below desktop). */}
+        <div className="border-b border-border p-sp4 lg:hidden">
+          <GuideBubble key={step} message={GUIDE_STEP_MESSAGES[step as 0 | 1 | 2 | 3]} compact />
+        </div>
 
-      <div className="flex items-center justify-between border-t border-border px-sp6 py-sp4">
-        <button
-          type="button"
-          onClick={() => (step === 0 ? router.push("/dashboard") : setStep(step - 1))}
-          className="text-[12.5px] font-medium text-t3 hover:text-t2"
-        >
-          {step === 0 ? "Cancel" : "Back"}
-        </button>
-        <button
-          type="button"
-          onClick={() => (step === LAST_STEP ? complete() : setStep(step + 1))}
-          className="rounded-r2 bg-teal px-sp5 py-sp2 text-[14px] font-bold text-bg shadow-teal transition-transform hover:-translate-y-px hover:bg-teal2"
-        >
-          {step === LAST_STEP ? "Go to my Dashboard →" : "Continue →"}
-        </button>
+        <div className="p-sp6 pb-0">
+          <StepIndicator step={step} />
+        </div>
+
+        <div className="px-sp6 py-sp4">
+          {step === 0 && (
+            <StepConcern value={state.concern} onChange={(concern) => patch({ concern })} />
+          )}
+          {step === 1 && (
+            <StepPortfolio
+              connectedBroker={state.connectedBroker}
+              onConnectBroker={(connectedBroker) => patch({ connectedBroker })}
+              tickers={state.tickers}
+              onTickersChange={(tickers) => patch({ tickers })}
+            />
+          )}
+          {step === 2 && <StepVerify tickers={state.tickers} />}
+          {step === 3 && <StepAlerts state={state} onChange={patch} />}
+        </div>
+
+        <div className="flex items-center justify-between border-t border-border px-sp6 py-sp4">
+          <button
+            type="button"
+            onClick={() => (step === 0 ? router.push("/dashboard") : setStep(step - 1))}
+            className="text-[12.5px] font-medium text-t3 hover:text-t2"
+          >
+            {step === 0 ? "Cancel" : "Back"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setStep(step + 1)}
+            className="rounded-r2 bg-teal px-sp5 py-sp2 text-[14px] font-bold text-bg shadow-teal transition-transform hover:-translate-y-px hover:bg-teal2"
+          >
+            {step === LAST_STEP ? "Finish →" : "Continue →"}
+          </button>
+        </div>
       </div>
     </div>
   );

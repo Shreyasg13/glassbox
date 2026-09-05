@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { WelcomeTour } from "@/components/onboarding/WelcomeTour";
 
 type NavItem = { href: string; label: string; icon: string };
 
@@ -50,9 +49,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <>
-      {token && <WelcomeTour role={role} />}
-      <div className="grid min-h-screen grid-cols-1 md:grid-cols-[230px_1fr]">
+    <div className="grid min-h-screen grid-cols-1 md:grid-cols-[230px_1fr]">
       <aside className="hidden flex-col gap-sp1 border-r border-border bg-bg1/90 p-sp3 md:flex">
         <Link href="/" className="mb-sp6 flex items-center gap-sp3 px-sp3 py-sp2">
           <div className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-r2 bg-gradient-to-br from-teal to-blue text-[13px] font-extrabold text-bg shadow-teal">
@@ -142,8 +139,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-sp5 py-sp6">{children}</main>
       </div>
-      </div>
-    </>
+    </div>
   );
 }
 

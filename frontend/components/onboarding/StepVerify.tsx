@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { GUIDE_METRIC_EXPLANATIONS } from "@/lib/glassboxGuide";
 
 type Metric = {
   ticker: string;
@@ -22,6 +23,37 @@ const mockMetrics: Record<string, Metric> = {
   NVDA: { ticker: "NVDA", name: "NVIDIA Corp.", score: 8.7, risk: "Low", de: 0.44, zscore: 7.66, beta: 1.78, price: "$901.44", change: "+3.2%" },
   TSLA: { ticker: "TSLA", name: "Tesla Inc.", score: 5.8, risk: "Moderate", de: 3.21, zscore: 2.88, beta: 2.1, price: "$218.90", change: "-1.8%" },
 };
+
+/** Small, accessible click-to-reveal explanation -- per spec, tooltips/
+ * popovers rather than permanent paragraphs. Keyboard-operable (a real
+ * <button>, not a hover-only div) and backed by GUIDE_METRIC_EXPLANATIONS'
+ * deterministic copy, same voice as the rest of GlassBox Guide. */
+function MetricHint({ metric }: { metric: string }) {
+  const [open, setOpen] = useState(false);
+  const explanation = GUIDE_METRIC_EXPLANATIONS[metric];
+  if (!explanation) return null;
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label={`What is ${metric}?`}
+        className="ml-1 inline-grid h-4 w-4 place-items-center rounded-full border border-border2 text-[9px] font-bold text-t3 hover:border-teal hover:text-teal"
+      >
+        ?
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          className="absolute left-1/2 top-full z-10 mt-1 w-[200px] -translate-x-1/2 rounded-r2 border border-border2 bg-panel2 p-sp3 text-left text-[11px] leading-relaxed text-t2 shadow-lg2"
+        >
+          {explanation}
+        </span>
+      )}
+    </span>
+  );
+}
 
 export function StepVerify({ tickers }: { tickers: string[] }) {
   const available = tickers.filter((t) => mockMetrics[t]);
@@ -83,6 +115,7 @@ export function StepVerify({ tickers }: { tickers: string[] }) {
               <span className="text-[12px] text-t3">NASDAQ · Technology</span>
               <span className="flex items-center gap-1 rounded-r2 border border-teal/15 px-2 py-0.5 text-[11px] text-teal">
                 ✓ A6 Verified
+                <MetricHint metric="A6 Verified" />
               </span>
               <span
                 className={`rounded-r4 px-2 py-0.5 text-[11px] font-semibold ${
@@ -109,6 +142,7 @@ export function StepVerify({ tickers }: { tickers: string[] }) {
 
         <div className="flex items-center gap-sp2 rounded-r1 border border-teal/15 bg-teal/[0.05] px-sp3 py-sp2 text-[12px] font-medium text-teal">
           ✓ A6 Auditor: narrative matches raw API · 0 discrepancies · Evidence chain intact
+          <MetricHint metric="Evidence Chain" />
         </div>
       </div>
       <div className="mt-sp3 text-center text-[11.5px] text-t3">
@@ -137,7 +171,10 @@ function EvidenceRow({
       style={{ borderLeft: `3px solid ${color}` }}
     >
       <div className="flex-1">
-        <div className="text-[10.5px] font-bold uppercase tracking-wide text-t3">{label}</div>
+        <div className="text-[10.5px] font-bold uppercase tracking-wide text-t3">
+          {label}
+          <MetricHint metric={label} />
+        </div>
         <div className="text-[10px] text-t4">{source}</div>
       </div>
       <div className="mono text-[16px] font-bold" style={{ color }}>

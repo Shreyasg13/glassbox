@@ -6,6 +6,8 @@ import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { GlassPanel } from "@/components/GlassPanel";
 import { JobOutputPanel } from "@/components/admin/JobOutputPanel";
+import { GuideAvatar } from "@/components/onboarding/GuideBubble";
+import { GLASSBOX_GUIDE } from "@/lib/glassboxGuide";
 
 type AgentSummary = {
   id: string;
@@ -32,6 +34,7 @@ export default function MyAgentsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [hydrated, setHydrated] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const { data: agents } = useQuery({
     queryKey: ["me-agents"],
@@ -97,6 +100,48 @@ export default function MyAgentsPage() {
       </div>
 
       <GlassPanel variant="accent">
+        <div className="flex items-start justify-between gap-sp3 rounded-r2 border border-teal/20 bg-teal/[0.04] p-sp3">
+          <div className="flex items-start gap-sp3">
+            <GuideAvatar />
+            <div>
+              <div className="flex items-center gap-sp2">
+                <span className="text-[13.5px] font-bold text-t1">{GLASSBOX_GUIDE.name}</span>
+                <span className="flex items-center gap-1 text-[10.5px] font-semibold text-teal">
+                  <span className="live-dot" /> ACTIVE
+                </span>
+              </div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-t3">
+                {GLASSBOX_GUIDE.role}
+              </div>
+              <p className="mt-1 max-w-[440px] text-[12px] leading-relaxed text-t2">
+                {GLASSBOX_GUIDE.description}
+              </p>
+              {guideOpen && (
+                <p className="mt-sp2 rounded-r2 border border-border bg-bg2 p-sp3 text-[11.5px] leading-relaxed text-t3">
+                  GlassBox Guide explains scores, evidence, reports, and alerts -- it doesn&apos;t
+                  trade or generate signals itself. Conversational Q&amp;A isn&apos;t built yet;
+                  this panel is a placeholder for that, not a live chat.
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-sp2">
+            <span className="rounded-r4 bg-teal-dim px-sp2 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-teal">
+              System Agent
+            </span>
+            <button
+              type="button"
+              onClick={() => setGuideOpen((o) => !o)}
+              className="text-[11.5px] font-semibold text-teal hover:underline"
+            >
+              {guideOpen ? "Close" : "Open →"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-sp1 mt-sp5 text-[10px] font-bold uppercase tracking-wide text-t4">
+          Your Committee Agents
+        </div>
         <div className="flex flex-col gap-sp2">
           {(agents ?? []).map((a) => (
             <label
@@ -144,6 +189,28 @@ export default function MyAgentsPage() {
           runLabel="Run My Report"
         />
       </GlassPanel>
+
+      <div>
+        <div className="mb-sp2 text-[10px] font-bold uppercase tracking-wide text-t4">
+          Future agents
+        </div>
+        <div className="grid grid-cols-2 gap-sp2 sm:grid-cols-3">
+          {[
+            { icon: "🔍", label: "Verify Agent" },
+            { icon: "⚠", label: "Risk Agent" },
+            { icon: "📑", label: "Reports Agent" },
+          ].map((f) => (
+            <div
+              key={f.label}
+              className="flex flex-col items-center gap-sp1 rounded-r2 border border-dashed border-border p-sp3 text-center opacity-50"
+            >
+              <span className="text-[16px]">{f.icon}</span>
+              <span className="text-[11px] font-semibold text-t3">{f.label}</span>
+              <span className="text-[9px] uppercase tracking-wide text-t4">Not built yet</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
