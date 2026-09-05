@@ -18,8 +18,11 @@ import { GUIDE_DASHBOARD_WELCOME, DASHBOARD_WELCOME_SEEN_KEY } from "@/lib/glass
  * multi-step tour.
  *
  * Gated by its own localStorage flag (DASHBOARD_WELCOME_SEEN_KEY), not
- * ONBOARDING_COMPLETE_KEY -- a sample-data visitor who skips the real
- * wizard entirely still gets this one note exactly once.
+ * the per-user onboardingCompleteKey() -- a sample-data visitor who
+ * skips the real wizard entirely still gets this one note exactly once.
+ * Deliberately NOT scoped per-user like the onboarding keys are: this
+ * note is generic ("here's the dashboard"), not account-specific state,
+ * so one flag per browser is the right amount of scoping here.
  */
 export function DashboardWelcomeNote() {
   const [visible, setVisible] = useState(false);

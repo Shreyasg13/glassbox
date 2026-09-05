@@ -30,8 +30,8 @@ export default function SignupPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await signup(username, password);
-      router.push(postLoginRedirect());
+      const authedUsername = await signup(username, password);
+      router.push(postLoginRedirect(authedUsername));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
     } finally {

@@ -28,11 +28,11 @@ export default function OAuthCompletePage() {
     const role = hash.get("role") as Role | null;
 
     if (token && (role === "admin" || role === "viewer")) {
-      completeOAuth(token, role);
+      const authedUsername = completeOAuth(token, role);
       // Clear the fragment from history so a back-navigation or a copied
       // URL never re-exposes the token.
       window.history.replaceState(null, "", "/oauth/complete");
-      router.replace(postLoginRedirect());
+      router.replace(postLoginRedirect(authedUsername));
     } else {
       router.replace("/login?oauth_error=1");
     }

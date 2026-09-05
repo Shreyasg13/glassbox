@@ -80,11 +80,36 @@ export const GUIDE_COMPLETE_MESSAGE =
 export const GUIDE_DASHBOARD_WELCOME =
   "You're in. This dashboard summarizes what GlassBox is monitoring. You can inspect or configure the automation behind your analysis under My Agents.";
 
-// localStorage keys -- same convention as useLensVoice.ts's shared
-// voice-enabled flag and the old WelcomeTour's tour-seen flag.
-export const ONBOARDING_STATE_KEY = "glassbox_onboarding_state";
-export const ONBOARDING_COMPLETE_KEY = "glassbox_onboarding_complete";
+// localStorage key *prefixes* -- same convention as useLensVoice.ts's
+// shared voice-enabled flag and the old WelcomeTour's tour-seen flag,
+// but scoped per-username (see the real bug this fixed, below) rather
+// than one flag shared by the whole browser.
+const ONBOARDING_STATE_PREFIX = "glassbox_onboarding_state";
+const ONBOARDING_COMPLETE_PREFIX = "glassbox_onboarding_complete";
 export const DASHBOARD_WELCOME_SEEN_KEY = "glassbox_dashboard_welcome_seen";
+
+/**
+ * Real bug this closes: these keys used to be single, global, un-scoped
+ * flags. On a shared browser (or just the same person re-testing with a
+ * second account), completing onboarding as account A silently made
+ * account B skip it too, and deleting/recreating a user in the database
+ * did nothing to fix that -- the flag lives in localStorage, not the
+ * account. Falls back to a fixed "anon" bucket only if a username is
+ * genuinely unavailable (e.g. an old cached auth blob from before this
+ * fix, or JWT decoding failed), which is the previous (buggy) behavior,
+ * not a regression.
+ */
+function scopedKey(prefix: string, username: string | null): string {
+  return `${prefix}:${username ?? "anon"}`;
+}
+
+export function onboardingStateKey(username: string | null): string {
+  return scopedKey(ONBOARDING_STATE_PREFIX, username);
+}
+
+export function onboardingCompleteKey(username: string | null): string {
+  return scopedKey(ONBOARDING_COMPLETE_PREFIX, username);
+}
 
 /**
  * Where to send the browser right after a successful login/signup/OAuth
@@ -96,9 +121,9 @@ export const DASHBOARD_WELCOME_SEEN_KEY = "glassbox_dashboard_welcome_seen";
  * vs. redo setup) -- that behavior predates this feature and isn't part
  * of the bug this fixes.
  */
-export function postLoginRedirect(): "/onboarding" | "/choose" {
+export function postLoginRedirect(username: string | null): "/onboarding" | "/choose" {
   try {
-    return localStorage.getItem(ONBOARDING_COMPLETE_KEY) === "1" ? "/choose" : "/onboarding";
+    return localStorage.getItem(onboardingCompleteKey(username)) === "1" ? "/choose" : "/onboarding";
   } catch {
     return "/choose";
   }

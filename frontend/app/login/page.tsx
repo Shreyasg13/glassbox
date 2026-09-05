@@ -35,8 +35,8 @@ export default function LoginPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await login(username, password);
-      router.push(postLoginRedirect());
+      const authedUsername = await login(username, password);
+      router.push(postLoginRedirect(authedUsername));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {

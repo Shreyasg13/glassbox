@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import { StepIndicator } from "./StepIndicator";
 import { StepConcern } from "./StepConcern";
 import { StepPortfolio } from "./StepPortfolio";
@@ -17,8 +18,8 @@ import {
   GUIDE_ALERTS_RECOMMENDATION,
   GUIDE_COMPLETE_MESSAGE,
   guidePortfolioMessage,
-  ONBOARDING_STATE_KEY,
-  ONBOARDING_COMPLETE_KEY,
+  onboardingStateKey,
+  onboardingCompleteKey,
 } from "@/lib/glassboxGuide";
 
 const LAST_STEP = 3;
@@ -27,6 +28,7 @@ type Persisted = { step: number; state: OnboardingState };
 
 export function OnboardingFlow() {
   const router = useRouter();
+  const { username, loading: authLoading } = useAuth();
   // -1 = the Guide intro screen, 0-3 = the real steps.
   const [step, setStep] = useState(-1);
   const [state, setState] = useState<OnboardingState>(initialOnboardingState);
@@ -35,10 +37,15 @@ export function OnboardingFlow() {
   // Resume in-progress onboarding on refresh -- the only source of
   // truth for this (there's no backend onboarding endpoint at all yet;
   // see complete()'s TODO below), so this isn't competing with
-  // anything, just filling a real gap.
+  // anything, just filling a real gap. Keyed per-username (real bug
+  // fixed: this used to be one global key shared by every account on
+  // the browser) -- waits for authLoading to clear first so it doesn't
+  // read the wrong (un-scoped/"anon") bucket on a hard page reload
+  // before AuthProvider's own hydration has run.
   useEffect(() => {
+    if (authLoading) return;
     try {
-      const raw = localStorage.getItem(ONBOARDING_STATE_KEY);
+      const raw = localStorage.getItem(onboardingStateKey(username));
       if (raw) {
         const parsed = JSON.parse(raw) as Persisted;
         setStep(parsed.step);
@@ -48,16 +55,16 @@ export function OnboardingFlow() {
       // malformed/inaccessible storage -- start fresh from the intro
     }
     setHydrated(true);
-  }, []);
+  }, [authLoading, username]);
 
   useEffect(() => {
     if (!hydrated) return;
     try {
-      localStorage.setItem(ONBOARDING_STATE_KEY, JSON.stringify({ step, state }));
+      localStorage.setItem(onboardingStateKey(username), JSON.stringify({ step, state }));
     } catch {
       // best-effort -- a refresh mid-flow just restarts in that case
     }
-  }, [hydrated, step, state]);
+  }, [hydrated, username, step, state]);
 
   function patch(next: Partial<OnboardingState>) {
     setState((prev) => ({ ...prev, ...next }));
@@ -66,8 +73,8 @@ export function OnboardingFlow() {
   async function complete() {
     // TODO: POST `state` to /api/onboarding once the FastAPI gateway exposes it.
     try {
-      localStorage.setItem(ONBOARDING_COMPLETE_KEY, "1");
-      localStorage.removeItem(ONBOARDING_STATE_KEY);
+      localStorage.setItem(onboardingCompleteKey(username), "1");
+      localStorage.removeItem(onboardingStateKey(username));
     } catch {
       // best-effort
     }
