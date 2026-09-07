@@ -6,6 +6,13 @@ import { Reveal } from "@/components/Reveal";
 import { useLensVoice } from "@/lib/useLensVoice";
 import { LENS_FILTERS, LENS_PERSONAS, type LensFilter, type LensPersona } from "./lensData";
 import { LensPortrait } from "./lensPortrait";
+import { GuideBubble } from "@/components/onboarding/GuideBubble";
+import {
+  GLASSBOX_GUIDE,
+  GUIDE_ELEVENLABS_VOICE_ID,
+  GUIDE_KOKORO_VOICE_ID,
+  GUIDE_LANDING_FINALE_MESSAGE,
+} from "@/lib/glassboxGuide";
 
 const TYPE_MS_PER_CHAR = 18;
 // Safety net for the voice-driven autoplay pacing below: if a persona's
@@ -46,6 +53,14 @@ export function StrategyLenses() {
   const [cur, setCur] = useState(0);
   const [autoplay, setAutoplay] = useState(true);
   const [typedText, setTypedText] = useState("");
+  // Which lens introductions have actually been fully consumed this
+  // session (narration finished, or fully typed out if voice is off) --
+  // tracked against the FULL persona set (not the current filtered
+  // `view`), so switching filters mid-way doesn't let a narrow filter
+  // trigger the "you've heard everyone" finale early.
+  const [heardLenses, setHeardLenses] = useState<Set<string>>(new Set());
+  const [finaleReady, setFinaleReady] = useState(false);
+  const finaleTriggeredRef = useRef(false);
   const typeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const dragStartX = useRef<number | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -85,6 +100,7 @@ export function StrategyLenses() {
     if (!active) return;
     if (typeTimer.current) clearInterval(typeTimer.current);
 
+    const activeId = active.id;
     let cancelled = false;
     let typewriterDone = false;
     let speechDone = !voice.enabled; // nothing to wait for if voice is off
@@ -93,6 +109,7 @@ export function StrategyLenses() {
 
     function maybeScheduleAdvance() {
       if (cancelled || !typewriterDone || !speechDone) return;
+      setHeardLenses((prev) => (prev.has(activeId) ? prev : new Set(prev).add(activeId)));
       advanceTimer = setTimeout(() => {
         if (!cancelled && autoplayRef.current) setCur((c) => (c + 1) % view.length);
       }, SETTLE_DELAY_MS);
@@ -142,6 +159,24 @@ export function StrategyLenses() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id, reduceMotion, voice.enabled]);
+
+  // GlassBox finale: once every lens introduction has actually been
+  // heard/read, hand off ONCE from the investor lens voices to the
+  // GlassBox system voice (same River/am_onyx identity GuideBubble uses
+  // for onboarding) -- per spec, this must not imitate any lens voice.
+  // Guarded by a ref (not just state) so it can never re-fire, including
+  // across a filter change that momentarily drops heardLenses below the
+  // full-set size in a re-render race.
+  useEffect(() => {
+    if (finaleTriggeredRef.current) return;
+    if (heardLenses.size < LENS_PERSONAS.length) return;
+    finaleTriggeredRef.current = true;
+    setFinaleReady(true);
+    if (voice.enabled) {
+      voice.speak(GLASSBOX_GUIDE.id, GUIDE_LANDING_FINALE_MESSAGE, GUIDE_ELEVENLABS_VOICE_ID, GUIDE_KOKORO_VOICE_ID);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heardLenses]);
 
   // keyboard nav
   useEffect(() => {
@@ -463,6 +498,22 @@ export function StrategyLenses() {
       <p className="mono mt-sp5 text-center text-[12px] text-t4">
         click a lens to hear its story · drag / arrows to slide · filter to spin the desk
       </p>
+
+      {/* GlassBox finale -- shown once, after every lens has been heard.
+          Hands off from the investor lens voices to the GlassBox system
+          voice; text is always visible regardless of voice state. */}
+      {finaleReady && (
+        <Reveal>
+          <div className="mx-auto mt-sp8 max-w-[640px] rounded-r3 border border-teal/30 bg-teal-dim p-sp5">
+            <GuideBubble message={GUIDE_LANDING_FINALE_MESSAGE} />
+            <div className="mt-sp4 text-center">
+              <a href="#glassbox-verify" className="btn btn-primary inline-block px-sp6 py-sp3">
+                See What GlassBox Verifies →
+              </a>
+            </div>
+          </div>
+        </Reveal>
+      )}
 
       {/* mandatory disclaimer -- see docs/design-reference/README.md */}
       <div className="mx-auto mt-sp8 max-w-[960px] rounded-r3 border border-gold/20 bg-gold-dim p-sp4 text-[11.5px] leading-relaxed text-t2">

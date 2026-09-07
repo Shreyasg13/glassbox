@@ -2,23 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useLensVoice } from "@/lib/useLensVoice";
-import { GLASSBOX_GUIDE } from "@/lib/glassboxGuide";
-
-// Real, live-verified ElevenLabs voice ID (fetched from GET /v2/voices
-// with a real key earlier this build, not guessed) -- "River", labeled
-// "Relaxed, Neutral, Informative" by ElevenLabs itself. Deliberately
-// not one of the 8 IDs already assigned to the investor Strategy Lens
-// personas (lensData.ts): this is a system agent, not an investor
-// archetype, and a neutral voice fits that distinction on purpose.
-const GUIDE_ELEVENLABS_VOICE_ID = "SAz9YHcvj6GT2YYXdXww";
-// Kokoro fallback reuses an already-assigned Kokoro id (am_onyx, Shaw's
-// lens) rather than guessing an unverified new one -- this session's
-// hard-learned rule is to never guess a provider's voice-id namespace.
-// This is only the FALLBACK path (ElevenLabs is primary and working),
-// and the Guide (onboarding) and that lens (marketing carousel) are
-// never on screen at the same time, so the overlap is low-stakes and
-// disclosed here rather than silent.
-const GUIDE_KOKORO_VOICE_ID = "am_onyx";
+import { GLASSBOX_GUIDE, GUIDE_ELEVENLABS_VOICE_ID, GUIDE_KOKORO_VOICE_ID } from "@/lib/glassboxGuide";
 
 /**
  * The GlassBox Guide's avatar + name/role badge -- shared across

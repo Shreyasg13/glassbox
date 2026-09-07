@@ -80,6 +80,28 @@ export const GUIDE_COMPLETE_MESSAGE =
 export const GUIDE_DASHBOARD_WELCOME =
   "You're in. This dashboard summarizes what GlassBox is monitoring. You can inspect or configure the automation behind your analysis under My Agents.";
 
+// Real, live-verified ElevenLabs voice ID (fetched from GET /v2/voices
+// with a real key earlier this build, not guessed) -- "River", labeled
+// "Relaxed, Neutral, Informative" by ElevenLabs itself. Exported from
+// here (rather than kept local to GuideBubble.tsx) so any surface that
+// needs to speak AS GlassBox itself -- not as one of the eight investor
+// Strategy Lens personas -- uses the exact same identity. This matters
+// for the landing-page Lens-carousel finale: it hands off from investor
+// voices to the GlassBox system voice, and must not imitate either.
+export const GUIDE_ELEVENLABS_VOICE_ID = "SAz9YHcvj6GT2YYXdXww";
+// Kokoro fallback reuses an already-assigned Kokoro id (am_onyx, Shaw's
+// lens) rather than guessing an unverified new one -- see GuideBubble.tsx.
+export const GUIDE_KOKORO_VOICE_ID = "am_onyx";
+
+/**
+ * Spoken (when voice is on) and always-shown (as text) closing line for
+ * the Strategy Lens carousel, once every lens has been heard/read. Per
+ * spec: must end on "Welcome to GlassBox." and must use the GlassBox
+ * system voice, never a lens/investor voice -- see StrategyLenses.tsx.
+ */
+export const GUIDE_LANDING_FINALE_MESSAGE =
+  "You've heard how the experts see the market. Now let GlassBox show you what the data actually says. Welcome to GlassBox.";
+
 // localStorage key *prefixes* -- same convention as useLensVoice.ts's
 // shared voice-enabled flag and the old WelcomeTour's tour-seen flag,
 // but scoped per-username (see the real bug this fixed, below) rather
