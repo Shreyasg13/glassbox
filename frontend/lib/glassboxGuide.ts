@@ -93,12 +93,18 @@ export const GUIDE_KOKORO_VOICE_ID = "am_onyx";
 
 /**
  * Spoken (when voice is on) and always-shown (as text) closing line for
- * the Strategy Lens carousel, once every lens has been heard/read. Per
- * spec: must end on "Welcome to GlassBox." and must use the GlassBox
- * system voice, never a lens/investor voice -- see StrategyLenses.tsx.
+ * the Strategy Lens carousel, once FINALE_LENS_THRESHOLD lenses have
+ * been heard/read (StrategyLenses.tsx) -- also the point where autoplay
+ * stops, so this is the LAST thing the automatic voice sequence says:
+ * lens intros, then this marketing-slogan-plus-welcome line, then
+ * silence until the visitor manually browses. Per spec: must end on
+ * "Welcome to GlassBox." and must use the GlassBox system voice, never
+ * a lens/investor voice -- see StrategyLenses.tsx. Leads with the same
+ * "See the data. Invest smarter." tagline used in the Hero headline
+ * (Hero.tsx) so the spoken and written marketing lines match.
  */
 export const GUIDE_LANDING_FINALE_MESSAGE =
-  "You've heard how the experts see the market. Now let GlassBox show you what the data actually says. Welcome to GlassBox.";
+  "You've heard how the experts see the market. See the data. Invest smarter. Welcome to GlassBox.";
 
 // localStorage key *prefixes* -- same convention as useLensVoice.ts's
 // shared voice-enabled flag and the old WelcomeTour's tour-seen flag,

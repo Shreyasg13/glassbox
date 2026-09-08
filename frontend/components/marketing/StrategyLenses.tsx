@@ -177,11 +177,22 @@ export function StrategyLenses() {
   // voice. Guarded by a ref (not just state) so it can never re-fire,
   // including across a filter change that momentarily drops heardLenses
   // below the threshold in a re-render race.
+  //
+  // Also stops autoplay here (setAutoplay(false)): without this, the
+  // carousel kept auto-advancing and auto-narrating past the threshold
+  // forever -- through lens 5, 6, 7, 8, then wrapping back to 1 and
+  // repeating indefinitely -- which defeated the whole point of a
+  // 4-lens threshold (a one-time intro sequence: 4 lenses + this finale
+  // slogan/welcome line, then stop). Stopping autoplay only halts the
+  // unattended auto-narration loop; a visitor can still manually click/
+  // arrow through every lens afterward (goTo/next/prev already set
+  // autoplay false themselves) and hear any of them on demand.
   useEffect(() => {
     if (finaleTriggeredRef.current) return;
     if (heardLenses.size < FINALE_LENS_THRESHOLD) return;
     finaleTriggeredRef.current = true;
     setFinaleReady(true);
+    setAutoplay(false);
     if (voice.enabled) {
       voice.speak(GLASSBOX_GUIDE.id, GUIDE_LANDING_FINALE_MESSAGE, GUIDE_ELEVENLABS_VOICE_ID, GUIDE_KOKORO_VOICE_ID);
     }
