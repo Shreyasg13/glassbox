@@ -26,6 +26,14 @@ const MAX_SPEECH_WAIT_MS = 25_000;
 // without this, the transition fires the instant reading/listening
 // ends, which reads as an abrupt cut rather than a settled finish.
 const SETTLE_DELAY_MS = 900;
+// How many lens intros trigger the GlassBox finale/CTA -- deliberately
+// short of all 8 (LENS_PERSONAS.length) so a visitor reaches the platform
+// overview and conversion moment quickly instead of sitting through every
+// persona first. The first 4 entries in LENS_PERSONAS are ordered to be
+// the strongest/best-known lenses for exactly this reason; the remaining
+// personas stay in the carousel and are still fully browsable, just not
+// required before moving on.
+const FINALE_LENS_THRESHOLD = 4;
 
 function growthColor(growth: number): string {
   if (growth >= 70) return "text-green";
@@ -55,9 +63,10 @@ export function StrategyLenses() {
   const [typedText, setTypedText] = useState("");
   // Which lens introductions have actually been fully consumed this
   // session (narration finished, or fully typed out if voice is off) --
-  // tracked against the FULL persona set (not the current filtered
-  // `view`), so switching filters mid-way doesn't let a narrow filter
-  // trigger the "you've heard everyone" finale early.
+  // tracked as ids across the FULL persona set, not reset by the current
+  // filtered `view`, so switching filters mid-way doesn't let a narrow
+  // filter reach FINALE_LENS_THRESHOLD sooner than genuinely hearing
+  // that many lenses would.
   const [heardLenses, setHeardLenses] = useState<Set<string>>(new Set());
   const [finaleReady, setFinaleReady] = useState(false);
   const finaleTriggeredRef = useRef(false);
@@ -160,16 +169,17 @@ export function StrategyLenses() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id, reduceMotion, voice.enabled]);
 
-  // GlassBox finale: once every lens introduction has actually been
-  // heard/read, hand off ONCE from the investor lens voices to the
-  // GlassBox system voice (same River/am_onyx identity GuideBubble uses
-  // for onboarding) -- per spec, this must not imitate any lens voice.
-  // Guarded by a ref (not just state) so it can never re-fire, including
-  // across a filter change that momentarily drops heardLenses below the
-  // full-set size in a re-render race.
+  // GlassBox finale: once FINALE_LENS_THRESHOLD lens introductions have
+  // actually been heard/read (not necessarily all 8 -- see that
+  // constant's comment), hand off ONCE from the investor lens voices to
+  // the GlassBox system voice (same River/am_onyx identity GuideBubble
+  // uses for onboarding) -- per spec, this must not imitate any lens
+  // voice. Guarded by a ref (not just state) so it can never re-fire,
+  // including across a filter change that momentarily drops heardLenses
+  // below the threshold in a re-render race.
   useEffect(() => {
     if (finaleTriggeredRef.current) return;
-    if (heardLenses.size < LENS_PERSONAS.length) return;
+    if (heardLenses.size < FINALE_LENS_THRESHOLD) return;
     finaleTriggeredRef.current = true;
     setFinaleReady(true);
     if (voice.enabled) {

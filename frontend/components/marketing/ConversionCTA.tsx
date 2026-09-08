@@ -21,9 +21,9 @@ export function ConversionCTA() {
             Verification, not advice
           </div>
           <h2 className="text-[30px] font-extrabold leading-tight tracking-tight text-t1 md:text-[36px]">
-            Stop trusting the score.
+            Stop guessing.
             <br />
-            <span className="text-teal">Inspect the evidence.</span>
+            <span className="text-teal">Start verifying with GlassBox.</span>
           </h2>
           <p className="max-w-[520px] text-[15px] leading-relaxed text-t2">
             Every lens gave you an opinion. GlassBox gives you the raw data, the formula, and an
@@ -31,7 +31,7 @@ export function ConversionCTA() {
           </p>
           <div className="mt-sp2 flex flex-wrap justify-center gap-sp3">
             <a href="/signup" className="btn btn-primary px-sp6 py-sp3 text-[14px]">
-              Create Free Account <span className="opacity-70">→</span>
+              Try GlassBox Free <span className="opacity-70">→</span>
             </a>
             <a href="/login" className="btn btn-ghost px-sp6 py-sp3 text-[14px]">
               Already verifying? Sign in

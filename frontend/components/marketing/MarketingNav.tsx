@@ -47,11 +47,13 @@ export function MarketingNav() {
   return (
     <nav className="glass-nav sticky top-0 z-50 flex items-center gap-sp6 px-sp6 py-sp3 md:px-sp10">
       <Link href="/" className="flex items-center gap-sp2">
-        <div className="grid h-[26px] w-[26px] place-items-center rounded-r1 bg-gradient-to-br from-teal to-blue text-[10px] font-extrabold text-bg">
-          GB
-        </div>
-        <span className="text-[14px] font-bold tracking-tight text-t2">
-          glass<span className="text-teal">box</span>
+        {/* eslint-disable-next-line @next/next/no-img-element -- fixed
+            static brand asset (public/logo-mark.png), not user content;
+            plain <img> avoids next/image's layout-shift reservation for
+            a 30px nav mark. */}
+        <img src="/logo-mark.png" alt="GlassBox" className="h-[30px] w-[30px] shrink-0 rounded-r1 object-cover" />
+        <span className="text-[15px] font-extrabold tracking-tight text-t1">
+          Glass<span className="text-teal">Box</span>
         </span>
       </Link>
 

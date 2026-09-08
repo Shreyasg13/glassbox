@@ -49,18 +49,18 @@ export function Hero() {
           AI Verification · Not AI Advice
         </div>
         <h1 className="mb-sp5 text-[40px] font-extrabold leading-[1.1] tracking-tight text-t1 md:text-[52px]">
-          See the math.
+          See the data.
           <br />
-          <span className="text-teal">Trust the data.</span>
+          <span className="text-teal">Invest smarter.</span>
         </h1>
         <p className="mb-sp8 max-w-[500px] text-[17px] leading-[1.7] text-t2">
-          Glass Box shows you exactly why every risk score is what it is: the raw institutional
-          data, the formula, and an independent audit before you see any number. No black box. No
-          hallucinations displayed unchecked.
+          GlassBox shows you exactly why every risk score is what it is: the raw institutional
+          data, the formula, and an independent audit, every time you check a stock. No black
+          box. No score you have to just take our word for.
         </p>
         <div className="mb-sp8 flex flex-wrap gap-sp3">
           <a href="/login" className="btn btn-primary px-sp5 py-sp3 text-[14px]">
-            Verify a stock free <span className="opacity-70">→</span>
+            Start verifying free <span className="opacity-70">→</span>
           </a>
           <a href="#how-it-works" className="btn btn-ghost px-sp5 py-sp3 text-[14px]">
             See how it works

@@ -53,6 +53,11 @@ export const LENS_FILTERS: { value: "all" | LensFilter; label: string }[] = [
   { value: "multi", label: "Multi-Strategy" },
 ];
 
+// Order matters: the first FINALE_LENS_THRESHOLD entries (StrategyLenses.tsx)
+// are the ones most visitors actually hear before the GlassBox finale fires,
+// so the strongest/best-known names (Value, GARP, Multi-Strat, Quant) lead;
+// the rest stay fully browsable via the carousel/filters, just not required
+// reading before moving on to the platform overview.
 export const LENS_PERSONAS: LensPersona[] = [
   {
     id: "buf",
@@ -144,6 +149,35 @@ export const LENS_PERSONAS: LensPersona[] = [
     kokoroVoiceId: "am_fenrir",
   },
   {
+    id: "sim",
+    code: "Q",
+    name: "The Quant Lens",
+    title: "Quantitative",
+    color: "cyan",
+    cls: "quant",
+    rank: "#3 · ~$51B",
+    lead: false,
+    inspiredName: "Jim Simons",
+    firm: "Renaissance Tech",
+    strat: "Quantitative",
+    track: "~$51B lifetime net gains",
+    growth: 90,
+    risk: 28,
+    story:
+      "I see patterns in your holdings no human eye catches — faint, statistical, fleeting. I let the mathematics speak and I never override the model on a hunch. Signal, not story. Discipline, not drama.",
+    look: {
+      skin: "#E4C4A0",
+      hair: "#D8DCE4",
+      hairStyle: "silver",
+      suit: "#123A44",
+      shirt: "#E6FBFF",
+      facialHair: "beard",
+      mouth: "confident",
+    },
+    elevenLabsVoiceId: "N2lVS1w4EtoT3dr4eOWO", // Callum -- Husky Trickster
+    kokoroVoiceId: "bm_fable",
+  },
+  {
     id: "dal",
     code: "M",
     name: "The Macro Lens",
@@ -172,35 +206,6 @@ export const LENS_PERSONAS: LensPersona[] = [
     },
     elevenLabsVoiceId: "onwK4e9ZLuTAKqWW03F9", // Daniel -- Steady Broadcaster
     kokoroVoiceId: "bm_george",
-  },
-  {
-    id: "sim",
-    code: "Q",
-    name: "The Quant Lens",
-    title: "Quantitative",
-    color: "cyan",
-    cls: "quant",
-    rank: "#3 · ~$51B",
-    lead: false,
-    inspiredName: "Jim Simons",
-    firm: "Renaissance Tech",
-    strat: "Quantitative",
-    track: "~$51B lifetime net gains",
-    growth: 90,
-    risk: 28,
-    story:
-      "I see patterns in your holdings no human eye catches — faint, statistical, fleeting. I let the mathematics speak and I never override the model on a hunch. Signal, not story. Discipline, not drama.",
-    look: {
-      skin: "#E4C4A0",
-      hair: "#D8DCE4",
-      hairStyle: "silver",
-      suit: "#123A44",
-      shirt: "#E6FBFF",
-      facialHair: "beard",
-      mouth: "confident",
-    },
-    elevenLabsVoiceId: "N2lVS1w4EtoT3dr4eOWO", // Callum -- Husky Trickster
-    kokoroVoiceId: "bm_fable",
   },
   {
     id: "eng",
