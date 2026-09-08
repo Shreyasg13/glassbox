@@ -172,7 +172,7 @@ export function GuideBubble({
     <div className={`flex gap-sp3 ${compact ? "items-center" : "items-start"}`}>
       <GuideAvatar size={compact ? 30 : 38} />
       <div className="flex-1">
-        <div className="mb-0.5 flex items-center justify-between gap-sp2">
+        <div className="mb-1 flex items-center justify-between gap-sp2">
           {!compact ? (
             <div className="flex items-center gap-sp2">
               <span className="text-[12px] font-extrabold text-t1">{GLASSBOX_GUIDE.name}</span>
@@ -183,30 +183,28 @@ export function GuideBubble({
           ) : (
             <span />
           )}
-          <div className="flex shrink-0 items-center gap-sp2">
-            <button
-              type="button"
-              onClick={handleSpeak}
-              aria-label="Hear this from GlassBox Guide"
-              title="Hear this"
-              className="inline-flex items-center gap-1 rounded-r4 border border-teal/30 px-sp2 py-0.5 text-[10px] font-semibold text-teal hover:bg-teal/10"
-            >
-              ▶ Hear
-            </button>
-            <button
-              type="button"
-              onClick={handleToggleVoice}
-              aria-pressed={voice.enabled}
-              aria-label={voice.enabled ? "Turn off GlassBox Guide voice" : "Turn on GlassBox Guide voice"}
-              title={voice.enabled ? "Voice on" : "Voice off"}
-              className={`rounded-r4 border px-sp2 py-0.5 text-[10px] font-semibold ${
-                voice.enabled ? "border-teal/30 text-teal" : "border-border2 text-t4"
-              }`}
-            >
-              {voice.enabled ? "🔊 Voice on" : "🔈 Voice off"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleToggleVoice}
+            aria-pressed={voice.enabled}
+            aria-label={voice.enabled ? "Turn off GlassBox Guide voice" : "Turn on GlassBox Guide voice"}
+            title={voice.enabled ? "Voice on" : "Voice off"}
+            className={`shrink-0 rounded-r4 border px-sp2 py-0.5 text-[10px] font-semibold ${
+              voice.enabled ? "border-teal/30 text-teal" : "border-border2 text-t4"
+            }`}
+          >
+            {voice.enabled ? "🔊 Voice on" : "🔈 Voice off"}
+          </button>
         </div>
+        <button
+          type="button"
+          onClick={handleSpeak}
+          aria-label="Hear this from GlassBox Guide"
+          title="Hear this"
+          className="mb-sp2 inline-flex items-center gap-1 rounded-r4 border border-teal/30 px-sp2 py-0.5 text-[10px] font-semibold text-teal hover:bg-teal/10"
+        >
+          ▶ Hear
+        </button>
         <div className="flex items-start gap-sp2">
           <p className={`flex-1 text-t2 ${compact ? "text-[12px]" : "text-[13px] leading-relaxed"}`}>
             {caption.speaking
