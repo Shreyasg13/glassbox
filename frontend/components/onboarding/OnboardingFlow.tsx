@@ -4,11 +4,15 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { StepIndicator } from "./StepIndicator";
+import { StepAgent } from "./StepAgent";
 import { StepConcern } from "./StepConcern";
 import { StepPortfolio } from "./StepPortfolio";
 import { StepVerify } from "./StepVerify";
 import { StepAlerts } from "./StepAlerts";
 import { GuideAvatar, GuideBubble } from "./GuideBubble";
+import { AgentHero } from "./AgentHero";
+import { AgentAvatar } from "./AgentAvatar";
+import { DEFAULT_AGENT_ID, getAgentPersona } from "./agentPersonas";
 import { initialOnboardingState, type OnboardingState } from "./types";
 import {
   GLASSBOX_GUIDE,
@@ -22,17 +26,23 @@ import {
   onboardingCompleteKey,
 } from "@/lib/glassboxGuide";
 
-const LAST_STEP = 3;
+const LAST_STEP = 4;
 
 type Persisted = { step: number; state: OnboardingState };
 
 export function OnboardingFlow() {
   const router = useRouter();
   const { username, loading: authLoading } = useAuth();
-  // -1 = the Guide intro screen, 0-3 = the real steps.
+  // -1 = the Guide intro screen, 0-4 = the real steps.
   const [step, setStep] = useState(-1);
   const [state, setState] = useState<OnboardingState>(initialOnboardingState);
   const [hydrated, setHydrated] = useState(false);
+  // Live preview while browsing the deck on step 0 -- not committed into
+  // persisted state until that step's Continue click (see the footer
+  // button below), so cancelling out of onboarding never leaves a
+  // half-chosen agentId behind.
+  const [previewAgentId, setPreviewAgentId] = useState(DEFAULT_AGENT_ID);
+  const effectiveAgentId = state.agentId ?? (step === 0 ? previewAgentId : DEFAULT_AGENT_ID);
 
   // Resume in-progress onboarding on refresh -- the only source of
   // truth for this (there's no backend onboarding endpoint at all yet;
@@ -82,15 +92,16 @@ export function OnboardingFlow() {
   }
 
   if (step === LAST_STEP + 1) {
+    const agent = getAgentPersona(state.agentId);
     return (
       <div className="mx-auto flex max-w-[440px] flex-col items-center gap-sp5 rounded-r4 border border-border2 bg-panel p-sp8 text-center shadow-lg2">
         <div
-          className="grid h-[56px] w-[56px] place-items-center rounded-full text-[22px] font-black"
-          style={{ background: "var(--c-teal-dim)", color: "var(--c-teal)", border: "2px solid var(--c-teal)" }}
+          className="grid place-items-center rounded-full border-2 p-1"
+          style={{ borderColor: agent.color }}
         >
-          ✓
+          <AgentAvatar face={agent.face} color={agent.color} size={56} showCheck />
         </div>
-        <div className="text-[16px] font-extrabold text-t1">GlassBox is ready</div>
+        <div className="text-[16px] font-extrabold text-t1">{agent.name} is active</div>
         <GuideBubble message={GUIDE_COMPLETE_MESSAGE} compact />
         <div className="grid w-full grid-cols-1 gap-sp2 rounded-r2 border border-border bg-bg2 p-sp4 text-[12.5px] text-t2 sm:grid-cols-3">
           <div>
@@ -139,26 +150,38 @@ export function OnboardingFlow() {
     );
   }
 
+  function handleContinue() {
+    if (step === 0) {
+      patch({ agentId: previewAgentId });
+      setStep(1);
+      return;
+    }
+    setStep(step + 1);
+  }
+
   return (
     <div className="mx-auto grid max-w-[880px] grid-cols-1 gap-sp5 lg:grid-cols-[220px_1fr]">
       <div className="hidden lg:block">
-        <div className="sticky top-sp5 rounded-r3 border border-border bg-panel p-sp4">
-          <GuideBubble key={step} message={GUIDE_STEP_MESSAGES[step as 0 | 1 | 2 | 3]} />
-          {step === 0 && state.concern && (
-            <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-teal">
-              {GUIDE_CONCERN_ACK[state.concern]}
-            </p>
-          )}
-          {step === 1 && (
-            <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-teal">
-              {guidePortfolioMessage(state.tickers.length)}
-            </p>
-          )}
-          {step === 3 && (
-            <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-t3">
-              {GUIDE_ALERTS_RECOMMENDATION}
-            </p>
-          )}
+        <div className="sticky top-sp5">
+          <AgentHero agentId={effectiveAgentId} />
+          <div className="rounded-r3 border border-border bg-panel p-sp4">
+            <GuideBubble key={step} message={GUIDE_STEP_MESSAGES[step as 0 | 1 | 2 | 3 | 4]} />
+            {step === 1 && state.concern && (
+              <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-teal">
+                {GUIDE_CONCERN_ACK[state.concern]}
+              </p>
+            )}
+            {step === 2 && (
+              <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-teal">
+                {guidePortfolioMessage(state.tickers.length)}
+              </p>
+            )}
+            {step === 4 && (
+              <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-t3">
+                {GUIDE_ALERTS_RECOMMENDATION}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -166,7 +189,8 @@ export function OnboardingFlow() {
         {/* Compact Guide message for tablet/mobile -- stacked above the
             form, never side-by-side (spec: no side-by-side below desktop). */}
         <div className="border-b border-border p-sp4 lg:hidden">
-          <GuideBubble key={step} message={GUIDE_STEP_MESSAGES[step as 0 | 1 | 2 | 3]} compact />
+          <AgentHero agentId={effectiveAgentId} />
+          <GuideBubble key={step} message={GUIDE_STEP_MESSAGES[step as 0 | 1 | 2 | 3 | 4]} compact />
         </div>
 
         <div className="p-sp6 pb-0">
@@ -174,19 +198,15 @@ export function OnboardingFlow() {
         </div>
 
         <div className="px-sp6 py-sp4">
-          {step === 0 && (
+          {step === 0 && <StepAgent selectedId={previewAgentId} onSelect={setPreviewAgentId} />}
+          {step === 1 && (
             <StepConcern value={state.concern} onChange={(concern) => patch({ concern })} />
           )}
-          {step === 1 && (
-            <StepPortfolio
-              connectedBroker={state.connectedBroker}
-              onConnectBroker={(connectedBroker) => patch({ connectedBroker })}
-              tickers={state.tickers}
-              onTickersChange={(tickers) => patch({ tickers })}
-            />
+          {step === 2 && (
+            <StepPortfolio tickers={state.tickers} onTickersChange={(tickers) => patch({ tickers })} />
           )}
-          {step === 2 && <StepVerify tickers={state.tickers} />}
-          {step === 3 && <StepAlerts state={state} onChange={patch} />}
+          {step === 3 && <StepVerify tickers={state.tickers} />}
+          {step === 4 && <StepAlerts state={state} onChange={patch} />}
         </div>
 
         <div className="flex items-center justify-between border-t border-border px-sp6 py-sp4">
@@ -199,10 +219,10 @@ export function OnboardingFlow() {
           </button>
           <button
             type="button"
-            onClick={() => setStep(step + 1)}
+            onClick={handleContinue}
             className="rounded-r2 bg-teal px-sp5 py-sp2 text-[14px] font-bold text-bg shadow-teal transition-transform hover:-translate-y-px hover:bg-teal2"
           >
-            {step === LAST_STEP ? "Finish →" : "Continue →"}
+            {step === 0 ? "Continue with this agent →" : step === LAST_STEP ? "Finish →" : "Continue →"}
           </button>
         </div>
       </div>

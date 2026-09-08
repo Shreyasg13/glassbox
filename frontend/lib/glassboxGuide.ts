@@ -28,11 +28,12 @@ export const GLASSBOX_GUIDE = {
 export const GUIDE_INTRO_MESSAGE =
   "I'll help you set up GlassBox around what matters to you. About 2 minutes.";
 
-export const GUIDE_STEP_MESSAGES: Record<0 | 1 | 2 | 3, string> = {
-  0: "First, tell me what you want GlassBox to watch most closely. I'll use this to prioritize your dashboard, reports, and alerts.",
-  1: "Now give me the holdings you want GlassBox to monitor. Connect a supported portfolio source or enter tickers manually.",
-  2: "Here's your first GlassBox verification. Instead of asking you to trust an AI-generated score, GlassBox exposes the data behind it and independently checks the result.",
-  3: "Last step. Tell me when something is important enough to get your attention.",
+export const GUIDE_STEP_MESSAGES: Record<0 | 1 | 2 | 3 | 4, string> = {
+  0: "Pick the agent you'd like to guide you through setup. Each one reads the same verified evidence, just with a different emphasis -- you can change your mind anytime before you continue.",
+  1: "First, tell me what you want GlassBox to watch most closely. I'll use this to prioritize your dashboard, reports, and alerts.",
+  2: "Now give me the holdings you want GlassBox to monitor. Connect a supported portfolio source or enter tickers manually.",
+  3: "Here's your first GlassBox verification. Instead of asking you to trust an AI-generated score, GlassBox exposes the data behind it and independently checks the result.",
+  4: "Last step. Tell me when something is important enough to get your attention.",
 };
 
 /** Deterministic (no LLM) contextual acknowledgement per concern
@@ -44,14 +45,11 @@ export const GUIDE_CONCERN_ACK: Record<ConcernId, string> = {
   retirement: "I'll prioritize portfolio risk, concentration, and changes that could affect your longer-term plan.",
 };
 
-/** Deterministic (no LLM) glossary for unfamiliar verification metrics
- * -- see StepVerify's EvidenceRow tooltips. */
+/** Deterministic (no LLM) glossary for unfamiliar dashboard/reports
+ * metrics, reused via GuideHint (GuideBubble.tsx). StepVerify.tsx's
+ * onboarding metrics use the richer ExplainTooltip component directly
+ * (own inline copy) instead of this map. */
 export const GUIDE_METRIC_EXPLANATIONS: Record<string, string> = {
-  "Debt / Equity Ratio": "Shows how much debt the company uses relative to shareholder equity.",
-  "Altman Z-Score": "A financial-health indicator commonly used to estimate bankruptcy risk.",
-  "Beta vs S&P 500": "Measures how strongly the stock has historically moved relative to the broader market.",
-  "A6 Verified": "GlassBox independently checked the generated analysis against the underlying evidence.",
-  "Evidence Chain": "Shows where the numbers came from so the result can be inspected rather than blindly trusted.",
   // Dashboard/reports terms -- same deterministic-glossary pattern,
   // reused via GuideHint (GuideBubble.tsx) rather than duplicated copy.
   "Portfolio Beta": "How strongly your combined holdings have historically moved relative to the broader market, weighted by position size.",
@@ -108,6 +106,7 @@ export const GUIDE_LANDING_FINALE_MESSAGE =
 // than one flag shared by the whole browser.
 const ONBOARDING_STATE_PREFIX = "glassbox_onboarding_state";
 const ONBOARDING_COMPLETE_PREFIX = "glassbox_onboarding_complete";
+const EVIDENCE_TUTORIAL_SEEN_PREFIX = "glassbox_onboarding_evidence_seen";
 export const DASHBOARD_WELCOME_SEEN_KEY = "glassbox_dashboard_welcome_seen";
 
 /**
@@ -131,6 +130,14 @@ export function onboardingStateKey(username: string | null): string {
 
 export function onboardingCompleteKey(username: string | null): string {
   return scopedKey(ONBOARDING_COMPLETE_PREFIX, username);
+}
+
+/** One-time "inspect the evidence chain" tutorial pulse -- per-user, same
+ * scoping convention as onboardingStateKey (not a global flag like
+ * DASHBOARD_WELCOME_SEEN_KEY) so one account completing the tutorial
+ * doesn't silently skip it for a different account on the same browser. */
+export function evidenceTutorialSeenKey(username: string | null): string {
+  return scopedKey(EVIDENCE_TUTORIAL_SEEN_PREFIX, username);
 }
 
 /**
