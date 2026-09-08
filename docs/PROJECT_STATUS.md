@@ -4,7 +4,7 @@ Living document. Update this whenever a phase completes, a bug is found,
 or scope changes — this is the single place to check "where are we" and
 "what's next" without re-deriving it from chat history.
 
-**Last updated:** 2026-09-07
+**Last updated:** 2026-09-08
 
 ## Live deployment
 
@@ -250,8 +250,75 @@ so the rationale doesn't rot into "trust the commit log."
   next time the VM/key is reachable, same bar the rest of the voice
   work holds itself to.
 
+## Phase 12 — Liquid glass, voice captions, dashboard insights (2026-09-08)
+
+Sourced from a design-exploration prototype the user iterated on
+separately (`glassbox-onboarding-upgrade(9).html`, a standalone static
+mockup in Downloads — never part of this repo, has no deploy path, and
+was never connected to the real app). Three pieces ported into the real
+codebase, committed locally (not yet pushed/deployed):
+
+1. **Liquid-glass frosted surface** — `.glass-panel-frost` /
+   `.glass-frost-surface` in `globals.css` (real `backdrop-filter`,
+   re-themed light/dark via dedicated vars, same pattern as the existing
+   `--c-glass-nav-bg`). `GlassPanel` gained a `"frost"` variant.
+   AgentHero.tsx already had real frosted glass before this; applied now
+   to OnboardingFlow.tsx's four card wrappers (intro screen, sidebar
+   Guide card, main wizard card, complete screen), which were flat
+   `bg-panel` before. **Not yet applied** to dashboard panels generally —
+   only the two new ones below use it; retrofitting existing panels
+   (PortfolioOverviewPanel, StressTestPanel, etc.) to `variant="frost"`
+   is a follow-up, not done this pass.
+2. **Live word-by-word captions on the Guide's voice** —
+   `useLensVoice.speak()` takes an optional `onProgress(fraction)`,
+   wired to the shared `<audio>` element's real `timeupdate` event
+   (genuine playback position, not a guessed timer). `GuideBubble`
+   highlights words in sequence, weighted by character length against
+   the real elapsed fraction. Does **not** change the deliberate
+   "never autoplay" behavior — captions only run inside an already
+   explicit `speak()` call from a real click, same as before.
+3. **Dashboard: sector-allocation donut + Insights & Alert Signals
+   panel** — both real, no new backend endpoint. The donut aggregates
+   the same real `holdings[].sector`/`weight` fields
+   PortfolioOverviewPanel already tables, re-fetching `/api/holdings`
+   client-side with the auth token so it personalizes the same way that
+   panel does (a first version of this that only used the server-fetched
+   default would have quietly diverged from it for logged-in users with
+   a watchlist — caught and fixed before committing). The insights panel
+   derives alert-worthy rows from the same live-signals feed
+   `SignalTicker` already renders (rsi/ma_cross/volume_ratio/confidence),
+   applying standard technical thresholds (RSI 75/25, MA-cross flips,
+   ≥1.8x volume, ≥70% confidence) — one insight per symbol, first
+   matching rule wins, explicitly labeled as derived from the live
+   signal feed and **not** a claim about the real A6 Audit feed (which
+   remains its own, still-mockup thing, unaffected by this).
+
+**Verified:** `npm run build` compiles clean (type-check + lint pass,
+zero errors). Backend's existing 106 pytest tests still pass (no
+backend files touched this pass). Local dev server (frontend :3000 +
+backend :8000, backend run against a fresh local SQLite, not Neon)
+served both `/onboarding` and `/dashboard` with 200s and no server-side
+exceptions logged. **Not verified:** an actual authenticated-browser
+visual check (glass blur rendering as intended, caption sync feeling
+right against real ElevenLabs audio, donut/insights panel layout) —
+every `(app)` route sits behind `AppShell`'s client-only auth `loading`
+gate (token lives in `localStorage`, structurally unreachable from a
+plain `curl` request, confirmed by reading `lib/auth.tsx`), so this
+needs a real logged-in browser session next time one's available in the
+environment. Also not done: pushing to `origin`, touching
+`docker-compose.yml`/`deploy/Caddyfile`, or deploying to the VM — local
+commits on `main` only, by design for this pass.
+
 ## Task list
 
+- [ ] **New:** Do the authenticated-browser visual check for Phase 12
+      (see "Not verified" above) before deploying it.
+- [ ] **New:** Decide whether to retrofit the other dashboard panels
+      (PortfolioOverviewPanel, StressTestPanel, AgentPerformancePanel,
+      TrackComparisonPanel) to `GlassPanel variant="frost"` for visual
+      consistency, or leave them on `variant="accent"`/`"panel"`.
+- [ ] **New:** Push Phase 12's 3 commits and deploy to the VM, once
+      visually verified.
 - [ ] Live-verify the 6 new onboarding-agent voice ids against a real
       `ELEVENLABS_API_KEY` (see the addendum note above) — currently
       known-catalog ids, not confirmed live.
