@@ -4,7 +4,7 @@ Living document. Update this whenever a phase completes, a bug is found,
 or scope changes — this is the single place to check "where are we" and
 "what's next" without re-deriving it from chat history.
 
-**Last updated:** 2026-09-04
+**Last updated:** 2026-09-07
 
 ## Live deployment
 
@@ -196,8 +196,69 @@ content, no backend dependency — can be built independently of Phases 7–10.
 
 **Status: build in progress.**
 
+### Landing-page addendum ("Plan-correction.MD") progress
+
+A follow-up product-direction doc (referred to in commit messages as
+`Plan-correction.MD`) split this into workstreams. Note: that file
+itself isn't checked into this repo — confirmed by a full home-directory
+search — so its content only survives in commit messages/code comments
+right now. If it still exists somewhere, worth adding it under `docs/`
+so the rationale doesn't rot into "trust the commit log."
+
+- **Workstream A — Done** (commit `0569bb7`, 2026-09-07): Strategy Lens
+  completion tracking (`heardLenses`, tracked against the full persona
+  set so filtering can't early-trigger it); a one-time "GlassBox finale"
+  voice moment (`GUIDE_LANDING_FINALE_MESSAGE`) that hands off from the
+  investor lens voices to the GlassBox system voice (River/am_onyx,
+  reused from `GuideBubble`, now exported from `lib/glassboxGuide.ts`
+  instead of duplicated); a dedicated `ConversionCTA` section
+  (`#glassbox-verify`) between the Lens carousel and the rest of the
+  landing page, deliberately not claiming a specific free-signal number
+  since backend enforcement didn't exist yet at that point; and a
+  floating `AgentLauncher` "Ask GlassBox" shell that never fakes command
+  execution for logged-out visitors (every submission gets the same
+  honest "create an account" response — no intent parsing behind it).
+- **Workstream B/C — Not started**: real intent parsing and real
+  verification runs from natural language behind `AgentLauncher` (it's
+  still just a shell today).
+- **Backend-enforced free-tier entitlements — implemented, tested, and
+  committed.** This is what Workstream A's "avoid claiming an unenforced
+  quota" note was blocking on: `POST /api/me/verify/{ticker}` and
+  `GET /api/me/entitlements` (`backend/app/routers/me.py`) give every
+  real (non-dev) account 5 free deterministic signal verifications,
+  metered on their own `users` row (`verified_signal_count`), 402 once
+  exhausted. Surfaced on the dashboard via a new `VerifySignalPanel`.
+  Full backend suite (106 tests, including 8 new ones for this) passes,
+  and the frontend type-checks clean — verified 2026-09-07. Not yet
+  deployed to the VM, and `ConversionCTA`/`AgentLauncher` copy still
+  doesn't reference the real "5 free" number.
+- **Onboarding "Choose your agent" step — implemented, tested, and
+  committed (2026-09-07).** A new step 0 in `OnboardingFlow.tsx`
+  (`StepAgent.tsx`) lets the user pick one of 6 onboarding-only agent
+  personas (`agentPersonas.ts` — deliberately separate from the 8
+  landing-page Strategy Lens personas and from the real
+  `/api/me/agent-subscriptions` feature; purely cosmetic, themes the
+  wizard's color/voice/copy). Persistent `AgentHero` sidebar card shows
+  the chosen agent with an optional "Hear this agent" voice button.
+  **Voice-id caveat**: unlike the 8 Strategy Lens voices and the Guide's
+  "River" voice (each fetched live from `GET /v2/voices` with a real
+  `ELEVENLABS_API_KEY` and confirmed against this account), the 6 new
+  agents' `elevenLabsVoiceId`/`kokoroVoiceId` were assigned with no key
+  available in this environment — they're long-stable public
+  ElevenLabs premade-catalog ids (Antoni, Arnold, Josh, Rachel, Bella,
+  Domi), not fetched/confirmed live this session. Verify with a real key
+  next time the VM/key is reachable, same bar the rest of the voice
+  work holds itself to.
+
 ## Task list
 
+- [ ] Live-verify the 6 new onboarding-agent voice ids against a real
+      `ELEVENLABS_API_KEY` (see the addendum note above) — currently
+      known-catalog ids, not confirmed live.
+- [ ] Deploy the free-tier entitlements/verify-signal feature (committed
+      2026-09-07, not yet deployed to the VM), then update
+      `ConversionCTA`/`AgentLauncher` copy to reference the real "5 free"
+      quota.
 - [ ] Decide: build Phase 7 (Stock Analysis + real A6 audit) next?
 - [ ] Decide: sequential-mode fallback for LLM committee runs (works around
       the Gemini RPM ceiling without needing a paid tier)?

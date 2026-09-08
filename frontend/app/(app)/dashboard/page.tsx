@@ -4,6 +4,7 @@ import { PortfolioOverviewPanel, type HoldingsData } from "@/components/dashboar
 import { AgentPerformancePanel, type AgentPerformance } from "@/components/dashboard/AgentPerformancePanel";
 import { TrackComparisonPanel, type TrackAgentsData } from "@/components/dashboard/TrackComparisonPanel";
 import { StressTestPanel } from "@/components/dashboard/StressTestPanel";
+import { VerifySignalPanel } from "@/components/dashboard/VerifySignalPanel";
 import { apiUrl } from "@/lib/api";
 
 /**
@@ -73,6 +74,9 @@ export default async function DashboardPage() {
         <AgentPerformancePanel data={agentPerformance} />
       </div>
       <StressTestPanel />
+      <div className="lg:col-span-3">
+        <VerifySignalPanel />
+      </div>
       <div className="lg:col-span-3">
         <TrackComparisonPanel track1={track1} track2={track2} />
       </div>

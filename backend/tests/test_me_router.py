@@ -177,6 +177,71 @@ async def test_run_report_filters_to_subscribed_agents(monkeypatch, _fake_db):
     assert captured["agent_ids"] == ["a1"]
 
 
+def _fake_signal(symbol="AAPL"):
+    return {
+        "symbol": symbol,
+        "name": "Apple Inc.",
+        "sector": "Technology",
+        "current_price": 190.12,
+        "signal": "BUY",
+        "confidence": 72.0,
+        "rsi": 28.4,
+        "ma_cross": "BULLISH",
+        "volume_ratio": 1.3,
+        "suggested_weight": 10.0,
+        "fast_ma": 20,
+        "slow_ma": 50,
+        "test_sharpe": 1.1,
+        "win_rate": 55.0,
+        "data_date": "2026-09-05",
+    }
+
+
+@pytest.fixture(autouse=True)
+def _fake_live_signals(monkeypatch):
+    monkeypatch.setattr(me.ds, "get_live_signals", lambda: {"signals": [_fake_signal()]})
+    monkeypatch.setattr(me.ds, "STOCK_INFO", {"AAPL": {}})
+
+
+async def test_dev_account_entitlements_show_unlimited_style_full_quota():
+    result = await me.get_my_entitlements(user=_admin_token())
+    assert result.limit == me.FREE_VERIFIED_SIGNAL_LIMIT
+    assert result.remaining == me.FREE_VERIFIED_SIGNAL_LIMIT
+
+
+async def test_real_user_entitlements_start_at_full_quota(_fake_db):
+    result = await me.get_my_entitlements(user=_viewer_token())
+    assert result.used == 0
+    assert result.remaining == me.FREE_VERIFIED_SIGNAL_LIMIT
+
+
+async def test_verify_ticker_decrements_real_users_quota(_fake_db):
+    result = await me.verify_ticker("aapl", user=_viewer_token())
+    assert result.signal.symbol == "AAPL"
+    assert result.entitlements.used == 1
+    assert result.entitlements.remaining == me.FREE_VERIFIED_SIGNAL_LIMIT - 1
+    assert _fake_db["users"]["shreyash"]["verified_signal_count"] == 1
+
+
+async def test_verify_ticker_blocks_at_quota(_fake_db):
+    _fake_db["users"]["shreyash"]["verified_signal_count"] = me.FREE_VERIFIED_SIGNAL_LIMIT
+    with pytest.raises(HTTPException) as exc_info:
+        await me.verify_ticker("AAPL", user=_viewer_token())
+    assert exc_info.value.status_code == 402
+
+
+async def test_verify_ticker_never_decrements_dev_accounts(_fake_db):
+    result = await me.verify_ticker("AAPL", user=_admin_token())
+    assert result.entitlements.remaining == me.FREE_VERIFIED_SIGNAL_LIMIT
+    assert "verified_signal_count" not in _fake_db["users"]["shreyash"]
+
+
+async def test_verify_ticker_404s_for_unknown_symbol(_fake_db):
+    with pytest.raises(HTTPException) as exc_info:
+        await me.verify_ticker("NOTASYMBOL", user=_viewer_token())
+    assert exc_info.value.status_code == 404
+
+
 async def test_run_report_falls_back_to_full_list_when_no_subscription(monkeypatch, _fake_db):
     """No subscription set (every dev account, and any real account
     that hasn't visited the subscriptions page) means "everyone runs",

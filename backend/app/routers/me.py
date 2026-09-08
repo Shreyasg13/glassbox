@@ -15,10 +15,12 @@ row to persist a subscription onto -- PUT rejects them with a clear
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from .. import data_source as ds
 from .. import db
 from .. import jobs
 from .. import orchestration
@@ -26,14 +28,23 @@ from ..auth import RESERVED_USERNAMES, TokenPayload, get_current_user
 from ..models import (
     AgentSubscriptions,
     AgentSummary,
+    Entitlements,
     JobAccepted,
     JobStatus,
     OrchestrationConfig,
     OrchestrationRunRequest,
+    VerifiedSignalResponse,
 )
 from ..scripts.seed_agents import ORCHESTRATION_NAME
 
 router = APIRouter(prefix="/api/me", tags=["me"])
+
+# Real free-tier quota (Plan-correction.MD's "5 free verified signals").
+# Dev accounts (admin/user) have no `users` row to persist a count on and
+# aren't real customers -- they bypass the quota entirely rather than
+# being blocked, the same "no row = the more permissive path" convention
+# run_my_report already uses for subscriptions.
+FREE_VERIFIED_SIGNAL_LIMIT = 5
 
 
 def _require_real_user_row(user: TokenPayload) -> Dict[str, Any]:
@@ -118,3 +129,61 @@ async def get_my_job(job_id: str, user: TokenPayload = Depends(get_current_user)
     if job.get("owner") != user.sub:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your job")
     return job
+
+
+@router.get("/entitlements", response_model=Entitlements)
+async def get_my_entitlements(user: TokenPayload = Depends(get_current_user)):
+    if user.sub.lower() in RESERVED_USERNAMES:
+        return Entitlements(limit=FREE_VERIFIED_SIGNAL_LIMIT, used=0, remaining=FREE_VERIFIED_SIGNAL_LIMIT)
+    row = db.get_user_by_username(user.sub)
+    used = (row or {}).get("verified_signal_count", 0)
+    return Entitlements(
+        limit=FREE_VERIFIED_SIGNAL_LIMIT,
+        used=used,
+        remaining=max(0, FREE_VERIFIED_SIGNAL_LIMIT - used),
+    )
+
+
+@router.post("/verify/{ticker}", response_model=VerifiedSignalResponse)
+async def verify_ticker(ticker: str, user: TokenPayload = Depends(get_current_user)):
+    """The real endpoint StepVerify.tsx's mock has been waiting on. Meters
+    against the real per-account free-tier quota (read-modify-write on
+    the user's own row, same as set_my_subscriptions above -- no
+    distributed lock, so two truly concurrent calls from the same account
+    could both slip through on the last unit; an acceptable soft-limit
+    risk for a free-tier nudge, not a billing-grade guarantee)."""
+    symbol = ticker.strip().upper()
+    is_dev = user.sub.lower() in RESERVED_USERNAMES
+    row: Optional[Dict[str, Any]] = None
+    used = 0
+    if not is_dev:
+        row = db.get_user_by_username(user.sub)
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        used = row.get("verified_signal_count", 0)
+        if used >= FREE_VERIFIED_SIGNAL_LIMIT:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Free verification limit reached ({FREE_VERIFIED_SIGNAL_LIMIT}/{FREE_VERIFIED_SIGNAL_LIMIT} used).",
+            )
+
+    signals = await asyncio.to_thread(ds.get_live_signals)
+    match = next((s for s in signals["signals"] if s["symbol"] == symbol), None)
+    if match is None:
+        known = ", ".join(sorted(ds.STOCK_INFO))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No signal for '{symbol}'. Known symbols: {known}",
+        )
+
+    if not is_dev:
+        used += 1
+        db.update_user(row["id"], {"verified_signal_count": used})
+        db.log_audit(user.sub, "me.verify_signal", "signal", symbol, {"verified_signal_count": used})
+
+    remaining = FREE_VERIFIED_SIGNAL_LIMIT if is_dev else max(0, FREE_VERIFIED_SIGNAL_LIMIT - used)
+    return VerifiedSignalResponse(
+        signal=match,
+        verified_at=datetime.now(timezone.utc).isoformat(),
+        entitlements=Entitlements(limit=FREE_VERIFIED_SIGNAL_LIMIT, used=0 if is_dev else used, remaining=remaining),
+    )

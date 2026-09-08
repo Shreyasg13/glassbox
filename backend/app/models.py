@@ -310,6 +310,36 @@ class AgentSubscriptions(BaseModel):
     agent_ids: List[str] = Field(default_factory=list)
 
 
+# ---- /api/me/entitlements, /api/me/verify/{ticker} ----
+
+class Entitlements(BaseModel):
+    """A real, backend-enforced free-tier quota -- not shown anywhere in
+    the product until this existed. `remaining` is what the UI should
+    gate on; `limit`/`used` are for display ("2 of 5 used")."""
+
+    limit: int
+    used: int
+    remaining: int
+
+
+class VerifiedSignalResponse(BaseModel):
+    """What a real verification actually returns today: GlassBox's
+    deterministic, real-data-driven per-ticker signal (see LiveSignal --
+    RSI/moving-average-cross computed from real historical prices, not
+    an LLM guess). This is intentionally NOT badged as the fuller
+    narrated A6 audit trail (still Phase 7, not built) -- `disclaimer`
+    says so explicitly so the free-tier entitlement is never spent on
+    something bigger than what it actually delivers."""
+
+    signal: LiveSignal
+    verified_at: str
+    entitlements: Entitlements
+    disclaimer: str = (
+        "Deterministic signal from GlassBox's real technical data (RSI, moving-average cross, "
+        "historical price/volume). Not yet the full narrated A6 audit trail."
+    )
+
+
 class JobAccepted(BaseModel):
     job_id: str
 
