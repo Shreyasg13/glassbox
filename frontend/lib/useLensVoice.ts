@@ -121,13 +121,53 @@ export function useLensVoice() {
       primeAudio();
     } else {
       audioRef.current?.pause();
+      try {
+        window.speechSynthesis?.cancel();
+      } catch {
+        // speechSynthesis unsupported -- nothing to cancel
+      }
     }
     setSharedEnabled(next);
   }, [primeAudio]);
 
   const stop = useCallback(() => {
     audioRef.current?.pause();
+    try {
+      window.speechSynthesis?.cancel();
+    } catch {
+      // speechSynthesis unsupported -- nothing to cancel
+    }
   }, []);
+
+  /** Last-resort fallback when BOTH server providers (ElevenLabs, then
+   * Kokoro/Hugging Face) are unavailable -- most commonly because a
+   * free-tier credit quota ran out on one or both, which has now
+   * happened to both providers independently. A third server-side API
+   * key would just be a third finite quota; the browser's own built-in
+   * speech synthesis has no external quota to exhaust at all. This is a
+   * genuine degradation, not a like-for-like replacement: it uses
+   * whatever default voice/OS the visitor's browser ships (not the
+   * per-persona ElevenLabs/Kokoro voice ids -- SpeechSynthesisUtterance
+   * has no concept of those), so every persona sounds the same instead
+   * of distinct. That tradeoff is deliberate -- degraded shared audio
+   * beats total silence when the primary/secondary providers are down.
+   * Returns false (caller falls through to the "unavailable" state) only
+   * if the browser has no speechSynthesis support at all. */
+  function speakViaBrowser(text: string, onEnded?: () => void): boolean {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      if (onEnded) {
+        utterance.onend = onEnded;
+        utterance.onerror = onEnded;
+      }
+      window.speechSynthesis.speak(utterance);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   const speak = useCallback(
     async (
@@ -151,6 +191,13 @@ export function useLensVoice() {
       el.onended = null;
       el.onpause = null;
       el.ontimeupdate = null;
+      try {
+        // Cancel any in-flight browser-fallback utterance from a
+        // previous speak() call too -- same reasoning as el.pause() above.
+        window.speechSynthesis?.cancel();
+      } catch {
+        // speechSynthesis unsupported -- nothing to cancel
+      }
       setUnavailable(false);
 
       function playUrl(url: string) {
@@ -198,8 +245,10 @@ export function useLensVoice() {
         // drop the result rather than playing stale/out-of-order audio.
         if (myRequestId !== requestIdRef.current) return;
         if (!res.ok) {
-          setUnavailable(true);
-          onEnded?.();
+          if (!speakViaBrowser(text, onEnded)) {
+            setUnavailable(true);
+            onEnded?.();
+          }
           return;
         }
         const blob = await res.blob();
@@ -208,8 +257,10 @@ export function useLensVoice() {
         playUrl(url);
       } catch {
         if (myRequestId === requestIdRef.current) {
-          setUnavailable(true);
-          onEnded?.();
+          if (!speakViaBrowser(text, onEnded)) {
+            setUnavailable(true);
+            onEnded?.();
+          }
         }
       }
     },
