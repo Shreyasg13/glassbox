@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { useLensVoice } from "@/lib/useLensVoice";
 import { StepIndicator } from "./StepIndicator";
 import { StepAgent } from "./StepAgent";
 import { StepConcern } from "./StepConcern";
@@ -33,6 +34,17 @@ type Persisted = { step: number; state: OnboardingState };
 export function OnboardingFlow() {
   const router = useRouter();
   const { username, loading: authLoading } = useAuth();
+  // Onboarding is the one flow where the Guide's voice is on by default
+  // and speaks each step automatically (spec: "live onboarding assistant
+  // with voice, clear steps"), unlike the rest of the app where voice
+  // stays click-only. `enabled` is the same shared, localStorage-persisted
+  // flag used by the Lenses/Hero/dashboard ticker (useLensVoice.ts) --
+  // turning it on here also turns it on there, which is intentional (one
+  // voice preference, not a hidden onboarding-only shadow flag). The
+  // actual enable+prime happens inside the "Get Started" button's onClick
+  // below, synchronously, because it must be a real user gesture for
+  // mobile Safari's autoplay policy to ever allow the audio that follows.
+  const voice = useLensVoice();
   // -1 = the Guide intro screen, 0-4 = the real steps.
   const [step, setStep] = useState(-1);
   const [state, setState] = useState<OnboardingState>(initialOnboardingState);
@@ -141,7 +153,13 @@ export function OnboardingFlow() {
         <p className="text-[14px] leading-relaxed text-t2">&ldquo;{GUIDE_INTRO_MESSAGE}&rdquo;</p>
         <button
           type="button"
-          onClick={() => setStep(0)}
+          onClick={() => {
+            // Real, synchronous click -- the one moment this session gets
+            // to unlock autoplay for everything that follows.
+            voice.primeAudio();
+            if (!voice.enabled) voice.toggle();
+            setStep(0);
+          }}
           className="btn btn-primary px-sp6 py-sp3"
         >
           Get Started →
@@ -165,7 +183,11 @@ export function OnboardingFlow() {
         <div className="sticky top-sp5">
           <AgentHero agentId={effectiveAgentId} />
           <div className="rounded-r3 glass-frost-surface p-sp4">
-            <GuideBubble key={step} message={GUIDE_STEP_MESSAGES[step as 0 | 1 | 2 | 3 | 4]} />
+            <GuideBubble
+              key={step}
+              message={GUIDE_STEP_MESSAGES[step as 0 | 1 | 2 | 3 | 4]}
+              autoSpeak
+            />
             {step === 1 && state.concern && (
               <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-teal">
                 {GUIDE_CONCERN_ACK[state.concern]}

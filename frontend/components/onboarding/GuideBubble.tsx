@@ -85,24 +85,39 @@ export function GuideAvatar({ size = 38 }: { size?: number }) {
 /**
  * A contextual Guide message -- text always visible (per spec, voice is
  * an enhancement, never a dependency). Two distinct controls, both
- * real: a persistent mute/enable toggle showing current state (spec
- * explicitly requires "clear mute/enable controls", not just an
- * implicit one), and a one-click "hear this" action that turns voice on
- * if it's currently off and speaks either way (same convenience
- * pattern Hero.tsx's Listen button already uses: `if (!voice.enabled)
- * voice.toggle()` before speaking, rather than requiring a separate
- * prior toggle before the button even appears). Never autoplays --
- * speaking only ever happens from an explicit click, and stop() fires
- * on unmount so navigating away cuts it off cleanly (the `key`-driven
- * remount from step to step in OnboardingFlow already causes this
- * unmount naturally).
+ * real, grouped together in the header row so they read as one
+ * cohesive voice control rather than a stray glyph floating on the
+ * message line: a "▶ Hear" button (always available, works whether or
+ * not voice is currently enabled -- turns it on if needed, same
+ * convenience pattern Hero.tsx's Listen button uses) and a persistent
+ * mute/enable toggle showing current state. During onboarding
+ * specifically (see the `autoSpeak` prop), the Guide also speaks each
+ * step automatically without waiting for that click -- gated on
+ * `voice.enabled`, which the onboarding intro's "Get Started" button
+ * turns on via a real user gesture before the first step ever renders.
+ * Outside onboarding (dashboard welcome note, My Agents), voice stays
+ * click-only. stop() fires on unmount so navigating away cuts audio off
+ * cleanly (the `key`-driven remount from step to step in OnboardingFlow
+ * already causes this unmount naturally).
  */
 export function GuideBubble({
   message,
   compact = false,
+  autoSpeak = false,
 }: {
   message: string;
   compact?: boolean;
+  // Speak this message on mount, once, if voice is enabled -- opt-in per
+  // instance because OnboardingFlow mounts TWO GuideBubbles for the same
+  // step at once (a desktop sidebar one and a `lg:hidden` compact one for
+  // mobile; both stay mounted, just CSS-toggled, so both would fire an
+  // on-mount effect). Only the desktop instance passes true, or both
+  // would speak simultaneously on separate <audio> elements -- real,
+  // audible double-playback, not a theoretical bug. Known gap: mobile
+  // therefore has no autoplay this pass, same "not verified on iOS"
+  // honesty bar the rest of the voice work already holds itself to --
+  // the manual Hear button still works everywhere.
+  autoSpeak?: boolean;
 }) {
   const voice = useLensVoice();
   const caption = useCaptionSweep(message);
@@ -138,6 +153,21 @@ export function GuideBubble({
     voice.toggle();
   }
 
+  // Autoplay for this one instance, gated behind the `autoSpeak` prop
+  // (see its doc comment above for why only one of the two mounted
+  // instances ever passes true) AND `voice.enabled` -- which itself only
+  // becomes true after the onboarding intro's "Get Started" click primes
+  // + enables voice (OnboardingFlow.tsx), a real gesture. Runs once per
+  // mount; GuideBubble is remounted per step via `key={step}` in the
+  // parent, so "on mount" already means "once per step" for free -- no
+  // extra step-tracking needed here.
+  useEffect(() => {
+    if (!autoSpeak || !voice.enabled) return;
+    const t = setTimeout(() => handleSpeak(), 450);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className={`flex gap-sp3 ${compact ? "items-center" : "items-start"}`}>
       <GuideAvatar size={compact ? 30 : 38} />
@@ -153,18 +183,29 @@ export function GuideBubble({
           ) : (
             <span />
           )}
-          <button
-            type="button"
-            onClick={handleToggleVoice}
-            aria-pressed={voice.enabled}
-            aria-label={voice.enabled ? "Turn off GlassBox Guide voice" : "Turn on GlassBox Guide voice"}
-            title={voice.enabled ? "Voice on" : "Voice off"}
-            className={`shrink-0 rounded-r4 border px-sp2 py-0.5 text-[10px] font-semibold ${
-              voice.enabled ? "border-teal/30 text-teal" : "border-border2 text-t4"
-            }`}
-          >
-            {voice.enabled ? "🔊 Voice on" : "🔈 Voice off"}
-          </button>
+          <div className="flex shrink-0 items-center gap-sp2">
+            <button
+              type="button"
+              onClick={handleSpeak}
+              aria-label="Hear this from GlassBox Guide"
+              title="Hear this"
+              className="inline-flex items-center gap-1 rounded-r4 border border-teal/30 px-sp2 py-0.5 text-[10px] font-semibold text-teal hover:bg-teal/10"
+            >
+              ▶ Hear
+            </button>
+            <button
+              type="button"
+              onClick={handleToggleVoice}
+              aria-pressed={voice.enabled}
+              aria-label={voice.enabled ? "Turn off GlassBox Guide voice" : "Turn on GlassBox Guide voice"}
+              title={voice.enabled ? "Voice on" : "Voice off"}
+              className={`rounded-r4 border px-sp2 py-0.5 text-[10px] font-semibold ${
+                voice.enabled ? "border-teal/30 text-teal" : "border-border2 text-t4"
+              }`}
+            >
+              {voice.enabled ? "🔊 Voice on" : "🔈 Voice off"}
+            </button>
+          </div>
         </div>
         <div className="flex items-start gap-sp2">
           <p className={`flex-1 text-t2 ${compact ? "text-[12px]" : "text-[13px] leading-relaxed"}`}>
@@ -190,15 +231,6 @@ export function GuideBubble({
                 })()
               : message}
           </p>
-          <button
-            type="button"
-            onClick={handleSpeak}
-            aria-label="Hear this from GlassBox Guide"
-            title="Hear this"
-            className="shrink-0 text-[13px] text-t3 hover:text-teal"
-          >
-            ▶
-          </button>
         </div>
       </div>
     </div>
