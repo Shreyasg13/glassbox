@@ -135,21 +135,33 @@ export function useLensVoice() {
       text: string,
       elevenLabsVoiceId: string,
       kokoroVoiceId: string,
-      onEnded?: () => void
+      onEnded?: () => void,
+      // Real playback progress (0..1), driven by the actual <audio>
+      // element's currentTime/duration via the native `timeupdate` event
+      // -- not a guessed/estimated timer. Used by GuideBubble's live
+      // word-by-word caption sweep so the highlight tracks genuine
+      // ElevenLabs/Kokoro audio, not an assumed speaking rate.
+      onProgress?: (fraction: number) => void
     ) => {
       const el = getAudioElement();
       el.pause();
       // Clear any handlers from a previous speak() call on this shared
       // element before attaching new ones, so a superseded call's
-      // onEnded can't fire late against the wrong persona/row.
+      // onEnded/onProgress can't fire late against the wrong persona/row.
       el.onended = null;
       el.onpause = null;
+      el.ontimeupdate = null;
       setUnavailable(false);
 
       function playUrl(url: string) {
         if (onEnded) {
           el.onended = onEnded;
           el.onpause = onEnded;
+        }
+        if (onProgress) {
+          el.ontimeupdate = () => {
+            onProgress(el.duration ? el.currentTime / el.duration : 0);
+          };
         }
         el.src = url;
         const p = el.play();

@@ -1,8 +1,64 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLensVoice } from "@/lib/useLensVoice";
 import { GLASSBOX_GUIDE, GUIDE_ELEVENLABS_VOICE_ID, GUIDE_KOKORO_VOICE_ID } from "@/lib/glassboxGuide";
+
+/**
+ * Live word-by-word captions while the Guide's real ElevenLabs/Kokoro
+ * audio plays -- driven by the actual <audio> element's currentTime via
+ * useLensVoice's onProgress callback (real playback fraction, not a
+ * guessed timer), weighted by each word's character length so a longer
+ * word gets proportionally more of the highlighted timeline. Purely a
+ * rendering concern local to GuideBubble; doesn't touch voice state.
+ */
+function useCaptionSweep(message: string) {
+  const tokens = useMemo(() => message.split(/(\s+)/), [message]);
+  const wordPositions = useMemo(
+    () => tokens.map((t, i) => (/^\s+$/.test(t) ? -1 : i)).filter((i) => i >= 0),
+    [tokens]
+  );
+  const cumLens = useMemo(() => {
+    let sum = 0;
+    return wordPositions.map((i) => (sum += tokens[i].length, sum));
+  }, [wordPositions, tokens]);
+  const totalLen = cumLens[cumLens.length - 1] || 1;
+
+  const [speaking, setSpeaking] = useState(false);
+  const [activeWord, setActiveWord] = useState(-1);
+  // Guards against a race: a previous speak() call's onEnded/onProgress
+  // firing after a newer call already started for a different message
+  // (e.g. rapid step navigation) -- same shape of problem the hook's own
+  // internal requestIdRef solves, just needed again at this consumer level
+  // since this component's callbacks close over component state, not the
+  // hook's internals.
+  const genRef = useRef(0);
+
+  function start() {
+    genRef.current += 1;
+    setSpeaking(true);
+    setActiveWord(0);
+  }
+  function progress(gen: number, fraction: number) {
+    if (gen !== genRef.current) return;
+    const target = fraction * totalLen;
+    let idx = cumLens.length - 1;
+    for (let i = 0; i < cumLens.length; i++) {
+      if (target <= cumLens[i]) {
+        idx = i;
+        break;
+      }
+    }
+    setActiveWord(idx);
+  }
+  function end(gen: number) {
+    if (gen !== genRef.current) return;
+    setSpeaking(false);
+    setActiveWord(-1);
+  }
+
+  return { tokens, wordPositions, activeWord, speaking, start, progress, end, gen: () => genRef.current };
+}
 
 /**
  * The GlassBox Guide's avatar + name/role badge -- shared across
@@ -49,6 +105,7 @@ export function GuideBubble({
   compact?: boolean;
 }) {
   const voice = useLensVoice();
+  const caption = useCaptionSweep(message);
 
   // Real stop-on-unmount, not just an assertion: OnboardingFlow remounts
   // this per step (keyed on the step), and the dashboard welcome note
@@ -63,7 +120,16 @@ export function GuideBubble({
   function handleSpeak() {
     voice.primeAudio();
     if (!voice.enabled) voice.toggle();
-    voice.speak(GLASSBOX_GUIDE.id, message, GUIDE_ELEVENLABS_VOICE_ID, GUIDE_KOKORO_VOICE_ID);
+    caption.start();
+    const gen = caption.gen();
+    voice.speak(
+      GLASSBOX_GUIDE.id,
+      message,
+      GUIDE_ELEVENLABS_VOICE_ID,
+      GUIDE_KOKORO_VOICE_ID,
+      () => caption.end(gen),
+      (fraction) => caption.progress(gen, fraction)
+    );
   }
 
   function handleToggleVoice() {
@@ -102,7 +168,27 @@ export function GuideBubble({
         </div>
         <div className="flex items-start gap-sp2">
           <p className={`flex-1 text-t2 ${compact ? "text-[12px]" : "text-[13px] leading-relaxed"}`}>
-            {message}
+            {caption.speaking
+              ? (() => {
+                  let wordPos = -1;
+                  return caption.tokens.map((tok, i) => {
+                    if (/^\s+$/.test(tok)) return tok;
+                    wordPos += 1;
+                    const pos = wordPos;
+                    const cls =
+                      pos < caption.activeWord
+                        ? "text-t1"
+                        : pos === caption.activeWord
+                          ? "font-bold text-teal"
+                          : "opacity-45";
+                    return (
+                      <span key={i} className={cls}>
+                        {tok}
+                      </span>
+                    );
+                  });
+                })()
+              : message}
           </p>
           <button
             type="button"
