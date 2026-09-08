@@ -44,6 +44,15 @@
      everything else under [data-theme="light"]. */
   --c-glass-nav-bg: rgba(10, 15, 26, 0.72);
 
+  /* Liquid-glass frosted surface (onboarding wizard shell, new dashboard
+     insight panels) -- same re-themeable-var reasoning as --c-glass-nav-bg.
+     Distinct from --c-panel/.glass-panel* above: those are solid, opaque
+     "card" surfaces just named "glass" by convention; this is real
+     backdrop-filter frosted glass layered as a gradient highlight over
+     --c-panel, not a replacement color. */
+  --c-glass-frost-bg: linear-gradient(165deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02));
+  --c-glass-frost-border: rgba(255, 255, 255, 0.14);
+
   /* Strategy Lenses' persona speech bubble (StrategyLenses.tsx) -- same
      reasoning as --c-glass-nav-bg above. This was a literal two-stop
      rgba() gradient inline on the element until a real light-mode bug:
@@ -109,6 +118,8 @@
 
   --c-glass-nav-bg: rgba(255, 255, 255, 0.72);
   --c-lens-bubble-bg: linear-gradient(160deg, #ffffff, #f0f3f9);
+  --c-glass-frost-bg: linear-gradient(165deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.32));
+  --c-glass-frost-border: rgba(15, 23, 42, 0.1);
 
   --sh-sm: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.06);
   --sh-md: 0 4px 16px rgba(15, 23, 42, 0.1), 0 2px 6px rgba(15, 23, 42, 0.06);
@@ -154,6 +165,26 @@ body {
   border: 1px solid rgba(13, 204, 170, 0.18);
   border-radius: var(--r3, 14px);
   box-shadow: var(--sh-teal);
+}
+
+/* Liquid-glass frosted surface -- real backdrop-filter, not just a named
+   "glass" solid card like the three above. Two forms: .glass-panel-frost
+   sets its own radius (for <GlassPanel variant="frost">, matching how the
+   other three variants above own their radius); .glass-frost-surface
+   deliberately does NOT set radius, for call sites (OnboardingFlow.tsx)
+   that already carry their own Tailwind rounded-* utility -- setting
+   radius in both places would just make one silently lose the cascade. */
+.glass-panel-frost,
+.glass-frost-surface {
+  background-color: var(--c-panel);
+  background-image: var(--c-glass-frost-bg);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--c-glass-frost-border);
+  box-shadow: var(--sh-lg);
+}
+.glass-panel-frost {
+  border-radius: var(--r3, 14px);
 }
 
 .mono {

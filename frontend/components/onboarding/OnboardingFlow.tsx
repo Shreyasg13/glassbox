@@ -94,7 +94,7 @@ export function OnboardingFlow() {
   if (step === LAST_STEP + 1) {
     const agent = getAgentPersona(state.agentId);
     return (
-      <div className="mx-auto flex max-w-[440px] flex-col items-center gap-sp5 rounded-r4 border border-border2 bg-panel p-sp8 text-center shadow-lg2">
+      <div className="mx-auto flex max-w-[440px] flex-col items-center gap-sp5 rounded-r4 glass-frost-surface p-sp8 text-center">
         <div
           className="grid place-items-center rounded-full border-2 p-1"
           style={{ borderColor: agent.color }}
@@ -128,7 +128,7 @@ export function OnboardingFlow() {
 
   if (step === -1) {
     return (
-      <div className="mx-auto flex max-w-[440px] flex-col items-center gap-sp5 rounded-r4 border border-border2 bg-panel p-sp8 text-center shadow-lg2">
+      <div className="mx-auto flex max-w-[440px] flex-col items-center gap-sp5 rounded-r4 glass-frost-surface p-sp8 text-center">
         <GuideAvatar size={56} />
         <div>
           <div className="mb-1 text-[13px] font-extrabold uppercase tracking-wide text-teal">
@@ -164,7 +164,7 @@ export function OnboardingFlow() {
       <div className="hidden lg:block">
         <div className="sticky top-sp5">
           <AgentHero agentId={effectiveAgentId} />
-          <div className="rounded-r3 border border-border bg-panel p-sp4">
+          <div className="rounded-r3 glass-frost-surface p-sp4">
             <GuideBubble key={step} message={GUIDE_STEP_MESSAGES[step as 0 | 1 | 2 | 3 | 4]} />
             {step === 1 && state.concern && (
               <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-teal">
@@ -185,7 +185,7 @@ export function OnboardingFlow() {
         </div>
       </div>
 
-      <div className="rounded-r4 border border-border2 bg-panel shadow-lg2">
+      <div className="rounded-r4 glass-frost-surface">
         {/* Compact Guide message for tablet/mobile -- stacked above the
             form, never side-by-side (spec: no side-by-side below desktop). */}
         <div className="border-b border-border p-sp4 lg:hidden">

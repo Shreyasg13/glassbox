@@ -1,9 +1,10 @@
-type Variant = "panel" | "raised" | "accent";
+type Variant = "panel" | "raised" | "accent" | "frost";
 
 const variantClass: Record<Variant, string> = {
   panel: "glass-panel",
   raised: "glass-panel-raised",
   accent: "glass-panel-accent",
+  frost: "glass-panel-frost",
 };
 
 export function GlassPanel({
