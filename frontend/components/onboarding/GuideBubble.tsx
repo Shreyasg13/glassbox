@@ -171,17 +171,23 @@ export function GuideBubble({
   return (
     <div className={`flex gap-sp3 ${compact ? "items-center" : "items-start"}`}>
       <GuideAvatar size={compact ? 30 : 38} />
-      <div className="flex-1">
-        <div className="mb-1 flex items-center justify-between gap-sp2">
+      {/* min-w-0 is load-bearing here, not decorative: this column sits in
+          a 220px sidebar (grid-cols-[220px_1fr] in OnboardingFlow), and a
+          flex item's default min-width is `auto` -- without min-w-0 it
+          refuses to shrink below its content's natural width, so text and
+          buttons overflow the card's right edge instead of wrapping. Real
+          bug caught by a screenshot verification pass, not theoretical. */}
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex flex-wrap items-center gap-sp2">
           {!compact ? (
-            <div className="flex items-center gap-sp2">
+            <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-sp2">
               <span className="text-[12px] font-extrabold text-t1">{GLASSBOX_GUIDE.name}</span>
               <span className="text-[10px] font-semibold uppercase tracking-wide text-t3">
                 {GLASSBOX_GUIDE.role}
               </span>
             </div>
           ) : (
-            <span />
+            <span className="flex-1" />
           )}
           <button
             type="button"
@@ -201,12 +207,14 @@ export function GuideBubble({
           onClick={handleSpeak}
           aria-label="Hear this from GlassBox Guide"
           title="Hear this"
-          className="mb-sp2 inline-flex items-center gap-1 rounded-r4 border border-teal/30 px-sp2 py-0.5 text-[10px] font-semibold text-teal hover:bg-teal/10"
+          className="mb-sp2 inline-flex shrink-0 items-center gap-1 rounded-r4 border border-teal/30 px-sp2 py-0.5 text-[10px] font-semibold text-teal hover:bg-teal/10"
         >
           ▶ Hear
         </button>
-        <div className="flex items-start gap-sp2">
-          <p className={`flex-1 text-t2 ${compact ? "text-[12px]" : "text-[13px] leading-relaxed"}`}>
+        <div className="flex min-w-0 items-start gap-sp2">
+          <p
+            className={`min-w-0 flex-1 break-words text-t2 ${compact ? "text-[12px]" : "text-[13px] leading-relaxed"}`}
+          >
             {caption.speaking
               ? (() => {
                   let wordPos = -1;
