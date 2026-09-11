@@ -64,6 +64,16 @@ def report_source_paths() -> List[Path]:
     return [REPORTS_DIR]
 
 
+def portfolio_source_paths() -> List[Path]:
+    """Files whose mtime should invalidate the /api/portfolio-stats cache
+    entry -- portfolio/trade state plus the same parquet files
+    get_live_signals watches, since position market values are priced
+    off those too."""
+    paths = [TRADING_STORAGE_PATH / "portfolio.json", TRADING_STORAGE_PATH / "trades.json"]
+    paths += live_signals_source_paths()
+    return paths
+
+
 def load_latest_data() -> Optional[List[Dict[str, Any]]]:
     """Load the most recently modified daily_*.json report."""
     if not REPORTS_DIR.exists():
@@ -488,4 +498,104 @@ def get_daily_summary() -> Dict[str, Any]:
         "alerts": alerts,
         "dates": [d["date"] for d in data],
         "growth_rates": [d["daily_return"] * 100 for d in data],
+    }
+
+
+def _current_price(symbol: str) -> Optional[float]:
+    df = _load_parquet_row(symbol)
+    if df is not None and len(df) > 0:
+        return float(df.iloc[-1]["Close"])
+    return None
+
+
+def get_portfolio_stats() -> Dict[str, Any]:
+    """Real P&L/turnover, ported from backend-source/DAILY_PNL.py's
+    DailyPnLTracker rather than reimplemented -- see PortfolioStats'
+    docstring in models.py for the churn_rate formula and the
+    has_trade_history honesty flag."""
+    portfolio_file = TRADING_STORAGE_PATH / "portfolio.json"
+    trades_file = TRADING_STORAGE_PATH / "trades.json"
+
+    portfolio: Dict[str, Any] = {"cash": 0.0, "positions": {}, "initial_capital": 0.0}
+    if portfolio_file.exists():
+        with open(portfolio_file, "r") as f:
+            portfolio = json.load(f)
+
+    trades: List[Dict[str, Any]] = []
+    if trades_file.exists():
+        with open(trades_file, "r") as f:
+            trades = json.load(f)
+
+    cash = portfolio.get("cash", 0.0)
+    initial_capital = portfolio.get("initial_capital", 0.0)
+    positions_value = 0.0
+    position_details: List[Dict[str, Any]] = []
+
+    for symbol, position in portfolio.get("positions", {}).items():
+        price = _current_price(symbol)
+        if price is None:
+            continue
+        market_value = price * position["shares"]
+        cost_basis = position["avg_price"] * position["shares"]
+        positions_value += market_value
+        position_details.append(
+            {
+                "symbol": symbol,
+                "shares": position["shares"],
+                "cost_basis": cost_basis,
+                "market_value": market_value,
+                "unrealized_pnl": market_value - cost_basis,
+            }
+        )
+
+    total_value = cash + positions_value
+    total_pnl = total_value - initial_capital
+    total_pnl_pct = (total_pnl / initial_capital * 100) if initial_capital else 0.0
+
+    # FIFO realized-P&L matching -- identical logic to DailyPnLTracker.calculate_daily_pnl.
+    realized_pnl = 0.0
+    open_lots: Dict[str, List[Dict[str, float]]] = {}
+    trade_notional = 0.0
+    for trade in trades:
+        symbol = trade["symbol"]
+        trade_notional += trade["shares"] * trade["price"]
+        lots = open_lots.setdefault(symbol, [])
+        if trade["action"] == "BUY":
+            lots.append({"price": trade["price"], "shares": trade["shares"]})
+        elif trade["action"] == "SELL":
+            shares_to_sell = trade["shares"]
+            while shares_to_sell > 0 and lots:
+                lot = lots[0]
+                shares_sold = min(shares_to_sell, lot["shares"])
+                realized_pnl += (trade["price"] - lot["price"]) * shares_sold
+                lot["shares"] -= shares_sold
+                shares_to_sell -= shares_sold
+                if lot["shares"] == 0:
+                    lots.pop(0)
+
+    unrealized_pnl = sum(p["unrealized_pnl"] for p in position_details)
+    # Turnover: total trade notional over the whole recorded history divided
+    # by the current book size -- a plain ratio, not annualized, since
+    # there's no trade-date range to anchor a period against yet.
+    churn_rate = (trade_notional / total_value) if total_value else 0.0
+
+    recent_trades = sorted(trades, key=lambda t: t.get("date", ""), reverse=True)[:20]
+
+    return {
+        "cash": cash,
+        "positions_value": positions_value,
+        "total_value": total_value,
+        "initial_capital": initial_capital,
+        "total_pnl": total_pnl,
+        "total_pnl_pct": total_pnl_pct,
+        "realized_pnl": realized_pnl,
+        "unrealized_pnl": unrealized_pnl,
+        "num_positions": len(position_details),
+        "num_trades": len(trades),
+        "has_trade_history": len(trades) > 0,
+        "churn_rate": churn_rate,
+        "position_details": position_details,
+        "recent_trades": recent_trades,
+        "data_source": f"{portfolio_file} + {trades_file}",
+        "as_of": datetime.now().isoformat(),
     }

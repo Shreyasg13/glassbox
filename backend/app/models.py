@@ -138,6 +138,75 @@ class LiveSignalsResponse(BaseModel):
     summary: LiveSignalsSummary
 
 
+# ---- /api/portfolio-stats ----
+
+class TradeRow(BaseModel):
+    symbol: str
+    action: Literal["BUY", "SELL"]
+    shares: float
+    price: float
+    date: str
+
+
+class PositionDetail(BaseModel):
+    symbol: str
+    shares: float
+    cost_basis: float
+    market_value: float
+    unrealized_pnl: float
+
+
+class PortfolioStats(BaseModel):
+    """Real P&L/turnover math ported from backend-source/DAILY_PNL.py's
+    DailyPnLTracker (FIFO realized-P&L matching, unrealized P&L from live
+    parquet prices) -- not reimplemented from scratch. Reads the same
+    portfolio.json/trades.json the legacy script does; both are empty in
+    a fresh TRADING_STORAGE_PATH, which `has_trade_history=False` makes
+    explicit rather than silently rendering zeros as if trading had
+    happened. `churn_rate` is total trade notional (sum of shares*price
+    across every trade on record) divided by current total_value -- a
+    plain turnover ratio, not time-annualized, since there's no reliable
+    period boundary without real trade history to anchor one."""
+
+    cash: float
+    positions_value: float
+    total_value: float
+    initial_capital: float
+    total_pnl: float
+    total_pnl_pct: float
+    realized_pnl: float
+    unrealized_pnl: float
+    num_positions: int
+    num_trades: int
+    has_trade_history: bool
+    churn_rate: float
+    position_details: List[PositionDetail]
+    recent_trades: List[TradeRow]
+    data_source: str
+    as_of: str
+
+
+# ---- /api/insights/narrate ----
+
+class InsightCandidate(BaseModel):
+    """One client-derived "missed opportunity" row, sent up for
+    narration -- the frontend owns the detection rule (same pattern
+    InsightsAlertsPanel already uses client-side for signal-derived
+    alerts), this endpoint only narrates the rows it's handed rather
+    than re-deriving its own, possibly-diverging definition."""
+
+    symbol: str
+    signal: Signal
+    confidence: float
+    reason: str
+
+
+class InsightNarrateRequest(BaseModel):
+    candidates: List[InsightCandidate]
+    provider: Provider = "ollama"
+    model: str
+
+
 # ---- /api/monte-carlo ----
 
 class MonteCarloResult(BaseModel):
@@ -275,7 +344,7 @@ class PaginatedLLMCalls(BaseModel):
 
 # ---- Background jobs: agent test-run, orchestration run, report generate ----
 
-JobKind = Literal["agent_test_run", "orchestration_run", "report_generate", "my_agents_run"]
+JobKind = Literal["agent_test_run", "orchestration_run", "report_generate", "my_agents_run", "insight_narrate"]
 JobState = Literal["queued", "running", "done", "error"]
 
 

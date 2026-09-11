@@ -7,6 +7,9 @@ import { StressTestPanel } from "@/components/dashboard/StressTestPanel";
 import { VerifySignalPanel } from "@/components/dashboard/VerifySignalPanel";
 import { SectorAllocationChart } from "@/components/dashboard/SectorAllocationChart";
 import { InsightsAlertsPanel } from "@/components/dashboard/InsightsAlertsPanel";
+import { PortfolioGrowthPanel, type GrowthPoint } from "@/components/dashboard/PortfolioGrowthPanel";
+import { StatsBoard, type DailySummaryData, type PortfolioStatsData } from "@/components/dashboard/StatsBoard";
+import { MissedOpportunitiesPanel, type RecentTrade } from "@/components/dashboard/MissedOpportunitiesPanel";
 import { apiUrl } from "@/lib/api";
 
 /**
@@ -56,30 +59,72 @@ async function getTrackAgents(track: "track1" | "track2"): Promise<TrackAgentsDa
   }
 }
 
+async function getPortfolioGrowth(): Promise<GrowthPoint[]> {
+  try {
+    const res = await fetch(apiUrl("/api/data"), { cache: "no-store" });
+    if (!res.ok) return [];
+    return (await res.json()) as GrowthPoint[];
+  } catch {
+    return [];
+  }
+}
+
+async function getDailySummary(): Promise<DailySummaryData | null> {
+  try {
+    const res = await fetch(apiUrl("/api/daily-summary"), { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Partial<DailySummaryData>;
+    return typeof data.sharpe === "number" ? (data as DailySummaryData) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getPortfolioStats(): Promise<PortfolioStatsData & { recent_trades: RecentTrade[] } | null> {
+  try {
+    const res = await fetch(apiUrl("/api/portfolio-stats"), { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as PortfolioStatsData & { recent_trades: RecentTrade[] };
+  } catch {
+    return null;
+  }
+}
+
 export default async function DashboardPage() {
-  const [initialSignals, holdings, agentPerformance, track1, track2] = await Promise.all([
-    getInitialSignals(),
-    getHoldings(),
-    getAgentPerformance(),
-    getTrackAgents("track1"),
-    getTrackAgents("track2"),
-  ]);
+  const [initialSignals, holdings, agentPerformance, track1, track2, growth, dailySummary, portfolioStats] =
+    await Promise.all([
+      getInitialSignals(),
+      getHoldings(),
+      getAgentPerformance(),
+      getTrackAgents("track1"),
+      getTrackAgents("track2"),
+      getPortfolioGrowth(),
+      getDailySummary(),
+      getPortfolioStats(),
+    ]);
 
   return (
     <div className="grid grid-cols-1 gap-sp5 lg:grid-cols-3">
       <div className="lg:col-span-3">
         <DashboardWelcomeNote />
       </div>
-      <PortfolioOverviewPanel initialData={holdings} />
+      <StatsBoard summary={dailySummary} stats={portfolioStats} />
+      <PortfolioGrowthPanel initialData={growth} />
       <SignalTicker initialSignals={initialSignals} />
+      <PortfolioOverviewPanel initialData={holdings} />
+      <StressTestPanel />
       <div className="lg:col-span-2">
         <AgentPerformancePanel data={agentPerformance} />
       </div>
-      <StressTestPanel />
       <SectorAllocationChart initialHoldings={holdings?.holdings ?? []} />
       <div className="lg:col-span-2">
         <InsightsAlertsPanel signals={initialSignals} />
       </div>
+      <MissedOpportunitiesPanel
+        signals={initialSignals}
+        recentTrades={portfolioStats?.recent_trades ?? []}
+        hasTradeHistory={portfolioStats?.has_trade_history ?? false}
+      />
       <div className="lg:col-span-3">
         <VerifySignalPanel />
       </div>

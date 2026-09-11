@@ -29,6 +29,7 @@ from ..models import (
     HistoricalReport,
     HoldingsResponse,
     LiveSignalsResponse,
+    PortfolioStats,
     TrackAgentsResponse,
     TrackDataPoint,
 )
@@ -113,4 +114,11 @@ async def api_historical_reports():
 async def api_daily_summary():
     return await hot_read_cache.get_or_compute_async(
         "daily_summary", ds.report_source_paths(), ds.get_daily_summary
+    )
+
+
+@router.get("/portfolio-stats", response_model=PortfolioStats)
+async def api_portfolio_stats():
+    return await hot_read_cache.get_or_compute_async(
+        "portfolio_stats", ds.portfolio_source_paths(), ds.get_portfolio_stats
     )
