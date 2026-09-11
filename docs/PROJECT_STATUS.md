@@ -4,7 +4,7 @@ Living document. Update this whenever a phase completes, a bug is found,
 or scope changes — this is the single place to check "where are we" and
 "what's next" without re-deriving it from chat history.
 
-**Last updated:** 2026-09-11 (Phase 14)
+**Last updated:** 2026-09-11 (Phase 14 + voice-cache fix)
 
 ## Live deployment
 
@@ -440,8 +440,69 @@ button inside a `<button>` — a real nested-interactive-element
 hydration warning, unrelated to either change above. Flagging for a
 future pass.
 
+## Post-Phase-14 fix — voice narration cache bug (2026-09-11)
+
+User report: navigating onboarding steps didn't stop/refresh narration
+correctly -- audio from a previous step kept playing (or replaying)
+against the wrong screen. Root cause found by instrumenting real
+`/api/tts` calls, not guessed: `useLensVoice.speak()`'s cache was keyed
+by `personaId` alone. Aria narrates a different message every step
+under that one same id, so after step 1's line was cached, every later
+step silently replayed step 1's audio with zero new network requests
+-- captions/on-screen text moved on, the sound never did. Fixed by
+keying the cache `${personaId}::${text}` and having `stop()` also bump
+the request-id guard (covers a fetch still in flight when stop() is
+called with nothing new queued). Verified: an instrumented run through
+4 real step transitions showed exactly 1 `/api/tts` request before the
+fix vs. 4 correct ones after. Deployed.
+
+## New requests to track, not yet scoped (2026-09-11)
+
+Bundled together in one message; none of this is started. Listed here
+so it isn't lost, per the user's own ask to track rather than rush it:
+
+- **Aria's avatar** -- currently the same plain checkmark badge used
+  for the small nav-icon Guide avatar everywhere else. User wants
+  something more expressive/animated ("Pixar-style" character), shared
+  via low-res Google Images search-result thumbnails (not usable
+  directly as a real asset -- provenance/licensing/resolution all
+  wrong for a production app) -- needs a real illustrated/animated
+  asset sourced or commissioned properly, not scraped.
+- **"Meet the team" entry point** on the home/dashboard screen, tied to
+  an animated character, redirecting into the marketing landing page's
+  existing Strategy-Lens-carousel flow.
+- **Lip-sync / more realistic voice-driven animation** for Aria while
+  she's speaking (today: word-by-word text caption highlighting only,
+  no visual mouth/face animation).
+- **A small HTML or Figma prototype** of the above, for review before
+  it's built into the real app -- user's own explicit ask, so this
+  should be the actual first deliverable for this bucket, not a full
+  implementation.
+- **Bigger animated GB logo** on the marketing landing page, placed
+  between the "See the data. Invest smarter." tagline and the
+  "Live verification / A6 Auditor active" stat panel -- "fun Pixar
+  style" animation of the GlassBox mark specifically (separate from
+  the Aria-character ask above).
+- **Notification panel** -- flagged as entirely missing; not yet
+  scoped (which events, where it lives, badge/count behavior all TBD).
+- **Mobile compatibility** -- flagged as a "major problem," open on a
+  real mobile device rather than a resized desktop browser (Playwright
+  viewport tests at 400-420px width across onboarding/dashboard this
+  session showed no breakage, so this needs to be characterized on an
+  actual phone before it can be diagnosed) -- user marked this as
+  priority-before-more-design-work.
+
 ## Task list
 
+- [ ] **New, flagged priority:** Characterize the real mobile-compat
+      bug (device/browser, which page, what actually happens) before
+      attempting a fix -- viewport-resize testing hasn't reproduced
+      anything so far, so this needs a real device or its exact repro.
+- [ ] **New:** Build a small HTML/Figma prototype for Aria's
+      avatar/animation + landing-page "meet the team" flow + bigger
+      animated logo placement, for review before real implementation.
+- [ ] **New:** Scope and build a notification panel (nothing decided
+      yet -- events, placement, badge behavior).
 - [x] Deploy Phase 14 to the VM — same `git archive` + `gcloud compute
       scp` convention, this time with the VM's tracked directories
       cleared before extraction (plain tar-over-existing doesn't
