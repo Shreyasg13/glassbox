@@ -4,7 +4,7 @@ Living document. Update this whenever a phase completes, a bug is found,
 or scope changes — this is the single place to check "where are we" and
 "what's next" without re-deriving it from chat history.
 
-**Last updated:** 2026-09-11 (Phase 13b)
+**Last updated:** 2026-09-11 (Phase 14)
 
 ## Live deployment
 
@@ -395,8 +395,60 @@ the Risk bar and footer both reachable at the short viewport, and the
 paging arrows correctly reveal the two hidden agents with zero console
 errors along the way.
 
+## Phase 14 — Aria onboarding revert + dashboard liquid-glass charts (2026-09-11)
+
+Two independent bug reports, both against the live app, addressed in
+one pass:
+
+**Onboarding: reverted to a single Aria hero, 4 steps.** The 6-agent
+picker step (Allocation/Value/Quant/Macro/Reflexive/GlassBox, built in
+an earlier phase) plus the separate "GlassBox Guide" copilot card next
+to it were the actual bug the report was describing: one guide persona
+shown twice, once generically and once "in character." Cross-checked
+against the user's own reference mockup
+(`glassbox-onboarding-upgrade(9).html` in Downloads), which has exactly
+this shape already. Deleted `StepAgent.tsx`/`AgentHero.tsx`/
+`AgentAvatar.tsx`/`agentPersonas.ts` (confirmed nothing outside
+onboarding imported them first), added `AriaHero.tsx` as the one
+consolidated hero card, trimmed the flow to 4 steps (Concern → Portfolio
+→ Verify → Alerts), and renamed `GLASSBOX_GUIDE.name` "GlassBox Guide" →
+"Aria" (propagates everywhere via the constant). Footer nav fixed:
+Continue is `ml-auto` + `min-w-[170px]`, not full-width, so Back no
+longer reads as stranded at the far edge.
+
+**Dashboard: Robinhood-style growth chart + liquid glass everywhere.**
+`PortfolioGrowthPanel` now renders a smoothed (Catmull-Rom, still every
+real data point) gradient-fill area chart colored by real direction,
+with a hover crosshair. `StatsBoard` tiles gained real direction arrows
+and ring gauges for Win Rate/Churn Rate (fed from each metric's own
+real scalar — no fabricated sparkline history for point-in-time
+metrics that don't have any). Every remaining dashboard panel
+(`AgentPerformancePanel`, `PortfolioOverviewPanel`, `StressTestPanel`,
+`TrackComparisonPanel`, `VerifySignalPanel`) switched from the flat
+`accent` variant to `frost`, so the whole dashboard now shares one
+consistent glass treatment instead of about half of it.
+
+**Verified:** `tsc --noEmit` and `next build` both clean. Playwright
+through the full onboarding flow (1400×900 and 420×900) and a full
+dashboard screenshot, logged in as `user` — no console errors beyond
+the pre-existing, unrelated data-theme hydration warning. **Not yet
+verified:** an actual VM deploy of this phase.
+
+**Found but not fixed (pre-existing, out of scope):**
+`StepPortfolio.tsx`'s "Connect portfolio" tab nests an `ExplainTooltip`
+button inside a `<button>` — a real nested-interactive-element
+hydration warning, unrelated to either change above. Flagging for a
+future pass.
+
 ## Task list
 
+- [ ] **New:** Deploy Phase 14 to the VM.
+- [ ] **New:** Fix `StepPortfolio.tsx`'s nested button
+      (`ExplainTooltip` inside the "Connect portfolio" tab) — real
+      hydration warning, found during Phase 14's verification, not
+      part of either change in that phase.
+- [x] Retrofit the remaining dashboard panels to `GlassPanel
+      variant="frost"` (done in Phase 14).
 - [x] Push Phase 12 + 13's commits (done this session).
 - [x] Deploy Phase 12/13/13b to the VM — `git archive` tarball
       (deploy convention this repo actually uses; `.env` preserved,
@@ -405,13 +457,6 @@ errors along the way.
       containers came up clean (`docker compose ps`/logs show no
       errors) and `https://glassbox-portfolio-review.duckdns.org/health`
       returns `{"status":"ok"}` post-deploy.
-- [ ] Decide whether to retrofit the other dashboard panels
-      (PortfolioOverviewPanel, StressTestPanel, AgentPerformancePanel,
-      TrackComparisonPanel) to `GlassPanel variant="frost"` for visual
-      consistency, or leave them on `variant="accent"`/`"panel"`.
-- [ ] Live-verify the 6 new onboarding-agent voice ids against a real
-      `ELEVENLABS_API_KEY` (see the addendum note above) — currently
-      known-catalog ids, not confirmed live.
 - [ ] Deploy the free-tier entitlements/verify-signal feature (committed
       2026-09-07, not yet deployed to the VM), then update
       `ConversionCTA`/`AgentLauncher` copy to reference the real "5 free"
