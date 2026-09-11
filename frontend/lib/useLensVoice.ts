@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { apiUrl } from "./api";
 
 const STORAGE_KEY = "glassbox_lens_voices_enabled";
@@ -15,6 +15,24 @@ const STORAGE_KEY = "glassbox_lens_voices_enabled";
 // useLensVoice() call on the page in sync immediately.
 let sharedEnabled = false;
 const listeners = new Set<() => void>();
+
+// One <audio> element (and its supporting cache/request-id state) for the
+// WHOLE PAGE, not per hook instance. GuideBubble and AgentHero both call
+// useLensVoice() and can be mounted at the same time (onboarding sidebar),
+// so a per-instance audioRef let two real ElevenLabs/Kokoro clips play at
+// once -- audible overlap, reported directly. Mirrors sharedEnabled above:
+// module-level state so starting playback anywhere pauses/replaces
+// whatever any other instance had going, instead of each instance only
+// knowing about its own element.
+let sharedAudio: HTMLAudioElement | null = null;
+let sharedPrimed = false;
+const sharedCache = new Map<string, string>(); // personaId -> object URL
+let sharedRequestId = 0;
+
+function getSharedAudioElement(): HTMLAudioElement {
+  if (!sharedAudio) sharedAudio = new Audio();
+  return sharedAudio;
+}
 
 function readInitialEnabled(): boolean {
   try {
@@ -60,33 +78,19 @@ function getServerSnapshot() {
 export function useLensVoice() {
   const enabled = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const [unavailable, setUnavailable] = useState(false);
-  // ONE persistent <audio> element reused for every speak() call, not a
-  // fresh `new Audio()` per call -- required for reliable playback on
-  // mobile Safari/WebKit. Those browsers only allow .play() when it's
-  // attributable to a real user gesture; an element "unlocked" by a
-  // gesture-synchronous play/pause (see primeAudio below) stays unlocked
-  // for ITS OWN lifetime, but a brand-new element created later (e.g.
-  // inside an async fetch callback, or from autoplay's setInterval with
-  // no gesture at all) does not inherit that unlock. Reusing one element
-  // across every call, primed once on the first real click, is the
-  // standard cross-browser fix for this class of bug.
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const primedRef = useRef(false);
-  const cacheRef = useRef<Map<string, string>>(new Map()); // speakerId -> object URL
-  const requestIdRef = useRef(0);
 
   function getAudioElement(): HTMLAudioElement {
-    if (!audioRef.current) audioRef.current = new Audio();
-    return audioRef.current;
+    return getSharedAudioElement();
   }
 
   /** Call SYNCHRONOUSLY (no `await` before it) from inside a real click
    * handler -- priming after an `await` defeats the whole point, since
    * strict mobile browsers attribute a gesture only to code still on the
-   * original call stack. Idempotent: only actually primes once. */
+   * original call stack. Idempotent: only actually primes once, across the
+   * whole page (sharedPrimed), since it's the same shared element either way. */
   const primeAudio = useCallback(() => {
-    if (primedRef.current) return;
-    primedRef.current = true;
+    if (sharedPrimed) return;
+    sharedPrimed = true;
     try {
       const el = getAudioElement();
       const p = el.play();
@@ -120,7 +124,7 @@ export function useLensVoice() {
       // non-gesture-triggered (autoplay) speak() call needs it.
       primeAudio();
     } else {
-      audioRef.current?.pause();
+      sharedAudio?.pause();
       try {
         window.speechSynthesis?.cancel();
       } catch {
@@ -131,7 +135,7 @@ export function useLensVoice() {
   }, [primeAudio]);
 
   const stop = useCallback(() => {
-    audioRef.current?.pause();
+    sharedAudio?.pause();
     try {
       window.speechSynthesis?.cancel();
     } catch {
@@ -224,13 +228,13 @@ export function useLensVoice() {
         }
       }
 
-      const cached = cacheRef.current.get(personaId);
+      const cached = sharedCache.get(personaId);
       if (cached) {
         playUrl(cached);
         return;
       }
 
-      const myRequestId = ++requestIdRef.current;
+      const myRequestId = ++sharedRequestId;
       try {
         const res = await fetch(apiUrl("/api/tts"), {
           method: "POST",
@@ -241,9 +245,10 @@ export function useLensVoice() {
             kokoro_voice_id: kokoroVoiceId,
           }),
         });
-        // A newer request superseded this one (user already moved on) --
-        // drop the result rather than playing stale/out-of-order audio.
-        if (myRequestId !== requestIdRef.current) return;
+        // A newer request superseded this one (user already moved on, or a
+        // different component started speaking) -- drop the result rather
+        // than playing stale/out-of-order audio.
+        if (myRequestId !== sharedRequestId) return;
         if (!res.ok) {
           if (!speakViaBrowser(text, onEnded)) {
             setUnavailable(true);
@@ -253,10 +258,10 @@ export function useLensVoice() {
         }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
-        cacheRef.current.set(personaId, url);
+        sharedCache.set(personaId, url);
         playUrl(url);
       } catch {
-        if (myRequestId === requestIdRef.current) {
+        if (myRequestId === sharedRequestId) {
           if (!speakViaBrowser(text, onEnded)) {
             setUnavailable(true);
             onEnded?.();
@@ -267,12 +272,11 @@ export function useLensVoice() {
     []
   );
 
-  useEffect(() => {
-    return () => {
-      audioRef.current?.pause();
-      cacheRef.current.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, []);
+  // No pause-on-unmount here: the <audio> element and its cache are now
+  // shared for the whole page (see sharedAudio above), so one consumer
+  // unmounting must not cut off audio some OTHER still-mounted consumer
+  // started. Consumers that need "stop when I go away" (GuideBubble,
+  // AgentHero) already call stop() explicitly in their own unmount effect.
 
   // Exposed so consumers can prime synchronously inside their OWN click
   // handlers too, not just this hook's toggle(). Needed for a real gap:
