@@ -12,7 +12,7 @@ import { GLASSBOX_GUIDE, GUIDE_ELEVENLABS_VOICE_ID, GUIDE_KOKORO_VOICE_ID } from
  * word gets proportionally more of the highlighted timeline. Purely a
  * rendering concern local to GuideBubble; doesn't touch voice state.
  */
-function useCaptionSweep(message: string) {
+export function useCaptionSweep(message: string) {
   const tokens = useMemo(() => message.split(/(\s+)/), [message]);
   const wordPositions = useMemo(
     () => tokens.map((t, i) => (/^\s+$/.test(t) ? -1 : i)).filter((i) => i >= 0),
@@ -100,6 +100,30 @@ export function GuideAvatar({ size = 38 }: { size?: number }) {
  * cleanly (the `key`-driven remount from step to step in OnboardingFlow
  * already causes this unmount naturally).
  */
+/** Renders a message as either the plain string or, mid-speech, the
+ * word-by-word highlighted caption sweep -- shared by GuideBubble and
+ * AriaHero so the two identical caption-rendering blocks don't drift. */
+export function CaptionText({ message, caption }: { message: string; caption: ReturnType<typeof useCaptionSweep> }) {
+  if (!caption.speaking) return <>{message}</>;
+  let wordPos = -1;
+  return (
+    <>
+      {caption.tokens.map((tok, i) => {
+        if (/^\s+$/.test(tok)) return tok;
+        wordPos += 1;
+        const pos = wordPos;
+        const cls =
+          pos < caption.activeWord ? "text-t1" : pos === caption.activeWord ? "font-bold text-teal" : "opacity-45";
+        return (
+          <span key={i} className={cls}>
+            {tok}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 export function GuideBubble({
   message,
   compact = false,
@@ -193,7 +217,7 @@ export function GuideBubble({
             type="button"
             onClick={handleToggleVoice}
             aria-pressed={voice.enabled}
-            aria-label={voice.enabled ? "Turn off GlassBox Guide voice" : "Turn on GlassBox Guide voice"}
+            aria-label={voice.enabled ? `Turn off ${GLASSBOX_GUIDE.name}'s voice` : `Turn on ${GLASSBOX_GUIDE.name}'s voice`}
             title={voice.enabled ? "Voice on" : "Voice off"}
             className={`shrink-0 rounded-r4 border px-sp2 py-0.5 text-[10px] font-semibold ${
               voice.enabled ? "border-teal/30 text-teal" : "border-border2 text-t4"
@@ -205,7 +229,7 @@ export function GuideBubble({
         <button
           type="button"
           onClick={handleSpeak}
-          aria-label="Hear this from GlassBox Guide"
+          aria-label={`Hear this from ${GLASSBOX_GUIDE.name}`}
           title="Hear this"
           className="mb-sp2 inline-flex shrink-0 items-center gap-1 rounded-r4 border border-teal/30 px-sp2 py-0.5 text-[10px] font-semibold text-teal hover:bg-teal/10"
         >
@@ -215,27 +239,7 @@ export function GuideBubble({
           <p
             className={`min-w-0 flex-1 break-words text-t2 ${compact ? "text-[12px]" : "text-[13px] leading-relaxed"}`}
           >
-            {caption.speaking
-              ? (() => {
-                  let wordPos = -1;
-                  return caption.tokens.map((tok, i) => {
-                    if (/^\s+$/.test(tok)) return tok;
-                    wordPos += 1;
-                    const pos = wordPos;
-                    const cls =
-                      pos < caption.activeWord
-                        ? "text-t1"
-                        : pos === caption.activeWord
-                          ? "font-bold text-teal"
-                          : "opacity-45";
-                    return (
-                      <span key={i} className={cls}>
-                        {tok}
-                      </span>
-                    );
-                  });
-                })()
-              : message}
+            <CaptionText message={message} caption={caption} />
           </p>
         </div>
       </div>

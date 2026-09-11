@@ -18,7 +18,7 @@ import type { ConcernId } from "@/components/onboarding/types";
  */
 export const GLASSBOX_GUIDE = {
   id: "glassbox-guide",
-  name: "GlassBox Guide",
+  name: "Aria",
   role: "Verification Copilot",
   accent: "teal",
   description:
@@ -28,12 +28,14 @@ export const GLASSBOX_GUIDE = {
 export const GUIDE_INTRO_MESSAGE =
   "I'll help you set up GlassBox around what matters to you. About 2 minutes.";
 
-export const GUIDE_STEP_MESSAGES: Record<0 | 1 | 2 | 3 | 4, string> = {
-  0: "Pick the agent you'd like to guide you through setup. Each one reads the same verified evidence, just with a different emphasis -- you can change your mind anytime before you continue.",
-  1: "First, tell me what you want GlassBox to watch most closely. I'll use this to prioritize your dashboard, reports, and alerts.",
-  2: "Now give me the holdings you want GlassBox to monitor. Connect a supported portfolio source or enter tickers manually.",
-  3: "Here's your first GlassBox verification. Instead of asking you to trust an AI-generated score, GlassBox exposes the data behind it and independently checks the result.",
-  4: "Last step. Tell me when something is important enough to get your attention.",
+// One hero, four real steps -- no separate agent-pick step (retired; see
+// OnboardingFlow.tsx/AriaHero.tsx). Index 0 is the first real step
+// (Your concern), matching STEP_LABELS in types.ts.
+export const GUIDE_STEP_MESSAGES: Record<0 | 1 | 2 | 3, string> = {
+  0: "First, tell me what you want GlassBox to watch most closely. I'll use this to prioritize your dashboard, reports, and alerts.",
+  1: "Now give me the holdings you want GlassBox to monitor. Connect a supported portfolio source or enter tickers manually.",
+  2: "Here's your first GlassBox verification. Instead of asking you to trust an AI-generated score, GlassBox exposes the data behind it and independently checks the result.",
+  3: "Last step. Tell me when something is important enough to get your attention.",
 };
 
 /** Deterministic (no LLM) contextual acknowledgement per concern

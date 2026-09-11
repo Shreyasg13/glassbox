@@ -17,7 +17,7 @@ let sharedEnabled = false;
 const listeners = new Set<() => void>();
 
 // One <audio> element (and its supporting cache/request-id state) for the
-// WHOLE PAGE, not per hook instance. GuideBubble and AgentHero both call
+// WHOLE PAGE, not per hook instance. GuideBubble and AriaHero both call
 // useLensVoice() and can be mounted at the same time (onboarding sidebar),
 // so a per-instance audioRef let two real ElevenLabs/Kokoro clips play at
 // once -- audible overlap, reported directly. Mirrors sharedEnabled above:
@@ -276,7 +276,7 @@ export function useLensVoice() {
   // shared for the whole page (see sharedAudio above), so one consumer
   // unmounting must not cut off audio some OTHER still-mounted consumer
   // started. Consumers that need "stop when I go away" (GuideBubble,
-  // AgentHero) already call stop() explicitly in their own unmount effect.
+  // AriaHero) already call stop() explicitly in their own unmount effect.
 
   // Exposed so consumers can prime synchronously inside their OWN click
   // handlers too, not just this hook's toggle(). Needed for a real gap:

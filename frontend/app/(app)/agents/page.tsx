@@ -118,7 +118,7 @@ export default function MyAgentsPage() {
               </p>
               {guideOpen && (
                 <p className="mt-sp2 rounded-r2 border border-border bg-bg2 p-sp3 text-[11.5px] leading-relaxed text-t3">
-                  GlassBox Guide explains scores, evidence, reports, and alerts -- it doesn&apos;t
+                  {GLASSBOX_GUIDE.name} explains scores, evidence, reports, and alerts -- it doesn&apos;t
                   trade or generate signals itself. Conversational Q&amp;A isn&apos;t built yet;
                   this panel is a placeholder for that, not a live chat.
                 </p>

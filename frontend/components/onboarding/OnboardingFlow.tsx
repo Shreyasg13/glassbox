@@ -5,15 +5,12 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useLensVoice } from "@/lib/useLensVoice";
 import { StepIndicator } from "./StepIndicator";
-import { StepAgent } from "./StepAgent";
 import { StepConcern } from "./StepConcern";
 import { StepPortfolio } from "./StepPortfolio";
 import { StepVerify } from "./StepVerify";
 import { StepAlerts } from "./StepAlerts";
 import { GuideAvatar, GuideBubble } from "./GuideBubble";
-import { AgentHero } from "./AgentHero";
-import { AgentAvatar } from "./AgentAvatar";
-import { DEFAULT_AGENT_ID, getAgentPersona } from "./agentPersonas";
+import { AriaHero } from "./AriaHero";
 import { initialOnboardingState, type OnboardingState } from "./types";
 import {
   GLASSBOX_GUIDE,
@@ -27,7 +24,12 @@ import {
   onboardingCompleteKey,
 } from "@/lib/glassboxGuide";
 
-const LAST_STEP = 4;
+// Four real steps -- Your concern, Portfolio, First verify, Alerts. The
+// agent-pick step that used to sit at index 0 is retired: it was a second,
+// confusing identity alongside Aria (the actual, single guide persona),
+// not a feature anyone's flow depended on downstream (OnboardingState's
+// old agentId was cosmetic-only, never read outside this file).
+const LAST_STEP = 3;
 
 type Persisted = { step: number; state: OnboardingState };
 
@@ -45,16 +47,10 @@ export function OnboardingFlow() {
   // below, synchronously, because it must be a real user gesture for
   // mobile Safari's autoplay policy to ever allow the audio that follows.
   const voice = useLensVoice();
-  // -1 = the Guide intro screen, 0-4 = the real steps.
+  // -1 = the Guide intro screen, 0-3 = the real steps.
   const [step, setStep] = useState(-1);
   const [state, setState] = useState<OnboardingState>(initialOnboardingState);
   const [hydrated, setHydrated] = useState(false);
-  // Live preview while browsing the deck on step 0 -- not committed into
-  // persisted state until that step's Continue click (see the footer
-  // button below), so cancelling out of onboarding never leaves a
-  // half-chosen agentId behind.
-  const [previewAgentId, setPreviewAgentId] = useState(DEFAULT_AGENT_ID);
-  const effectiveAgentId = state.agentId ?? (step === 0 ? previewAgentId : DEFAULT_AGENT_ID);
 
   // Resume in-progress onboarding on refresh -- the only source of
   // truth for this (there's no backend onboarding endpoint at all yet;
@@ -104,16 +100,10 @@ export function OnboardingFlow() {
   }
 
   if (step === LAST_STEP + 1) {
-    const agent = getAgentPersona(state.agentId);
     return (
       <div className="mx-auto flex max-w-[440px] flex-col items-center gap-sp5 rounded-r4 glass-frost-surface p-sp8 text-center">
-        <div
-          className="grid place-items-center rounded-full border-2 p-1"
-          style={{ borderColor: agent.color }}
-        >
-          <AgentAvatar face={agent.face} color={agent.color} size={56} showCheck />
-        </div>
-        <div className="text-[16px] font-extrabold text-t1">{agent.name} is active</div>
+        <GuideAvatar size={56} />
+        <div className="text-[16px] font-extrabold text-t1">You&apos;re all set</div>
         <GuideBubble message={GUIDE_COMPLETE_MESSAGE} compact />
         <div className="grid w-full grid-cols-1 gap-sp2 rounded-r2 border border-border bg-bg2 p-sp4 text-[12.5px] text-t2 sm:grid-cols-3">
           <div>
@@ -168,42 +158,28 @@ export function OnboardingFlow() {
     );
   }
 
-  function handleContinue() {
-    if (step === 0) {
-      patch({ agentId: previewAgentId });
-      setStep(1);
-      return;
-    }
-    setStep(step + 1);
-  }
+  const stepMessage = GUIDE_STEP_MESSAGES[step as 0 | 1 | 2 | 3];
 
   return (
     <div className="mx-auto grid max-w-[880px] grid-cols-1 gap-sp5 lg:grid-cols-[220px_1fr]">
       <div className="hidden lg:block">
         <div className="sticky top-sp5">
-          <AgentHero agentId={effectiveAgentId} />
-          <div className="rounded-r3 glass-frost-surface p-sp4">
-            <GuideBubble
-              key={step}
-              message={GUIDE_STEP_MESSAGES[step as 0 | 1 | 2 | 3 | 4]}
-              autoSpeak
-            />
-            {step === 1 && state.concern && (
-              <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-teal">
-                {GUIDE_CONCERN_ACK[state.concern]}
-              </p>
-            )}
-            {step === 2 && (
-              <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-teal">
-                {guidePortfolioMessage(state.tickers.length)}
-              </p>
-            )}
-            {step === 4 && (
-              <p className="mt-sp3 border-t border-border pt-sp3 text-[12px] text-t3">
-                {GUIDE_ALERTS_RECOMMENDATION}
-              </p>
-            )}
-          </div>
+          <AriaHero key={step} message={stepMessage} autoSpeak />
+          {step === 0 && state.concern && (
+            <p className="-mt-sp2 mb-sp4 rounded-r3 border border-teal/[0.18] bg-teal/[0.05] p-sp3 text-[12px] text-teal">
+              {GUIDE_CONCERN_ACK[state.concern]}
+            </p>
+          )}
+          {step === 1 && (
+            <p className="-mt-sp2 mb-sp4 rounded-r3 border border-teal/[0.18] bg-teal/[0.05] p-sp3 text-[12px] text-teal">
+              {guidePortfolioMessage(state.tickers.length)}
+            </p>
+          )}
+          {step === 3 && (
+            <p className="-mt-sp2 mb-sp4 rounded-r3 border border-border bg-bg2 p-sp3 text-[12px] text-t3">
+              {GUIDE_ALERTS_RECOMMENDATION}
+            </p>
+          )}
         </div>
       </div>
 
@@ -211,32 +187,29 @@ export function OnboardingFlow() {
         {/* Compact Guide message for tablet/mobile -- stacked above the
             form, never side-by-side (spec: no side-by-side below desktop). */}
         <div className="shrink-0 border-b border-border p-sp4 lg:hidden">
-          <AgentHero agentId={effectiveAgentId} />
-          <GuideBubble key={step} message={GUIDE_STEP_MESSAGES[step as 0 | 1 | 2 | 3 | 4]} compact />
+          <AriaHero key={step} message={stepMessage} compact />
         </div>
 
         <div className="shrink-0 p-sp6 pb-0">
           <StepIndicator step={step} />
         </div>
 
-        {/* Bounded + independently scrollable, so a tall step (e.g. Step 1's
-            Risk meter) always stays reachable via a visible scrollbar
-            instead of running under the viewport fold with no cue -- and
-            the Back/Continue footer below never gets pushed off-screen
-            with it. */}
+        {/* Bounded + independently scrollable, so a tall step always
+            stays reachable via a visible scrollbar instead of running
+            under the viewport fold with no cue -- and the Back/Continue
+            footer below never gets pushed off-screen with it. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-sp6 py-sp4">
-          {step === 0 && <StepAgent selectedId={previewAgentId} onSelect={setPreviewAgentId} />}
-          {step === 1 && (
+          {step === 0 && (
             <StepConcern value={state.concern} onChange={(concern) => patch({ concern })} />
           )}
-          {step === 2 && (
+          {step === 1 && (
             <StepPortfolio tickers={state.tickers} onTickersChange={(tickers) => patch({ tickers })} />
           )}
-          {step === 3 && <StepVerify tickers={state.tickers} />}
-          {step === 4 && <StepAlerts state={state} onChange={patch} />}
+          {step === 2 && <StepVerify tickers={state.tickers} />}
+          {step === 3 && <StepAlerts state={state} onChange={patch} />}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between border-t border-border px-sp6 py-sp4">
+        <div className="flex shrink-0 items-center gap-sp3 border-t border-border px-sp6 py-sp4">
           <button
             type="button"
             onClick={() => (step === 0 ? router.push("/dashboard") : setStep(step - 1))}
@@ -244,12 +217,15 @@ export function OnboardingFlow() {
           >
             {step === 0 ? "Cancel" : "Back"}
           </button>
+          {/* Pinned to the right with a fixed floor width, not flex:1 --
+              a full-width Continue button left Back visually stranded at
+              the far edge with no relationship to it. */}
           <button
             type="button"
-            onClick={handleContinue}
-            className="rounded-r2 bg-teal px-sp5 py-sp2 text-[14px] font-bold text-bg shadow-teal transition-transform hover:-translate-y-px hover:bg-teal2"
+            onClick={() => setStep(step + 1)}
+            className="ml-auto min-w-[170px] rounded-r2 bg-teal px-sp5 py-sp2 text-[14px] font-bold text-bg shadow-teal transition-transform hover:-translate-y-px hover:bg-teal2"
           >
-            {step === 0 ? "Continue with this agent →" : step === LAST_STEP ? "Finish →" : "Continue →"}
+            {step === LAST_STEP ? "Finish →" : "Continue →"}
           </button>
         </div>
       </div>
