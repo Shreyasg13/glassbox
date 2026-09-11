@@ -136,6 +136,15 @@ export function useLensVoice() {
 
   const stop = useCallback(() => {
     sharedAudio?.pause();
+    // Also invalidates any in-flight speak() fetch (see the requestId
+    // check below) -- without this, calling stop() while a request was
+    // still in the air didn't prevent it from starting playback once it
+    // resolved a moment later, which read as "the old screen's narration
+    // ignored Back/Continue." A normal step transition already bumps
+    // this via the next speak() call; this covers stop() called with no
+    // follow-up speak() (voice toggled off, or a component unmounting
+    // with nothing new to say).
+    sharedRequestId++;
     try {
       window.speechSynthesis?.cancel();
     } catch {
@@ -228,7 +237,17 @@ export function useLensVoice() {
         }
       }
 
-      const cached = sharedCache.get(personaId);
+      // Real bug this fixes: the cache used to be keyed by personaId alone.
+      // Aria (GLASSBOX_GUIDE.id) narrates a DIFFERENT message on every
+      // onboarding step under that same single id, so once step 1's line
+      // was cached, every later step's speak() call hit that same cache
+      // entry and replayed step 1's audio verbatim -- captions and the
+      // visible step text moved on, the actual sound never did. Keying by
+      // (personaId, text) together means a genuinely new line always
+      // fetches fresh; a truly repeated line (e.g. re-clicking "Hear
+      // this") still hits the cache as before.
+      const cacheKey = `${personaId}::${text}`;
+      const cached = sharedCache.get(cacheKey);
       if (cached) {
         playUrl(cached);
         return;
@@ -258,7 +277,7 @@ export function useLensVoice() {
         }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
-        sharedCache.set(personaId, url);
+        sharedCache.set(cacheKey, url);
         playUrl(url);
       } catch {
         if (myRequestId === sharedRequestId) {
