@@ -442,7 +442,13 @@ future pass.
 
 ## Task list
 
-- [ ] **New:** Deploy Phase 14 to the VM.
+- [x] Deploy Phase 14 to the VM — same `git archive` + `gcloud compute
+      scp` convention, this time with the VM's tracked directories
+      cleared before extraction (plain tar-over-existing doesn't
+      remove files a commit deleted, e.g. the retired agent-picker
+      components) so the VM matches the repo exactly. Both containers
+      up clean, `/health`, `/onboarding`, and `/dashboard` all 200 on
+      the live domain post-deploy.
 - [ ] **New:** Fix `StepPortfolio.tsx`'s nested button
       (`ExplainTooltip` inside the "Connect portfolio" tab) — real
       hydration warning, found during Phase 14's verification, not
