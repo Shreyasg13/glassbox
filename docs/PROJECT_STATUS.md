@@ -398,8 +398,13 @@ errors along the way.
 ## Task list
 
 - [x] Push Phase 12 + 13's commits (done this session).
-- [ ] **New:** Deploy Phase 12/13/13b to the VM (in progress this
-      session).
+- [x] Deploy Phase 12/13/13b to the VM — `git archive` tarball
+      (deploy convention this repo actually uses; `.env` preserved,
+      not overwritten) shipped via `gcloud compute scp`, extracted
+      over `~/glassbox`, `docker compose up -d --build`. Both
+      containers came up clean (`docker compose ps`/logs show no
+      errors) and `https://glassbox-portfolio-review.duckdns.org/health`
+      returns `{"status":"ok"}` post-deploy.
 - [ ] Decide whether to retrofit the other dashboard panels
       (PortfolioOverviewPanel, StressTestPanel, AgentPerformancePanel,
       TrackComparisonPanel) to `GlassPanel variant="frost"` for visual
