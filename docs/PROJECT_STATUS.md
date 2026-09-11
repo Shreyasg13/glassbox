@@ -4,7 +4,7 @@ Living document. Update this whenever a phase completes, a bug is found,
 or scope changes — this is the single place to check "where are we" and
 "what's next" without re-deriving it from chat history.
 
-**Last updated:** 2026-09-08
+**Last updated:** 2026-09-11
 
 ## Live deployment
 
@@ -309,16 +309,61 @@ environment. Also not done: pushing to `origin`, touching
 `docker-compose.yml`/`deploy/Caddyfile`, or deploying to the VM — local
 commits on `main` only, by design for this pass.
 
+## Phase 13 — Portfolio growth/stats panels, voice + layout fixes (2026-09-11)
+
+Three commits, local on `main`, **not yet pushed to `origin`** (as of
+this writing) and not deployed to the VM. (Phase 12's own commits —
+the liquid-glass surface, captions, and the sector-allocation
+donut/insights panel — were pushed as part of this same push; they'd
+been sitting local since 2026-09-08.)
+
+1. **`PortfolioGrowthPanel`** — timeframe-toggled (7D/30D/90D/ALL) chart
+   over the real `/api/data` series; ranges longer than the on-disk
+   sample are disabled and clearly marked rather than silently
+   truncated.
+2. **`StatsBoard`** — surfaces the already-computed but previously
+   unused `/api/daily-summary` risk/return metrics (Sharpe, max
+   drawdown, win rate) plus new real P&L/turnover numbers from a new
+   `GET /api/portfolio-stats` (`data_source.get_portfolio_stats`): FIFO
+   realized-P&L matching and unrealized P&L from live prices, ported
+   from `backend-source/DAILY_PNL.py`'s `DailyPnLTracker` rather than
+   reimplemented. `has_trade_history` distinguishes a real zero from
+   "no trades recorded yet" so an empty `portfolio.json`/`trades.json`
+   renders an honest empty state instead of misleading zeros.
+3. **`MissedOpportunitiesPanel`** — derives "strong signal, no matching
+   trade" candidates client-side (same pattern `InsightsAlertsPanel`
+   already uses), with an admin-only "Generate AI take" action hitting
+   a new `POST /api/insights/narrate` background job (mirrors
+   `reports.py`'s `generate_report` machinery: `complete_with_logging`,
+   audit log, WS/poll status) that narrates the candidates it's handed
+   rather than re-deriving its own definition server-side.
+4. Two bugfixes riding along: `useLensVoice`'s `<audio>` element was
+   per-hook-instance, so `GuideBubble` and `AgentHero` (both mounted at
+   once in the onboarding sidebar) could genuinely play two voices
+   concurrently — moved to module-level shared state so starting
+   playback anywhere pauses whatever else was playing. And the
+   onboarding sidebar's Guide bubble was clipping text mid-word because
+   `min-w-0` was missing through the flex chain in the fixed-220px
+   column — added `min-w-0`/`break-words`/`flex-wrap` through it.
+
+**Verified:** `tsc --noEmit` clean, all 106 existing backend pytest
+tests still pass, and a live logged-in dashboard screenshot confirmed
+every new panel renders against real data with no console errors. This
+also stands in for Phase 12's previously-outstanding authenticated-
+browser check (donut/insights panel, liquid-glass surface) since
+they're on the same dashboard page — captions weren't specifically
+re-checked this pass. **Not verified:** an actual VM deploy (still
+local-only until pushed and deployed).
+
 ## Task list
 
-- [ ] **New:** Do the authenticated-browser visual check for Phase 12
-      (see "Not verified" above) before deploying it.
-- [ ] **New:** Decide whether to retrofit the other dashboard panels
+- [x] Push Phase 12's 3 commits (done this pass, bundled with Phase 13).
+- [ ] **New:** Push Phase 13's 3 commits and deploy both phases to the
+      VM.
+- [ ] Decide whether to retrofit the other dashboard panels
       (PortfolioOverviewPanel, StressTestPanel, AgentPerformancePanel,
       TrackComparisonPanel) to `GlassPanel variant="frost"` for visual
       consistency, or leave them on `variant="accent"`/`"panel"`.
-- [ ] **New:** Push Phase 12's 3 commits and deploy to the VM, once
-      visually verified.
 - [ ] Live-verify the 6 new onboarding-agent voice ids against a real
       `ELEVENLABS_API_KEY` (see the addendum note above) — currently
       known-catalog ids, not confirmed live.
