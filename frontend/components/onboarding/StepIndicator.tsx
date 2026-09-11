@@ -13,9 +13,7 @@ export function StepIndicator({ step }: { step: number }) {
         {STEP_LABELS.map((_, i) => (
           <div
             key={i}
-            className={`h-[3.5px] flex-1 rounded-[2px] ${
-              i < step ? "bg-teal" : i === step ? "bg-teal/35" : "bg-border2"
-            }`}
+            className={`h-[3.5px] flex-1 rounded-[2px] ${i <= step ? "bg-teal" : "bg-border2"}`}
           />
         ))}
       </div>
@@ -24,7 +22,7 @@ export function StepIndicator({ step }: { step: number }) {
           <div
             key={label}
             className={`flex-1 text-center text-[9px] font-semibold uppercase tracking-wide ${
-              i === step ? "text-teal" : i < step ? "text-t2" : "text-t4"
+              i === step ? "text-teal" : i < step ? "text-t2" : "text-t3"
             }`}
           >
             {label}

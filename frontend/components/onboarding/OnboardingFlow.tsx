@@ -207,19 +207,24 @@ export function OnboardingFlow() {
         </div>
       </div>
 
-      <div className="rounded-r4 glass-frost-surface">
+      <div className="flex max-h-[calc(100vh-180px)] flex-col rounded-r4 glass-frost-surface">
         {/* Compact Guide message for tablet/mobile -- stacked above the
             form, never side-by-side (spec: no side-by-side below desktop). */}
-        <div className="border-b border-border p-sp4 lg:hidden">
+        <div className="shrink-0 border-b border-border p-sp4 lg:hidden">
           <AgentHero agentId={effectiveAgentId} />
           <GuideBubble key={step} message={GUIDE_STEP_MESSAGES[step as 0 | 1 | 2 | 3 | 4]} compact />
         </div>
 
-        <div className="p-sp6 pb-0">
+        <div className="shrink-0 p-sp6 pb-0">
           <StepIndicator step={step} />
         </div>
 
-        <div className="px-sp6 py-sp4">
+        {/* Bounded + independently scrollable, so a tall step (e.g. Step 1's
+            Risk meter) always stays reachable via a visible scrollbar
+            instead of running under the viewport fold with no cue -- and
+            the Back/Continue footer below never gets pushed off-screen
+            with it. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-sp6 py-sp4">
           {step === 0 && <StepAgent selectedId={previewAgentId} onSelect={setPreviewAgentId} />}
           {step === 1 && (
             <StepConcern value={state.concern} onChange={(concern) => patch({ concern })} />
@@ -231,7 +236,7 @@ export function OnboardingFlow() {
           {step === 4 && <StepAlerts state={state} onChange={patch} />}
         </div>
 
-        <div className="flex items-center justify-between border-t border-border px-sp6 py-sp4">
+        <div className="flex shrink-0 items-center justify-between border-t border-border px-sp6 py-sp4">
           <button
             type="button"
             onClick={() => (step === 0 ? router.push("/dashboard") : setStep(step - 1))}

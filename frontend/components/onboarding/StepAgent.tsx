@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { ExplainTooltip } from "@/components/ExplainTooltip";
 import { AgentAvatar } from "./AgentAvatar";
 import { AGENT_PERSONAS, getAgentPersona, hexToRgba } from "./agentPersonas";
+
+const CARD_STEP_PX = 164; // ~2 cards (74px + gap) per click
 
 function Meter({ value, color }: { value: number; color: string }) {
   return (
@@ -14,6 +17,38 @@ function Meter({ value, color }: { value: number; color: string }) {
 
 export function StepAgent({ selectedId, onSelect }: { selectedId: string; onSelect: (id: string) => void }) {
   const agent = getAgentPersona(selectedId);
+  const railRef = useRef<HTMLDivElement>(null);
+  // Real overflow, not hypothetical: 6 agent cards already don't all fit
+  // in view below ~1000px wide (confirmed at mobile/tablet widths), with
+  // native horizontal scroll as the only way to reach the rest and no cue
+  // that more exist. These two buttons page the rail and self-hide at
+  // each end, tracked off the rail's real scrollLeft/scrollWidth rather
+  // than assumed from the persona count.
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  function updateScrollState() {
+    const el = railRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }
+
+  useEffect(() => {
+    updateScrollState();
+    const el = railRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateScrollState, { passive: true });
+    window.addEventListener("resize", updateScrollState);
+    return () => {
+      el.removeEventListener("scroll", updateScrollState);
+      window.removeEventListener("resize", updateScrollState);
+    };
+  }, []);
+
+  function page(direction: -1 | 1) {
+    railRef.current?.scrollBy({ left: direction * CARD_STEP_PX, behavior: "smooth" });
+  }
 
   return (
     <div>
@@ -78,31 +113,58 @@ export function StepAgent({ selectedId, onSelect }: { selectedId: string; onSele
         </div>
       </div>
 
-      <div className="flex gap-sp2 overflow-x-auto pb-1" role="tablist" aria-label="Choose your agent">
-        {AGENT_PERSONAS.map((a) => {
-          const on = a.id === selectedId;
-          return (
-            <button
-              key={a.id}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => onSelect(a.id)}
-              className={`flex w-[74px] shrink-0 flex-col items-center gap-1 rounded-r2 border p-sp2 text-center transition-colors ${
-                on ? "" : "border-border bg-bg2 hover:border-border2"
-              }`}
-              style={on ? { borderColor: a.color, background: hexToRgba(a.color, 0.1) } : undefined}
-            >
-              <AgentAvatar face={a.face} color={a.color} size={42} />
-              <span
-                className="text-[10px] font-bold leading-tight"
-                style={{ color: on ? a.color : "var(--c-t2)" }}
+      <div className="relative">
+        {canScrollLeft && (
+          <button
+            type="button"
+            onClick={() => page(-1)}
+            aria-label="Show earlier agents"
+            className="absolute left-0 top-1/2 z-10 grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-border2 bg-panel text-[12px] font-bold text-t2 shadow-lg2 hover:border-teal hover:text-teal"
+          >
+            ‹
+          </button>
+        )}
+        <div
+          ref={railRef}
+          className="flex gap-sp2 overflow-x-auto scroll-smooth pb-1"
+          role="tablist"
+          aria-label="Choose your agent"
+        >
+          {AGENT_PERSONAS.map((a) => {
+            const on = a.id === selectedId;
+            return (
+              <button
+                key={a.id}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => onSelect(a.id)}
+                className={`flex w-[74px] shrink-0 flex-col items-center gap-1 rounded-r2 border p-sp2 text-center transition-colors ${
+                  on ? "" : "border-border bg-bg2 hover:border-border2"
+                }`}
+                style={on ? { borderColor: a.color, background: hexToRgba(a.color, 0.1) } : undefined}
               >
-                {a.name.replace("The ", "").replace(" Agent", "")}
-              </span>
-            </button>
-          );
-        })}
+                <AgentAvatar face={a.face} color={a.color} size={42} />
+                <span
+                  className="text-[10px] font-bold leading-tight"
+                  style={{ color: on ? a.color : "var(--c-t2)" }}
+                >
+                  {a.name.replace("The ", "").replace(" Agent", "")}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {canScrollRight && (
+          <button
+            type="button"
+            onClick={() => page(1)}
+            aria-label="Show more agents"
+            className="absolute right-0 top-1/2 z-10 grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-border2 bg-panel text-[12px] font-bold text-t2 shadow-lg2 hover:border-teal hover:text-teal"
+          >
+            ›
+          </button>
+        )}
       </div>
     </div>
   );
