@@ -84,7 +84,7 @@ export function PortfolioOverviewPanel({ initialData }: { initialData: HoldingsD
 
   if (!data || data.holdings.length === 0) {
     return (
-      <GlassPanel variant="accent" className="lg:col-span-2">
+      <GlassPanel variant="frost" className="lg:col-span-2">
         <h1 className="mb-sp2 text-[20px] font-extrabold text-t1">Portfolio Overview</h1>
         <p className="text-[13px] text-t3">No holdings data available right now.</p>
       </GlassPanel>
@@ -94,7 +94,7 @@ export function PortfolioOverviewPanel({ initialData }: { initialData: HoldingsD
   const { holdings, summary } = data;
 
   return (
-    <GlassPanel variant="accent" className="lg:col-span-2">
+    <GlassPanel variant="frost" className="lg:col-span-2">
       <div className="mb-sp5 flex items-center justify-between">
         <h1 className="text-[20px] font-extrabold text-t1">Portfolio Overview</h1>
         <div className="flex items-center gap-sp3">

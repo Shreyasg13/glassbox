@@ -58,7 +58,7 @@ export function TrackComparisonPanel({
   track2: TrackAgentsData | null;
 }) {
   return (
-    <GlassPanel variant="accent">
+    <GlassPanel variant="frost">
       <div className="mb-sp1 flex items-center justify-between">
         <h2 className="text-[15px] font-bold text-t1">Track Comparison</h2>
         <span className="text-[10.5px] text-t3">illustrative</span>
