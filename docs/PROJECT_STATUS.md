@@ -4,7 +4,7 @@ Living document. Update this whenever a phase completes, a bug is found,
 or scope changes — this is the single place to check "where are we" and
 "what's next" without re-deriving it from chat history.
 
-**Last updated:** 2026-09-11
+**Last updated:** 2026-09-11 (Phase 13b)
 
 ## Live deployment
 
@@ -311,11 +311,10 @@ commits on `main` only, by design for this pass.
 
 ## Phase 13 — Portfolio growth/stats panels, voice + layout fixes (2026-09-11)
 
-Three commits, local on `main`, **not yet pushed to `origin`** (as of
-this writing) and not deployed to the VM. (Phase 12's own commits —
-the liquid-glass surface, captions, and the sector-allocation
-donut/insights panel — were pushed as part of this same push; they'd
-been sitting local since 2026-09-08.)
+Three commits, pushed to `origin/main` this session (bundled with
+Phase 12's own commits — the liquid-glass surface, captions, and the
+sector-allocation donut/insights panel — which had been sitting local
+since 2026-09-08). Not yet deployed to the VM as of this writing.
 
 1. **`PortfolioGrowthPanel`** — timeframe-toggled (7D/30D/90D/ALL) chart
    over the real `/api/data` series; ranges longer than the on-disk
@@ -352,14 +351,55 @@ every new panel renders against real data with no console errors. This
 also stands in for Phase 12's previously-outstanding authenticated-
 browser check (donut/insights panel, liquid-glass surface) since
 they're on the same dashboard page — captions weren't specifically
-re-checked this pass. **Not verified:** an actual VM deploy (still
-local-only until pushed and deployed).
+re-checked this pass.
+
+## Phase 13b — Onboarding wizard fixes (2026-09-11)
+
+A follow-up bug report against the onboarding wizard (`/onboarding`,
+"Step 1 of 5" screen) listed six issues. Checked each against the real
+running app (backend :8000 + frontend :3000, logged in as `user`) via
+Playwright screenshots before touching anything, since two were
+already fixed by Phase 13's `3f30b90`/`c022e17`:
+
+- Guide copilot card clipped / audio button truncated / text
+  overflowing the main panel — **already fixed**, no reproduction at
+  1400x900 or 400x900.
+- Left sidebar cards overlapping the main panel — **already fixed**,
+  same screenshots.
+- Wizard Back/Continue navigation — **already present**
+  (`OnboardingFlow.tsx`'s Cancel/Back + Continue/Finish footer).
+- Stepper filled progress + inactive-label contrast — **real, fixed**:
+  the current-step segment was only 35%-opacity teal and inactive
+  labels used `--c-t4` (`#98a6c0` on white in light theme, barely
+  legible) — `StepIndicator.tsx` now fills every segment through the
+  current step solid teal and raises inactive labels to `--c-t3`.
+- Main panel scroll / Risk meter cut off at the bottom — **real,
+  fixed and reproduced first**: at a real 760px-tall viewport the step
+  card had no height bound, so the Risk meter and the Back/Continue
+  footer ran under the fold with the page's own un-cued scroll as the
+  only way to reach them (`scrollHeight` 993 vs `clientHeight` 760).
+  `OnboardingFlow.tsx`'s card is now capped at `calc(100vh-180px)`
+  with its content independently scrollable and the nav footer pinned
+  outside that scroll region — footer always reachable, rest scrolls
+  into view.
+- Agent carousel/pagination — **real, fixed and reproduced first**: 6
+  agent cards don't all fit below ~1000px wide (reproduced at 400px
+  and 900px — two of six scrolled out of view with zero affordance
+  that more existed). `StepAgent.tsx` gained prev/next paging buttons
+  over the existing scroll rail, shown/hidden off the rail's real
+  `scrollLeft`/`scrollWidth`.
+
+**Verified:** `tsc --noEmit` clean. Playwright screenshots + scroll-state
+checks at 1400x900, 1400x760, and 400x900 confirm no clipping/overlap,
+the Risk bar and footer both reachable at the short viewport, and the
+paging arrows correctly reveal the two hidden agents with zero console
+errors along the way.
 
 ## Task list
 
-- [x] Push Phase 12's 3 commits (done this pass, bundled with Phase 13).
-- [ ] **New:** Push Phase 13's 3 commits and deploy both phases to the
-      VM.
+- [x] Push Phase 12 + 13's commits (done this session).
+- [ ] **New:** Deploy Phase 12/13/13b to the VM (in progress this
+      session).
 - [ ] Decide whether to retrofit the other dashboard panels
       (PortfolioOverviewPanel, StressTestPanel, AgentPerformancePanel,
       TrackComparisonPanel) to `GlassPanel variant="frost"` for visual
