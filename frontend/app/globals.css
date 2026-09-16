@@ -299,3 +299,195 @@ textarea.input {
   height: 4px;
   animation: speak-wave 0.9s ease-in-out infinite;
 }
+
+/* ── NAV LOGO MOTION ──
+   No layered source art exists for the logo illustration (analyst/fish/
+   octopus are baked into one flattened PNG) -- see the .logo-porthole
+   comment below for how individual elements move anyway.
+
+   The base <img> itself (man, glass container, border, "GlassBox / See
+   the data. Invest smarter." wordmark) is completely static -- it does
+   NOT float/bob. It sits inside an overflow-hidden box exactly its own
+   size, so any transform on it would clip its edges against that box,
+   which is exactly the "borderline" shifting that must not happen. Only
+   the masked sub-regions below (water band, fish, rod, one tentacle,
+   dollar particles) move; everything else in the artwork stays put.
+
+   Everything "story" (rod, AAPL, the reaching tentacle) shares one 8s
+   cycle at the same 0% start so they read as a single sequence instead of
+   independent loops: idle float -> rod aims/dips -> AAPL is hooked and
+   pulled up -> just the nearest tentacle reaches for the catch -> risk
+   glow spikes -> everything eases back to idle. Only that one tentacle
+   moves, not the whole octopus body. The ambient wave fish
+   (NVDA/MSFT/TSLA) run their own separate, unsynced float loops since
+   they're just background water motion, not part of the catch beat.
+   Every keyframe uses several intermediate stops (not just 0/50/100)
+   specifically so motion reads as floating/reaching, not a snap-jump
+   between two poses. */
+
+@keyframes logo-dollar-rise {
+  0% { transform: translateY(6px) scale(0.7); opacity: 0; }
+  15% { opacity: 1; }
+  80% { opacity: 0.9; }
+  100% { transform: translateY(-22px) scale(1); opacity: 0; }
+}
+.logo-dollar {
+  position: absolute;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  color: #35e0b8;
+  text-shadow: 0 0 6px rgba(53, 224, 184, 0.9);
+  pointer-events: none;
+  animation-name: logo-dollar-rise;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+}
+/* AAPL's particle is part of the story beat, not ambient -- it should
+   only sparkle right as the hook connects (see logo-fish-catch timing). */
+@keyframes logo-dollar-catch {
+  0%, 44% { transform: translateY(6px) scale(0.6); opacity: 0; }
+  50% { opacity: 1; }
+  58% { transform: translateY(-6px) scale(1.15); opacity: 1; }
+  72% { transform: translateY(-16px) scale(1); opacity: 0.8; }
+  85%, 100% { transform: translateY(-20px) scale(0.9); opacity: 0; }
+}
+.logo-dollar-catch {
+  position: absolute;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  color: #35e0b8;
+  text-shadow: 0 0 6px rgba(53, 224, 184, 0.9);
+  pointer-events: none;
+  animation: logo-dollar-catch 8s ease-in-out infinite;
+}
+
+@keyframes logo-risk-pulse {
+  0%, 42% { opacity: 0.32; transform: scale(0.92); }
+  60% { opacity: 0.75; transform: scale(1.12); }
+  78% { opacity: 0.55; transform: scale(1.03); }
+  100% { opacity: 0.32; transform: scale(0.92); }
+}
+.logo-risk-glow {
+  position: absolute;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(227, 60, 60, 0.55), rgba(227, 60, 60, 0) 70%);
+  pointer-events: none;
+  animation: logo-risk-pulse 8s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+
+/* "Porthole" trick for moving individual painted elements (fish, rod,
+   one tentacle) that were never separate layers: each .logo-porthole is
+   a small window showing the SAME background image,
+   cropped + feathered to exactly match its spot over the base <img>, then
+   nudged a few degrees/pixels. Because it's pixel-identical to what's
+   underneath at rest, there's no seam -- just that one region moving
+   independently. background-size is fixed to the 150px nav mark this was
+   built for; if the mark's rendered size ever changes, these need to
+   change with it. */
+.logo-porthole {
+  position: absolute;
+  background-image: url(/logo-mark.png);
+  background-size: 150px 150px;
+  background-repeat: no-repeat;
+  -webkit-mask-image: radial-gradient(closest-side, black 55%, transparent 100%);
+  mask-image: radial-gradient(closest-side, black 55%, transparent 100%);
+  pointer-events: none;
+}
+
+/* Ambient wave fish (NVDA/MSFT/TSLA) -- gentle, continuous, multi-stop
+   float so it reads as bobbing on water, never a two-pose snap/jump. */
+@keyframes logo-fish-float-a {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(1px, -2.5px) rotate(-3deg); }
+  50% { transform: translate(0.5px, -3.5px) rotate(0deg); }
+  75% { transform: translate(-1px, -1.5px) rotate(3deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+@keyframes logo-fish-float-b {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(-1px, -2px) rotate(3deg); }
+  50% { transform: translate(-0.5px, -3px) rotate(0deg); }
+  75% { transform: translate(1px, -1px) rotate(-3deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+.logo-fish-a { animation: logo-fish-float-a 4.4s ease-in-out infinite; }
+.logo-fish-b { animation: logo-fish-float-b 4s ease-in-out infinite; }
+
+/* Story beat: AAPL floats like the others until the rod reaches it
+   (~44%), gets pulled up on the hook, then settles back to floating. */
+@keyframes logo-fish-catch {
+  0% { transform: translate(0, 0) rotate(0deg) scale(1); }
+  20% { transform: translate(1px, -2px) rotate(-2deg) scale(1); }
+  40% { transform: translate(0, -1px) rotate(0deg) scale(1); }
+  50% { transform: translate(-1px, -5px) rotate(-6deg) scale(1.05); }
+  62% { transform: translate(-2px, -11px) rotate(-10deg) scale(1.1); }
+  78% { transform: translate(-1px, -6px) rotate(-4deg) scale(1.03); }
+  100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+}
+.logo-fish-catch { animation: logo-fish-catch 8s ease-in-out infinite; }
+
+/* Story beat: rod idles, aims down toward AAPL, dips to set the hook,
+   lifts the catch, then returns to rest. */
+@keyframes logo-rod-story {
+  0%, 15% { transform: rotate(0deg); }
+  30% { transform: rotate(-7deg); }
+  44% { transform: rotate(-16deg); }
+  58% { transform: rotate(-9deg); }
+  75% { transform: rotate(-2deg); }
+  100% { transform: rotate(0deg); }
+}
+.logo-rod { animation: logo-rod-story 8s ease-in-out infinite; }
+
+/* Story beat: only the nearest tentacle (not the octopus body/head)
+   idles, then reaches out toward the catch right as it's being pulled up,
+   and retreats as the sequence resets. transform-origin should be set
+   near the tentacle's base/attachment point so it reaches rather than
+   just sliding. */
+@keyframes logo-tentacle-reach {
+  0%, 40% { transform: rotate(0deg) scale(1) translate(0, 0); }
+  58% { transform: rotate(-10deg) scale(1.08) translate(-4px, -2px); }
+  72% { transform: rotate(4deg) scale(1.02) translate(-1px, 0); }
+  100% { transform: rotate(0deg) scale(1) translate(0, 0); }
+}
+.logo-tentacles { animation: logo-tentacle-reach 8s ease-in-out infinite; }
+
+/* Water flow -- a horizontal band of the SAME image tiled with
+   background-repeat-x and scrolled left, wrapping every 150px (one full
+   image width) so the loop itself is seamless (t=7s is pixel-identical to
+   t=0). A linear mask fades the band's top/bottom edges into the rest of
+   the (static) art so there's no hard seam where the moving strip meets
+   the still image. background-position-y is set per-instance inline to
+   whatever vertical slice of water it's covering; only x scrolls. */
+.logo-water {
+  position: absolute;
+  background-image: url(/logo-mark.png);
+  background-repeat: repeat-x;
+  background-size: 150px 150px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  pointer-events: none;
+  animation: logo-water-flow 7s linear infinite;
+}
+@keyframes logo-water-flow {
+  from { background-position-x: 0px; }
+  to { background-position-x: -150px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-dollar,
+  .logo-dollar-catch,
+  .logo-risk-glow,
+  .logo-fish-a,
+  .logo-fish-b,
+  .logo-fish-catch,
+  .logo-rod,
+  .logo-tentacles,
+  .logo-water {
+    animation: none !important;
+  }
+}
