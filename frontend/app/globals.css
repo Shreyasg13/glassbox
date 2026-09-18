@@ -325,18 +325,23 @@ textarea.input {
    specifically so motion reads as floating/reaching, not a snap-jump
    between two poses. */
 
+/* translateY amounts and font-size/text-shadow are all calc(var(--logo-size)
+   * fraction) rather than fixed px -- these particles need to scale down
+   with the logo (68px mobile / 92px desktop) same as everything else, or
+   they'd read as oversized text sitting on top of a now-much-smaller mark. */
 @keyframes logo-dollar-rise {
-  0% { transform: translateY(6px) scale(0.7); opacity: 0; }
+  0% { transform: translateY(calc(var(--logo-size) * 0.04)) scale(0.7); opacity: 0; }
   15% { opacity: 1; }
   80% { opacity: 0.9; }
-  100% { transform: translateY(-22px) scale(1); opacity: 0; }
+  100% { transform: translateY(calc(var(--logo-size) * -0.147)) scale(1); opacity: 0; }
 }
 .logo-dollar {
   position: absolute;
   font-family: var(--font-mono, monospace);
   font-weight: 700;
+  font-size: calc(var(--logo-size) * 0.07);
   color: #35e0b8;
-  text-shadow: 0 0 6px rgba(53, 224, 184, 0.9);
+  text-shadow: 0 0 calc(var(--logo-size) * 0.04) rgba(53, 224, 184, 0.9);
   pointer-events: none;
   animation-name: logo-dollar-rise;
   animation-timing-function: ease-in;
@@ -345,18 +350,19 @@ textarea.input {
 /* AAPL's particle is part of the story beat, not ambient -- it should
    only sparkle right as the hook connects (see logo-fish-catch timing). */
 @keyframes logo-dollar-catch {
-  0%, 44% { transform: translateY(6px) scale(0.6); opacity: 0; }
+  0%, 44% { transform: translateY(calc(var(--logo-size) * 0.04)) scale(0.6); opacity: 0; }
   50% { opacity: 1; }
-  58% { transform: translateY(-6px) scale(1.15); opacity: 1; }
-  72% { transform: translateY(-16px) scale(1); opacity: 0.8; }
-  85%, 100% { transform: translateY(-20px) scale(0.9); opacity: 0; }
+  58% { transform: translateY(calc(var(--logo-size) * -0.04)) scale(1.15); opacity: 1; }
+  72% { transform: translateY(calc(var(--logo-size) * -0.107)) scale(1); opacity: 0.8; }
+  85%, 100% { transform: translateY(calc(var(--logo-size) * -0.133)) scale(0.9); opacity: 0; }
 }
 .logo-dollar-catch {
   position: absolute;
   font-family: var(--font-mono, monospace);
   font-weight: 700;
+  font-size: calc(var(--logo-size) * 0.07);
   color: #35e0b8;
-  text-shadow: 0 0 6px rgba(53, 224, 184, 0.9);
+  text-shadow: 0 0 calc(var(--logo-size) * 0.04) rgba(53, 224, 184, 0.9);
   pointer-events: none;
   animation: logo-dollar-catch 8s ease-in-out infinite;
 }
@@ -382,13 +388,17 @@ textarea.input {
    cropped + feathered to exactly match its spot over the base <img>, then
    nudged a few degrees/pixels. Because it's pixel-identical to what's
    underneath at rest, there's no seam -- just that one region moving
-   independently. background-size is fixed to the 150px nav mark this was
-   built for; if the mark's rendered size ever changes, these need to
-   change with it. */
+   independently. background-size reads the --logo-size custom property
+   set on the logo's wrapping container (see MarketingNav.tsx), so this
+   scales automatically with the logo's rendered size at any breakpoint --
+   nothing here is tied to a fixed pixel size. Each instance's
+   background-position is likewise `calc(var(--logo-size) * -fraction)`,
+   where fraction matches that instance's own left%/top% (divided by 100)
+   so the crop always lines up regardless of --logo-size. */
 .logo-porthole {
   position: absolute;
   background-image: url(/logo-mark.png);
-  background-size: 150px 150px;
+  background-size: var(--logo-size) var(--logo-size);
   background-repeat: no-repeat;
   -webkit-mask-image: radial-gradient(closest-side, black 55%, transparent 100%);
   mask-image: radial-gradient(closest-side, black 55%, transparent 100%);
@@ -453,17 +463,18 @@ textarea.input {
 .logo-tentacles { animation: logo-tentacle-reach 8s ease-in-out infinite; }
 
 /* Water flow -- a horizontal band of the SAME image tiled with
-   background-repeat-x and scrolled left, wrapping every 150px (one full
-   image width) so the loop itself is seamless (t=7s is pixel-identical to
-   t=0). A linear mask fades the band's top/bottom edges into the rest of
-   the (static) art so there's no hard seam where the moving strip meets
-   the still image. background-position-y is set per-instance inline to
+   background-repeat-x and scrolled left-to-right, wrapping every
+   --logo-size (one full image width) so the loop itself is seamless
+   (t=7s is pixel-identical to t=0) at whatever size the logo renders at.
+   A linear mask fades the band's top/bottom edges into the rest of the
+   (static) art so there's no hard seam where the moving strip meets the
+   still image. background-position-y is set per-instance inline to
    whatever vertical slice of water it's covering; only x scrolls. */
 .logo-water {
   position: absolute;
   background-image: url(/logo-mark.png);
   background-repeat: repeat-x;
-  background-size: 150px 150px;
+  background-size: var(--logo-size) var(--logo-size);
   -webkit-mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
   mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
   -webkit-mask-repeat: no-repeat;
@@ -475,7 +486,7 @@ textarea.input {
 }
 @keyframes logo-water-flow {
   from { background-position-x: 0px; }
-  to { background-position-x: -150px; }
+  to { background-position-x: var(--logo-size); }
 }
 
 @media (prefers-reduced-motion: reduce) {
