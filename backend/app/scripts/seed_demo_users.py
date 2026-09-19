@@ -9,8 +9,9 @@ The archetypes are deliberately spread across risk level, horizon and asset mix
 (growth, income, index, financials, diversified, 60/40, all-weather, quality,
 momentum, cyclical, capital preservation) so that when per-profile paper
 tracking exists, an agent that only works on one kind of portfolio shows up.
-Every ticker must be inside data_source.STOCK_INFO (the 15 symbols with price
-history on the server) -- tests enforce that.
+The profiles themselves live in app/paper_profiles.py (also used by the
+paper-trading cycle, which does NOT need these logins to exist). Every ticker must
+be inside data_source.STOCK_INFO -- tests enforce that.
 
 Run via: python -m app.scripts.seed_demo_users
 
@@ -36,91 +37,17 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from app import auth, db
+from app import auth, db, paper_profiles
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("seed_demo_users")
 
-STARTING_CASH = 100_000  # matches the system portfolio's initial capital
-
+# One login per profile in the shared registry (app/paper_profiles.py, which is
+# also what the paper-trading cycle simulates -- with or without these logins).
+# Passwords are demo-pass-1 .. demo-pass-N in registry order.
 DEMO_USERS = [
-    {
-        "username": "demo_growth",
-        "password": "demo-pass-1",
-        "tickers": ["AAPL", "NVDA", "TSLA"],
-        "note": "Aggressive tech growth",
-        "profile": {"archetype": "growth", "risk_level": "aggressive", "horizon_years": 10, "starting_cash": STARTING_CASH},
-    },
-    {
-        "username": "demo_income",
-        "password": "demo-pass-2",
-        "tickers": ["JNJ", "V", "TLT"],
-        "note": "Defensive / income-oriented",
-        "profile": {"archetype": "income", "risk_level": "conservative", "horizon_years": 5, "starting_cash": STARTING_CASH},
-    },
-    {
-        "username": "demo_index",
-        "password": "demo-pass-3",
-        "tickers": ["SPY", "QQQ", "IWM"],
-        "note": "Broad index / ETF core",
-        "profile": {"archetype": "index", "risk_level": "moderate", "horizon_years": 15, "starting_cash": STARTING_CASH},
-    },
-    {
-        "username": "demo_finance",
-        "password": "demo-pass-4",
-        "tickers": ["JPM", "V", "GOOGL"],
-        "note": "Financials + mega-cap tilt",
-        "profile": {"archetype": "financials", "risk_level": "moderate", "horizon_years": 7, "starting_cash": STARTING_CASH},
-    },
-    {
-        "username": "demo_diversified",
-        "password": "demo-pass-5",
-        "tickers": ["AAPL", "JPM", "JNJ", "GLD", "TLT"],
-        "note": "Multi-sector diversified (5 symbols)",
-        "profile": {"archetype": "diversified", "risk_level": "moderate", "horizon_years": 10, "starting_cash": STARTING_CASH},
-    },
-    {
-        "username": "demo_balanced",
-        "password": "demo-pass-6",
-        "tickers": ["SPY", "TLT"],
-        "note": "Balanced 60/40 -- the classic institutional baseline",
-        "profile": {"archetype": "balanced_60_40", "risk_level": "moderate", "horizon_years": 10, "starting_cash": STARTING_CASH},
-    },
-    {
-        "username": "demo_allweather",
-        "password": "demo-pass-7",
-        "tickers": ["SPY", "TLT", "GLD"],
-        "note": "All-weather / risk-parity style -- tests drawdown control",
-        "profile": {"archetype": "all_weather", "risk_level": "conservative", "horizon_years": 15, "starting_cash": STARTING_CASH},
-    },
-    {
-        "username": "demo_quality",
-        "password": "demo-pass-8",
-        "tickers": ["MSFT", "GOOGL", "AAPL", "V", "JNJ"],
-        "note": "Quality mega-cap compounding",
-        "profile": {"archetype": "quality_megacap", "risk_level": "moderate", "horizon_years": 10, "starting_cash": STARTING_CASH},
-    },
-    {
-        "username": "demo_momentum",
-        "password": "demo-pass-9",
-        "tickers": ["NVDA", "META", "TSLA", "QQQ"],
-        "note": "Concentrated momentum -- high volatility, tests risk management",
-        "profile": {"archetype": "momentum", "risk_level": "aggressive", "horizon_years": 5, "starting_cash": STARTING_CASH},
-    },
-    {
-        "username": "demo_cyclical",
-        "password": "demo-pass-10",
-        "tickers": ["IWM", "JPM", "AMZN", "TSLA"],
-        "note": "Cyclical / small-cap -- tests regime sensitivity",
-        "profile": {"archetype": "cyclical_smallcap", "risk_level": "aggressive", "horizon_years": 7, "starting_cash": STARTING_CASH},
-    },
-    {
-        "username": "demo_preserve",
-        "password": "demo-pass-11",
-        "tickers": ["TLT", "JNJ", "GLD", "V"],
-        "note": "Capital preservation -- low-risk mandate",
-        "profile": {"archetype": "capital_preservation", "risk_level": "conservative", "horizon_years": 3, "starting_cash": STARTING_CASH},
-    },
+    {**entry, "password": f"demo-pass-{i}"}
+    for i, entry in enumerate(paper_profiles.DEMO_PROFILES, start=1)
 ]
 
 

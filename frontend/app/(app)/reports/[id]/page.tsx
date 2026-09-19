@@ -25,7 +25,10 @@ export default function ReportDetailPage() {
   return (
     <div className="flex flex-col gap-sp5">
       <div className="flex items-center justify-between">
-        <h1 className="mono text-[18px] font-bold text-t1">{data.date}</h1>
+        <h1 className="mono text-[18px] font-bold text-t1">
+          {data.date}
+          {data.title && <span className="ml-sp3 font-sans text-[14px] font-semibold text-t2">{data.title}</span>}
+        </h1>
         <span className="text-[11px] font-semibold uppercase text-t3">
           {data.provider} · {data.model}
         </span>

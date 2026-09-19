@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import Optional
+import time
+from typing import Optional, Set
 
 import httpx
 
@@ -36,6 +37,15 @@ from .base import BaseProvider, NotConfiguredError, OnToken
 # lower than initially assumed: staggering launches 0.4s apart still
 # left 6 of 7 calls 429'd), while a 503 "high demand" typically clears
 # in a couple seconds and doesn't need as long a wait.
+class ModelUnavailableError(RuntimeError):
+    """HTTP 404: this model id doesn't exist, or isn't served to this key.
+    Never retryable, and worth remembering (see gemini_quota.mark_unavailable)
+    -- distinct from 429/503, which are transient. Message text is kept
+    identical to the old generic 404 error so existing log filters still match."""
+
+
+_MODELS_TTL_S = 6 * 60 * 60.0  # how long a successful ListModels result is trusted
+_MODELS_FAIL_TTL_S = 5 * 60.0  # how long a FAILED lookup suppresses re-asking
 _RETRYABLE_STATUS = {429, 503}
 _MAX_ATTEMPTS = 3
 _BACKOFF_BASE_S = {429: 12.0, 503: 2.0}
@@ -56,6 +66,44 @@ class GeminiProvider(BaseProvider):
         kwargs.setdefault("failure_threshold", 30)
         super().__init__(**kwargs)
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
+        self._models_cache: Optional[tuple] = None  # (fetched_at_monotonic, set-or-None)
+
+    async def available_models(self) -> Optional[Set[str]]:
+        """Model ids this key can actually call generateContent on (from the
+        API's own ListModels), cached. None = unknown (no key, or the lookup
+        failed) -- callers must treat None as "don't filter", never as "none
+        available". Errors are swallowed WITHOUT logging their text: httpx
+        error strings contain the request URL, which contains the API key."""
+        if not self.api_key:
+            return None
+        now = time.monotonic()
+        if self._models_cache is not None:
+            fetched, value = self._models_cache
+            if now - fetched < (_MODELS_TTL_S if value is not None else _MODELS_FAIL_TTL_S):
+                return value
+        names: Set[str] = set()
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                token: Optional[str] = None
+                for _page in range(5):
+                    params = {"key": self.api_key, "pageSize": 1000}
+                    if token:
+                        params["pageToken"] = token
+                    resp = await client.get(f"{self.BASE_URL}/models", params=params)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    for m in data.get("models", []):
+                        if "generateContent" in m.get("supportedGenerationMethods", []):
+                            names.add(str(m["name"]).removeprefix("models/"))
+                    token = data.get("nextPageToken")
+                    if not token:
+                        break
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            self._models_cache = (now, None)
+            return None
+        value = names or None
+        self._models_cache = (now, value)
+        return value
 
     async def _do_complete(
         self,
@@ -109,6 +157,8 @@ class GeminiProvider(BaseProvider):
                     resp.raise_for_status()
                 except httpx.HTTPStatusError as exc:
                     status = exc.response.status_code
+                    if status == 404:
+                        raise ModelUnavailableError("Gemini API error: HTTP 404") from None
                     if status in _RETRYABLE_STATUS and attempt < max_attempts:
                         retry_after = exc.response.headers.get("retry-after")
                         delay = float(retry_after) if retry_after else _BACKOFF_BASE_S[status] * attempt

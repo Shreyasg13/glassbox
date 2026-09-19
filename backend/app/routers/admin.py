@@ -170,6 +170,35 @@ async def get_job(job_id: str):
 
 # ---- Provider health (Phase 5) ----
 
+@router.get("/providers/gemini/models")
+async def gemini_models():
+    """Why are Gemini calls failing? Compares the models agents are configured
+    to use with the models this API key is actually offered, and shows which
+    have recently 404'd and the free-tier ceilings we track."""
+    from ..providers import gemini_quota
+    from ..providers.factory import get_provider
+
+    provider = get_provider("gemini")
+    offered = await provider.available_models()
+    configured = sorted(
+        {
+            m
+            for a in db.list_agents()
+            if a.get("provider") == "gemini"
+            for m in [a.get("model"), *(a.get("fallback_models") or [])]
+            if m
+        }
+    )
+    return {
+        "key_configured": bool(getattr(provider, "api_key", None)),
+        "configured_models": configured,
+        "offered_by_key": sorted(offered) if offered is not None else None,
+        "configured_but_not_offered": [m for m in configured if offered is not None and m not in offered],
+        "recently_404_retry_in_s": gemini_quota.unavailable_models(),
+        "free_tier_ceilings": {m: {"rpm": r, "tpm": t, "rpd": d} for m, (r, t, d) in gemini_quota.GEMINI_LIMITS.items()},
+    }
+
+
 @router.get("/providers/health", response_model=List[ProviderHealth])
 async def providers_health():
     names: List[Provider] = ["ollama", "vllm", "gemini", "claude"]

@@ -14,6 +14,7 @@ import { ProviderHealthStrip } from "@/components/admin/ProviderHealthStrip";
 const tabs = [
   { href: "/admin/agents", label: "Agents" },
   { href: "/admin/orchestrations", label: "Orchestrations" },
+  { href: "/admin/paper", label: "Paper Trading" },
   { href: "/admin/reports", label: "Reports" },
   { href: "/admin/observability", label: "Observability" },
 ];

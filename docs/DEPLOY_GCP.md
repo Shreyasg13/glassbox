@@ -163,6 +163,27 @@ back atomically (temp file + `os.replace`).
   directly against the live parquet files rather than assumed from the
   legacy script.
 
+## 6c. Paper-trading cycle (cron)
+
+Runs the simulated portfolios forward one day (see docs/PROJECT_STATUS.md,
+"Phase 1"). Once, to create the accounts and backfill history:
+
+```bash
+docker compose exec -T backend python -m app.scripts.run_paper_cycle --bootstrap
+```
+
+Then daily, 15 minutes after the data sync (`crontab -e`):
+
+```
+15 22 * * 1-5 cd /home/shrey/glassbox && /usr/bin/docker compose exec -T backend python -m app.scripts.run_paper_cycle >> /home/shrey/glassbox/logs/paper_cycle.log 2>&1
+```
+
+- **Check it ran**: `tail -30 ~/glassbox/logs/paper_cycle.log`, or Admin -> Paper Trading.
+- **Idempotent**: running it twice on the same data does nothing the second time.
+- **Dry run**: add `--dry-run` to compute and print without saving.
+- Optional env: `PAPER_LLM_NARRATIVES=1` (adds an AI note to reports, best-effort),
+  `PAPER_BACKTEST_START`, `PAPER_COMMISSION_BPS`.
+
 ## 7. Claude via Vertex AI instead of the direct Anthropic API (optional)
 
 If you'd rather keep LLM billing entirely inside your GCP project: GCP's

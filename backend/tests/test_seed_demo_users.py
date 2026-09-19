@@ -10,6 +10,7 @@ import pytest
 
 from app import auth
 from app import data_source as ds
+from app import paper_profiles
 from app.scripts import seed_demo_users
 
 RISK_LEVELS = {"conservative", "moderate", "aggressive"}
@@ -65,6 +66,26 @@ def test_every_ticker_is_a_symbol_with_real_price_history():
         assert entry["tickers"], entry["username"]
         assert set(entry["tickers"]) <= universe, f"{entry['username']} uses a symbol we have no data for"
         assert len(set(entry["tickers"])) == len(entry["tickers"]), f"{entry['username']} lists a symbol twice"
+
+
+def test_strategic_weights_cover_only_the_profiles_own_tickers_and_sum_to_one():
+    seen = 0
+    for entry in seed_demo_users.DEMO_USERS:
+        w = entry["profile"].get("strategic_weights")
+        if w is None:
+            continue
+        seen += 1
+        assert set(w) == set(entry["tickers"]), entry["username"]
+        assert sum(w.values()) == pytest.approx(1.0)
+    assert seen >= 2  # the 60/40 and all-weather profiles
+
+
+def test_logins_mirror_the_shared_registry_exactly():
+    # The paper-trading cohort and the demo logins must never drift apart.
+    assert [(e["username"], e["tickers"], e["profile"]) for e in seed_demo_users.DEMO_USERS] == [
+        (p["username"], p["tickers"], p["profile"]) for p in paper_profiles.DEMO_PROFILES
+    ]
+    assert [e["password"] for e in seed_demo_users.DEMO_USERS] == [f"demo-pass-{i}" for i in range(1, 12)]
 
 
 def test_usernames_and_passwords_are_unique():

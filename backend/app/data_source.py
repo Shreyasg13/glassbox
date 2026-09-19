@@ -20,7 +20,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -279,6 +279,22 @@ def get_holdings(tickers: Optional[List[str]] = None) -> Dict[str, Any]:
     }
 
 
+def signal_from_indicators(current_rsi: float, ma_cross: str, params: Dict[str, Any]) -> Tuple[str, float]:
+    """The engine's BUY/SELL/HOLD rule as a pure function of one day's
+    indicators -- the single definition used by /api/live-signals AND by the
+    paper-trading replay (app/paper.py), so a backtest can never drift from
+    what the live endpoint says. BUY = oversold (RSI below the trained low)
+    inside an uptrend (fast MA above slow MA); SELL = overbought inside a
+    downtrend; everything else HOLD. Returns (signal, confidence)."""
+    rsi_low = params.get("rsi_low", 30)
+    rsi_high = params.get("rsi_high", 70)
+    if current_rsi < rsi_low and ma_cross == "BULLISH":
+        return "BUY", min(90, 60 + (rsi_low - current_rsi))
+    if current_rsi > rsi_high and ma_cross == "BEARISH":
+        return "SELL", min(85, 50 + (current_rsi - rsi_high))
+    return "HOLD", 50
+
+
 def get_live_signals() -> Dict[str, Any]:
     trained_params = _load_trained_params()
     signals: List[Dict[str, Any]] = []
@@ -319,17 +335,12 @@ def get_live_signals() -> Dict[str, Any]:
         rsi_low = params.get("rsi_low", 30)
         rsi_high = params.get("rsi_high", 70)
 
-        if current_rsi < rsi_low and ma_cross == "BULLISH":
-            signal = "BUY"
-            confidence = min(90, 60 + (rsi_low - current_rsi))
+        signal, confidence = signal_from_indicators(current_rsi, ma_cross, params)
+        if signal == "BUY":
             buy_count += 1
-        elif current_rsi > rsi_high and ma_cross == "BEARISH":
-            signal = "SELL"
-            confidence = min(85, 50 + (current_rsi - rsi_high))
+        elif signal == "SELL":
             sell_count += 1
         else:
-            signal = "HOLD"
-            confidence = 50
             hold_count += 1
 
         total_confidence += confidence

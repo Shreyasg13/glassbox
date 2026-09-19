@@ -30,7 +30,10 @@ export default function AdminReportsPage() {
               href={`/reports/${r.id}`}
               className="glass-panel flex items-center justify-between p-sp3 hover:border-teal/40"
             >
-              <span className="mono text-[13px] text-t1">{r.date}</span>
+              <span className="flex flex-col">
+                <span className="mono text-[13px] text-t1">{r.date}</span>
+                {r.title && <span className="text-[12px] text-t2">{r.title}</span>}
+              </span>
               <span className="text-[11px] font-semibold uppercase text-t3">
                 {r.provider} · {r.model}
               </span>

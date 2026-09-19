@@ -84,6 +84,37 @@ def has_headroom(model: str, estimated_tokens: int = 0) -> bool:
     return rpm_used < rpm_limit and tpm_used + estimated_tokens <= tpm_limit and rpd_used < rpd_limit
 
 
+# Models the API told us don't exist / aren't served to this key (HTTP 404).
+# Retrying one on every call just burns latency and floods llm_calls with
+# errors, so remember it for a day. model -> monotonic expiry.
+UNAVAILABLE_TTL_S = 24 * 60 * 60.0
+_unavailable: Dict[str, float] = {}
+
+
+def mark_unavailable(model: str, ttl: float = UNAVAILABLE_TTL_S) -> None:
+    _unavailable[model] = time.monotonic() + ttl
+
+
+def is_unavailable(model: str) -> bool:
+    expiry = _unavailable.get(model)
+    if expiry is None:
+        return False
+    if time.monotonic() >= expiry:
+        del _unavailable[model]
+        return False
+    return True
+
+
+def unavailable_models() -> Dict[str, int]:
+    """model -> seconds until we'll try it again (for the admin diagnostics)."""
+    now = time.monotonic()
+    return {m: int(exp - now) for m, exp in _unavailable.items() if exp > now}
+
+
+def reset_unavailable() -> None:
+    _unavailable.clear()
+
+
 def record_call(model: str, tokens: int = 0) -> None:
     """Call after a successful completion so future has_headroom() checks
     for this model reflect it. Silently a no-op for models with no known

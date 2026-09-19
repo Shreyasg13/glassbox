@@ -586,3 +586,55 @@ pip-audit; Dependabot watches pip/npm/docker/actions.
 - `GET /api/reports/narratives/{id}` is still public (UUID-guarded) -- decide
   whether shared report links are intended.
 - Redis-backed rate limits (only needed once there is more than one VM).
+
+## Phase 1 -- paper trading, backtests and the admin master view (2026-09-19)
+
+**What exists now.** The quant engine's BUY/SELL/HOLD signals drive simulated
+portfolios so the strategy can be measured. Nothing places real orders.
+
+- `app/paper.py` -- the engine (no DB, no network). Orders decided at day D's
+  close fill at D+1's close (no look-ahead), 5 bps costs, long-only, no leverage.
+  Strategies: `engine_tilt` (target weight = invested x strategic weight x the
+  engine's own 1.5x / 1.0x / 0.5x suggested-weight tilt; SELL raises cash),
+  `static_rebalanced` (same weights and rebalancing, signals ignored -- each
+  profile's benchmark, so alpha = what the signals added), `static_hold`,
+  `random_tilt` (a placebo: each symbol acts on ANOTHER symbol's real signal
+  history) and `cash`. Days before `live_from` are tagged **backtest**
+  (in-sample: the trained params were fitted on this same history); days after
+  are **live** (genuine out-of-sample).
+- `app/paper_profiles.py` -- the 11-profile cohort (growth, income, index,
+  financials, diversified, 60/40, all-weather, quality, momentum, cyclical,
+  capital preservation). Every profile gets an account + benchmark **without
+  needing a login**; the demo logins (`seed_demo_users`) are optional.
+- `app/paper_cycle.py` + `python -m app.scripts.run_paper_cycle` -- the daily
+  cycle. `--bootstrap` (once) creates 27 accounts (11 profiles, 11 benchmarks,
+  5 controls: SPY, equal-weight, engine-on-all, placebo, cash) and backfills from
+  2021-01-04 (includes the 2022 bear market); the daily run replays new days,
+  stores the day's signals and writes one report per profile (provider
+  `system`) so **Admin -> Reports is no longer empty**. Idempotent.
+- Admin: **Admin -> Paper Trading** (leaderboard, equity curve vs benchmark,
+  holdings, trades, signal scorecard, "run now"). API: `/api/admin/paper/*`.
+- Cron (add after the data sync; see docs/DEPLOY_GCP.md 6b):
+  `15 22 * * 1-5 cd ~/glassbox && docker compose exec -T backend python -m app.scripts.run_paper_cycle >> logs/paper_cycle.log 2>&1`
+
+**Gemini reliability (why 40 of 46 LLM calls failed).** 21x 429 (the free tier is
+5 req/min and only 20/day on flash models), 14x 404 (invented model ids in the
+fallback chain), 4x 503. Now: a 404 is remembered for 24h and never retried;
+the fallback chain is narrowed to models the key's own ListModels offers
+(fail-open); diagnostics at `GET /api/admin/providers/gemini/models`. The daily
+paper cycle does NOT depend on any LLM -- reports are factual templates; an
+optional AI note is off unless `PAPER_LLM_NARRATIVES=1`. Free-tier quota itself
+is unchanged: LLM agents still get 20 flash calls/day; enable billing to lift it.
+
+**First findings (real data, 2021-01-04 to 2026-09-18, in-sample -- read with care).**
+- The SELL signal is counter-productive: prices after a SELL rose *more* than
+  average (5-day edge -0.46 pts). BUY has a real edge (+0.78 pts at 5 days, 63% hit rate).
+- Engine on all 15 symbols: +133% vs +124% for the placebo, +120% SPY, +213%
+  equal-weight buy-and-hold. The engine holds ~20% cash in a bull market.
+- Per-profile alpha vs policy benchmark ranges from -7.1% (growth) to +14.5% (quality).
+These are the targets for Phase 3 (re-weighting, challenger orchestrations).
+
+**Not built yet:** Phase 2 (richer admin dashboard: attribution, calibration,
+drawdown views), Phase 3 (shadow challengers, proposals queue, re-weighting),
+per-agent recommendation logging for the LLM committee, per-user paper portfolios
+for real customers.

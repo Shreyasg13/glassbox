@@ -35,6 +35,7 @@ from .pricing import estimate_cost
 from .providers import gemini_quota
 from .providers.base import OnToken
 from .providers.factory import get_provider
+from .providers.gemini import ModelUnavailableError
 
 OnFallback = Callable[[str, str], Awaitable[None]]
 
@@ -58,6 +59,24 @@ def _candidate_chain(model: str, fallback_models: Optional[List[str]]) -> List[s
     return chain
 
 
+async def _usable_chain(provider, chain: List[str]) -> List[str]:
+    """Drop Gemini candidates we already know are useless, so they cost no
+    call, no latency and no llm_calls row: models that 404'd recently, and
+    models the key's own ListModels doesn't offer. FAIL-OPEN by design: if
+    discovery is unavailable, or filtering would leave nothing, the configured
+    chain is used as-is -- a hiccup in this pre-filter must never turn a
+    working setup into a broken one."""
+    usable = [m for m in chain if not gemini_quota.is_unavailable(m)]
+    lister = getattr(provider, "available_models", None)
+    if lister is not None:
+        offered = await lister()
+        if offered:
+            narrowed = [m for m in usable if m in offered]
+            if narrowed:
+                usable = narrowed
+    return usable or chain
+
+
 async def complete_with_logging(
     provider_name: str,
     model: str,
@@ -77,6 +96,8 @@ async def complete_with_logging(
     served the request may differ from `model` (the first choice)."""
     provider = get_provider(provider_name)
     chain = _candidate_chain(model, fallback_models)
+    if provider_name == "gemini":
+        chain = await _usable_chain(provider, chain)
     tokens_in = _estimate_tokens(prompt) + _estimate_tokens(system)
 
     last_exc: Optional[Exception] = None
@@ -154,6 +175,8 @@ async def complete_with_logging(
                     "error": str(exc),
                 },
             )
+            if isinstance(exc, ModelUnavailableError):
+                gemini_quota.mark_unavailable(candidate)  # don't ask again for a day
             last_exc = exc
             prev_outcome = "failed"
             if is_final:

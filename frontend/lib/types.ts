@@ -87,10 +87,12 @@ export type PaginatedAuditLog = { items: AuditLogEntry[]; total: number };
 export type DailyReportNarrative = {
   id: string;
   date: string;
-  provider: Provider;
+  provider: Provider | "system"; // "system" = written by the paper-trading engine, not an LLM
   model: string;
   narrative: string;
   created_at: string;
+  title?: string | null;
+  profile?: string | null;
 };
 
 export const DEFAULT_AGENT_PARAMS: AgentParams = {
@@ -126,3 +128,76 @@ export function emptyOrchestration(): OrchestrationConfig {
     run_budget_s: 120.0,
   };
 }
+
+// ---- Paper trading (admin master view) ----
+
+export type PaperAccountKind = "profile" | "benchmark" | "control";
+export type CurveMode = "backtest" | "live";
+export type CurvePoint = [string, number, CurveMode];
+
+export type PaperAccountSummary = {
+  id: string;
+  name: string;
+  kind: PaperAccountKind;
+  strategy: string;
+  username: string | null;
+  risk_level: string | null;
+  profile: { archetype?: string; horizon_years?: number };
+  equity: number;
+  total_return: number;
+  cagr: number | null;
+  live_return: number | null;
+  max_drawdown: number;
+  sharpe: number;
+  volatility: number;
+  trade_count: number;
+  cost_paid: number;
+  turnover: number;
+  days: number;
+  live_days: number;
+  inception: string | null;
+  last_date: string | null;
+  cash_weight: number;
+  benchmark_id: string | null;
+  benchmark_return?: number;
+  alpha: number | null;
+  live_alpha: number | null;
+};
+
+export type PaperOverview = {
+  initialised: boolean;
+  meta: { live_from: string; start: string; last_date: string | null; last_run?: string } | null;
+  accounts: PaperAccountSummary[];
+};
+
+export type PaperTrade = { date: string; symbol: string; side: "BUY" | "SELL"; shares: number; price: number; cost: number; reason: string };
+
+export type PaperAccountDetail = {
+  summary: PaperAccountSummary;
+  weights: Record<string, number>;
+  invested: number;
+  note: string;
+  holdings: Record<string, { shares: number; price: number; value: number; weight: number }>;
+  cash: number;
+  curve: CurvePoint[];
+  benchmark_curve: CurvePoint[];
+  recent_trades: PaperTrade[];
+};
+
+export type SignalStat = { n: number; mean_return: number | null; hit_rate: number | null };
+export type PaperScorecard = {
+  horizons: number[];
+  signals: Record<"BUY" | "SELL" | "HOLD" | "ALL", Record<string, SignalStat>>;
+  edge_vs_average: Record<"BUY" | "SELL", Record<string, number | null>>;
+  in_sample: boolean;
+  as_of: string | null;
+};
+
+export type PaperRunResult = {
+  bootstrapped: boolean;
+  latest_data_date: string;
+  live_from: string;
+  accounts: number;
+  new_live_days: string[];
+  reports_written: number;
+};

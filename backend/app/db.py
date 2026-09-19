@@ -109,6 +109,34 @@ users_table = Table(
     Column("config", String, nullable=False),  # JSON-encoded: username, username_lower, password_hash, role, created_at
 )
 
+# ---- Paper trading (app/paper.py, app/paper_cycle.py) ----
+# One row per simulated account: its whole equity curve and trade list live in
+# the JSON blob (a few hundred KB at most over a decade), so a daily cycle is
+# one read + one write per account instead of thousands of tiny inserts.
+paper_accounts_table = Table(
+    "paper_accounts",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("config", String, nullable=False),  # JSON-encoded account dict (see paper.new_account)
+)
+
+# One row per live trading day: the engine's signal for every symbol that day,
+# kept as an auditable record of what was actually recommended.
+paper_signals_table = Table(
+    "paper_signals",
+    metadata,
+    Column("id", String, primary_key=True),  # "signals:YYYY-MM-DD"
+    Column("config", String, nullable=False),
+)
+
+# Single row (id "meta"): live_from date, last run, bootstrap info.
+paper_meta_table = Table(
+    "paper_meta",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("config", String, nullable=False),
+)
+
 metadata.create_all(engine)
 
 
@@ -278,6 +306,46 @@ def get_report_narrative(narrative_id: str) -> Optional[Dict[str, Any]]:
 
 def list_report_narratives() -> List[Dict[str, Any]]:
     return _list(report_narratives_table)
+
+
+# ---- Paper trading ----
+
+def list_paper_accounts() -> List[Dict[str, Any]]:
+    return _list(paper_accounts_table)
+
+
+def get_paper_account(account_id: str) -> Optional[Dict[str, Any]]:
+    return _get(paper_accounts_table, account_id)
+
+
+def save_paper_account(account: Dict[str, Any]) -> Dict[str, Any]:
+    """Upsert by the account's own stable id (e.g. "profile:demo_growth")."""
+    if _update(paper_accounts_table, account["id"], account) is None:
+        return _create(paper_accounts_table, account)
+    return account
+
+
+def get_paper_meta() -> Optional[Dict[str, Any]]:
+    return _get(paper_meta_table, "meta")
+
+
+def save_paper_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
+    if _update(paper_meta_table, "meta", meta) is None:
+        return _create(paper_meta_table, meta)
+    return meta
+
+
+def save_paper_signals(date: str, doc: Dict[str, Any]) -> Dict[str, Any]:
+    doc = dict(doc, id=f"signals:{date}", date=date)
+    if _update(paper_signals_table, doc["id"], doc) is None:
+        return _create(paper_signals_table, doc)
+    return doc
+
+
+def list_paper_signals(limit: int = 30) -> List[Dict[str, Any]]:
+    items = _list(paper_signals_table)
+    items.sort(key=lambda x: x.get("date", ""), reverse=True)
+    return items[:limit]
 
 
 # ---- Pagination + audit log (Phase 6) ----
