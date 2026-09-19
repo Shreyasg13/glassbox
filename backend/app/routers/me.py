@@ -8,13 +8,14 @@ Committee orchestration's agent list down to that subscription before
 calling the exact same orchestration.run_orchestration() the admin-
 triggered run already uses -- no separate execution path to maintain.
 
-Dev accounts (admin/user, app/auth.py's _DEV_USERS) have no real `users`
+System accounts (the bootstrap admin, and the opt-in dev users in app/auth.py) have no real `users`
 row to persist a subscription onto -- PUT rejects them with a clear
 400 rather than silently no-op'ing or crashing on a None row.
 """
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -25,6 +26,7 @@ from .. import db
 from .. import jobs
 from .. import orchestration
 from ..auth import RESERVED_USERNAMES, TokenPayload, get_current_user
+from ..rate_limit import check_user_heavy, check_user_report
 from ..models import (
     AgentSubscriptions,
     AgentSummary,
@@ -45,6 +47,12 @@ router = APIRouter(prefix="/api/me", tags=["me"])
 # being blocked, the same "no row = the more permissive path" convention
 # run_my_report already uses for subscriptions.
 FREE_VERIFIED_SIGNAL_LIMIT = 5
+
+# Letters/digits with an optional class/exchange suffix (BRK.B, BF-B). This
+# only exists to reject junk and injection characters before the value is
+# used as a lookup key or written to the audit log -- an unknown but
+# well-formed symbol still gets the normal 404 below.
+_TICKER_RE = re.compile(r"^[A-Z0-9]{1,10}([.-][A-Z0-9]{1,3})?$")
 
 
 def _require_real_user_row(user: TokenPayload) -> Dict[str, Any]:
@@ -92,6 +100,7 @@ async def run_my_report(body: OrchestrationRunRequest, user: TokenPayload = Depe
     set (every dev account, and any real account that hasn't visited
     the subscriptions page yet), so "no subscription" means "everyone",
     not "nobody"."""
+    check_user_report(user.sub)  # LLM fan-out: tight hourly per-user budget
     orchestrations_by_name = {o["name"]: o for o in db.list_orchestrations()}
     orch_data = orchestrations_by_name.get(ORCHESTRATION_NAME)
     if orch_data is None:
@@ -152,7 +161,10 @@ async def verify_ticker(ticker: str, user: TokenPayload = Depends(get_current_us
     distributed lock, so two truly concurrent calls from the same account
     could both slip through on the last unit; an acceptable soft-limit
     risk for a free-tier nudge, not a billing-grade guarantee)."""
+    check_user_heavy(user.sub)
     symbol = ticker.strip().upper()
+    if not _TICKER_RE.match(symbol):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid ticker")
     is_dev = user.sub.lower() in RESERVED_USERNAMES
     row: Optional[Dict[str, Any]] = None
     used = 0

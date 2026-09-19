@@ -414,11 +414,11 @@ class JobAccepted(BaseModel):
 
 
 class AgentTestRunRequest(BaseModel):
-    input: str = Field(..., description="Freeform prompt/context to run the agent against")
+    input: str = Field(..., max_length=8000, description="Freeform prompt/context to run the agent against")
 
 
 class OrchestrationRunRequest(BaseModel):
-    input: Optional[str] = None
+    input: Optional[str] = Field(default=None, max_length=8000)  # flows into LLM prompts -- bound it
 
 
 class ReportGenerateRequest(BaseModel):
@@ -456,11 +456,14 @@ class Token(BaseModel):
     role: Literal["admin", "viewer"]
 
 
+# Length caps keep a hostile client from making the server hash/log/store
+# megabyte-sized "passwords" and usernames. Password's real limit is 72
+# BYTES (bcrypt), enforced in auth.py; this is just a coarse outer bound.
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(max_length=100)
+    password: str = Field(max_length=256)
 
 
 class SignupRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(max_length=100)
+    password: str = Field(max_length=256)

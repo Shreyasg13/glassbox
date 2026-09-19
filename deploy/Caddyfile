@@ -7,6 +7,29 @@
 # /health, or /ws/* goes to the backend; everything else (including
 # /admin/* and /reports/* as HTML pages) goes to the frontend.
 {$APP_DOMAIN} {
+	# Baseline hardening for every response (API and pages). The backend adds
+	# its own copy of the non-HSTS ones too (app/main.py).
+	#  - HSTS: browsers stay on HTTPS for a year. (No `preload`/subdomains:
+	#    this is a duckdns subdomain we don't own the parent of.)
+	#  - Content-Security-Policy is intentionally NOT set here yet: Next.js
+	#    inlines scripts and the voice player uses blob: audio URLs, so a
+	#    correct policy needs nonce support added to the frontend first. A
+	#    guessed CSP would either break the app or protect nothing.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# Reject oversized request bodies at the edge. Real payloads here are
+	# small JSON; nothing legitimate is anywhere near this.
+	request_body {
+		max_size 1MB
+	}
+
 	@api {
 		path /api/* /auth/* /health /ws/*
 	}

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from typing import List, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -25,6 +26,7 @@ router = APIRouter(tags=["ws"])
 
 PUSH_INTERVAL_SECONDS = 3
 SEND_TIMEOUT_SECONDS = 2.0
+MAX_WS_CONNECTIONS = int(os.environ.get("WS_MAX_CONNECTIONS", "300"))
 
 
 class ConnectionManager:
@@ -85,6 +87,12 @@ def ensure_broadcaster_started() -> None:
 
 @router.websocket("/ws/signals")
 async def ws_signals(websocket: WebSocket) -> None:
+    # Public and unauthenticated by design (it's the demo's live ticker), so
+    # cap concurrent sockets -- otherwise opening thousands of idle
+    # connections is a free way to exhaust file descriptors and memory.
+    if len(manager.active) >= MAX_WS_CONNECTIONS:
+        await websocket.close(code=1013)  # "try again later"
+        return
     ensure_broadcaster_started()
     await manager.connect(websocket)
     try:

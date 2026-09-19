@@ -1,0 +1,33 @@
+name: backend
+
+# Free CI: runs the backend test-suite and scans the pinned dependencies for
+# known vulnerabilities on every push and pull request that touches the backend.
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  schedule:
+    - cron: "0 6 * * 1"  # weekly: new CVEs appear against unchanged pins
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+      - name: Dependency vulnerability scan
+        run: python -m pip_audit -r requirements.txt --progress-spinner off

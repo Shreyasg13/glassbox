@@ -78,14 +78,42 @@ English male). All 8 Strategy Lens personas are archetypes of real men
 an all-male voice set; the two personas marked `lead: true` in
 lensData.ts got the two highest-graded voices per VOICES.md's own
 quality grading (am_michael, am_fenrir).
+
+HARDENING (cost + abuse control, added after the quota exhaustion above):
+
+/api/tts is public and every provider call spends metered quota, so:
+- Audio is cached (memory LRU + a small on-disk cache next to the DB
+  volume) keyed on (text, both voice ids). The narrations are fixed
+  strings, so after the first play every visitor is served from cache for
+  free -- this is the main cost saver.
+- Concurrent requests for the same uncached line share ONE provider call.
+- ElevenLabs is skipped once TTS_DAILY_CHAR_BUDGET characters have been
+  spent that UTC day (Kokoro/browser fallback take over) so a burst can't
+  drain the month's quota.
+- Provider failures are LOGGED (status + provider's own error code, never
+  the key or the text). Before this every failure was swallowed silently,
+  which is why a dead key looked identical to a working one from outside.
+- The voice id is URL-encoded into the ElevenLabs path and validated at the
+  API boundary (routers/tts.py), so it can't be used to reach other
+  ElevenLabs endpoints with our key.
 """
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import logging
 import os
-from typing import Optional, Tuple
+import time
+from collections import OrderedDict
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, Optional, Tuple
+from urllib.parse import quote
 
 import httpx
 from huggingface_hub import AsyncInferenceClient
+
+log = logging.getLogger("glassbox.tts")
 
 HF_MODEL = "hexgrad/Kokoro-82M"
 HF_PROVIDER = "fal-ai"
@@ -94,6 +122,10 @@ ELEVENLABS_URL_TMPL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
 MAX_CHARS = 800
 
 TTSResult = Tuple[bytes, str]  # (audio_bytes, content_type)
+
+_MEM_CACHE_MAX_ENTRIES = 256
+_CONTENT_TYPE_EXT = {"audio/mpeg": "mp3", "audio/wav": "wav", "audio/flac": "flac"}
+_EXT_CONTENT_TYPE = {v: k for k, v in _CONTENT_TYPE_EXT.items()}
 
 
 def _sniff_audio_content_type(data: bytes) -> str:
@@ -110,25 +142,139 @@ def _sniff_audio_content_type(data: bytes) -> str:
     return "audio/mpeg"
 
 
+# ---------------------------------------------------------------- cache ---
+
+_mem_cache: "OrderedDict[str, TTSResult]" = OrderedDict()
+_inflight: Dict[str, "asyncio.Task[Optional[Tuple[TTSResult, str]]]"] = {}
+
+
+def _cache_dir() -> Optional[Path]:
+    """Disk cache lives beside the DB volume (/data in the container).
+    Unset GLASSBOX_DB_PATH (local dev, tests) means memory-only, so nothing
+    gets written to surprising places."""
+    explicit = os.environ.get("TTS_CACHE_DIR")
+    if explicit:
+        return Path(explicit)
+    db_path = os.environ.get("GLASSBOX_DB_PATH")
+    return Path(db_path).parent / "tts-cache" if db_path else None
+
+
+def cache_key(text: str, elevenlabs_voice_id: str, kokoro_voice_id: str) -> str:
+    raw = "\x00".join((text.strip()[:MAX_CHARS], elevenlabs_voice_id, kokoro_voice_id))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _disk_get(key: str) -> Optional[TTSResult]:
+    d = _cache_dir()
+    if d is None:
+        return None
+    for ext, ctype in _EXT_CONTENT_TYPE.items():
+        p = d / f"{key}.{ext}"
+        try:
+            return p.read_bytes(), ctype
+        except OSError:
+            continue
+    return None
+
+
+def _disk_put(key: str, result: TTSResult) -> None:
+    d = _cache_dir()
+    if d is None:
+        return
+    audio, ctype = result
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        tmp = d / f"{key}.tmp"
+        tmp.write_bytes(audio)
+        tmp.replace(d / f"{key}.{_CONTENT_TYPE_EXT.get(ctype, 'mp3')}")
+        _disk_trim(d)
+    except OSError as exc:
+        # A cache that can't be written must never break speech itself.
+        log.warning("tts disk cache write failed: %s", type(exc).__name__)
+
+
+def _disk_trim(d: Path) -> None:
+    cap = int(float(os.environ.get("TTS_CACHE_MAX_MB", "200")) * 1024 * 1024)
+    files = [f for f in d.iterdir() if f.is_file() and f.suffix != ".tmp"]
+    total = sum(f.stat().st_size for f in files)
+    for f in sorted(files, key=lambda f: f.stat().st_mtime):  # oldest first
+        if total <= cap:
+            break
+        total -= f.stat().st_size
+        f.unlink(missing_ok=True)
+
+
+def lookup(text: str, elevenlabs_voice_id: str, kokoro_voice_id: str) -> Optional[TTSResult]:
+    """Cache-only read (memory, then disk). Free -- callers use this BEFORE
+    applying any rate limit, since a hit spends no provider quota."""
+    key = cache_key(text, elevenlabs_voice_id, kokoro_voice_id)
+    hit = _mem_cache.get(key)
+    if hit is not None:
+        _mem_cache.move_to_end(key)
+        return hit
+    hit = _disk_get(key)
+    if hit is not None:
+        _remember(key, hit)
+    return hit
+
+
+def _remember(key: str, result: TTSResult) -> None:
+    _mem_cache[key] = result
+    _mem_cache.move_to_end(key)
+    while len(_mem_cache) > _MEM_CACHE_MAX_ENTRIES:
+        _mem_cache.popitem(last=False)
+
+
+def clear_cache() -> None:
+    """Memory only; used by tests."""
+    _mem_cache.clear()
+    _inflight.clear()
+
+
+# --------------------------------------------------------------- budget ---
+
+_budget_day = ""
+_budget_spent = 0
+
+
+def _budget_remaining() -> int:
+    global _budget_day, _budget_spent
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if today != _budget_day:
+        _budget_day, _budget_spent = today, 0
+    limit = int(os.environ.get("TTS_DAILY_CHAR_BUDGET", "30000"))
+    return limit - _budget_spent
+
+
+def _spend(chars: int) -> None:
+    global _budget_spent
+    _budget_spent += chars
+
+
+# ------------------------------------------------------------ providers ---
+
+
 async def _try_hugging_face(text: str, voice_id: str) -> Optional[TTSResult]:
     hf_token = os.environ.get("HUGGINGFACE_API_KEY")
     if not hf_token:
+        log.info("tts huggingface skipped: HUGGINGFACE_API_KEY not set")
         return None
     client = AsyncInferenceClient(provider=HF_PROVIDER, api_key=hf_token, timeout=HF_TIMEOUT_S)
     try:
         audio = await client.text_to_speech(text, model=HF_MODEL, extra_body={"voice": voice_id})
-    except Exception:
+    except Exception as exc:
         # Broad catch is deliberate here, matching this file's existing
         # policy: any provider failure means "try the next provider / report
         # unavailable", never surface a provider-specific stack trace or
-        # error string to the public /api/tts endpoint. (Verified live
-        # during this fix: a real call succeeds and returns real audio --
-        # a 402 "monthly included credits depleted" from Hugging Face's
-        # own billing is an account-level quota limit, not a code defect;
-        # this same catch-all correctly turns that into a clean
-        # "unavailable" response rather than a crash either way.)
+        # error string to the public /api/tts endpoint. (A 402 "monthly
+        # included credits depleted" is an account-level quota limit, not a
+        # code defect.) It is now LOGGED -- type and HTTP status only, never
+        # the message body -- so an exhausted quota is visible to the operator.
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        log.warning("tts huggingface failed: %s status=%s", type(exc).__name__, status)
         return None
     if not audio:
+        log.warning("tts huggingface returned empty audio")
         return None
     audio_bytes = bytes(audio)
     return audio_bytes, _sniff_audio_content_type(audio_bytes)
@@ -137,8 +283,11 @@ async def _try_hugging_face(text: str, voice_id: str) -> Optional[TTSResult]:
 async def _try_eleven_labs(text: str, voice_id: str) -> Optional[TTSResult]:
     api_key = os.environ.get("ELEVENLABS_API_KEY")
     if not api_key:
+        log.info("tts elevenlabs skipped: ELEVENLABS_API_KEY not set")
         return None
-    url = ELEVENLABS_URL_TMPL.format(voice_id=voice_id)
+    # quote(): a voice id is one path segment. Encoding it means "../x" or
+    # "a/b" can't steer this authenticated request to a different endpoint.
+    url = ELEVENLABS_URL_TMPL.format(voice_id=quote(voice_id, safe=""))
     headers = {"xi-api-key": api_key, "Content-Type": "application/json", "Accept": "audio/mpeg"}
     body = {
         "text": text,
@@ -149,10 +298,79 @@ async def _try_eleven_labs(text: str, voice_id: str) -> Optional[TTSResult]:
         try:
             resp = await client.post(url, headers=headers, json=body)
             if resp.status_code != 200:
+                log.warning("tts elevenlabs failed: http=%s code=%s", resp.status_code, _eleven_error_code(resp))
                 return None
             return resp.content, "audio/mpeg"
-        except httpx.HTTPError:
+        except httpx.HTTPError as exc:
+            log.warning("tts elevenlabs failed: %s", type(exc).__name__)
             return None
+
+
+def _eleven_error_code(resp: httpx.Response) -> str:
+    """ElevenLabs errors look like {"detail": {"status": "quota_exceeded",
+    ...}} -- pull just that short machine code (e.g. quota_exceeded,
+    invalid_api_key). Never the message text or anything from the request."""
+    try:
+        detail = resp.json().get("detail")
+        if isinstance(detail, dict):
+            return str(detail.get("status", "unknown"))[:40]
+    except Exception:
+        pass
+    return "unknown"
+
+
+# --------------------------------------------------------------- public ---
+
+
+async def _synthesize_uncached(text: str, elevenlabs_voice_id: str, kokoro_voice_id: str) -> Optional[Tuple[TTSResult, str]]:
+    started = time.monotonic()
+    result: Optional[TTSResult] = None
+    provider = ""
+    if _budget_remaining() >= len(text):
+        result = await _try_eleven_labs(text, elevenlabs_voice_id)
+        if result is not None:
+            provider = "elevenlabs"
+            _spend(len(text))
+    else:
+        log.warning("tts elevenlabs skipped: daily character budget exhausted")
+    if result is None:
+        result = await _try_hugging_face(text, kokoro_voice_id)
+        provider = "kokoro" if result is not None else ""
+    ms = int((time.monotonic() - started) * 1000)
+    if result is None:
+        log.error("tts unavailable: every provider failed chars=%d ms=%d", len(text), ms)
+        return None
+    log.info("tts ok provider=%s chars=%d ms=%d bytes=%d", provider, len(text), ms, len(result[0]))
+    return result, provider
+
+
+async def synthesize(text: str, elevenlabs_voice_id: str, kokoro_voice_id: str) -> Optional[Tuple[TTSResult, str]]:
+    """Returns ((audio_bytes, content_type), provider_label) or None.
+    provider_label is "cache", "elevenlabs" or "kokoro". Caches successes,
+    and de-duplicates concurrent identical requests into one provider call."""
+    trimmed = text.strip()[:MAX_CHARS]
+    if not trimmed:
+        return None
+    hit = lookup(trimmed, elevenlabs_voice_id, kokoro_voice_id)
+    if hit is not None:
+        return hit, "cache"
+
+    key = cache_key(trimmed, elevenlabs_voice_id, kokoro_voice_id)
+    task = _inflight.get(key)
+    if task is None:
+
+        async def _run() -> Optional[Tuple[TTSResult, str]]:
+            out = await _synthesize_uncached(trimmed, elevenlabs_voice_id, kokoro_voice_id)
+            if out is not None:
+                _remember(key, out[0])
+                _disk_put(key, out[0])
+            return out
+
+        task = asyncio.create_task(_run())
+        _inflight[key] = task
+        task.add_done_callback(lambda _t: _inflight.pop(key, None))
+    # shield: one caller disconnecting must not cancel the shared call.
+    return await asyncio.shield(task)
 
 
 async def generate_speech(text: str, elevenlabs_voice_id: str, kokoro_voice_id: str) -> Optional[TTSResult]:
@@ -166,9 +384,5 @@ async def generate_speech(text: str, elevenlabs_voice_id: str, kokoro_voice_id: 
     single shared id was a real bug waiting to happen) -- ElevenLabs is
     tried first, Kokoro/Hugging Face as the fallback.
     """
-    trimmed = text.strip()[:MAX_CHARS]
-    if not trimmed:
-        return None
-    return (await _try_eleven_labs(trimmed, elevenlabs_voice_id)) or (
-        await _try_hugging_face(trimmed, kokoro_voice_id)
-    )
+    out = await synthesize(text, elevenlabs_voice_id, kokoro_voice_id)
+    return out[0] if out is not None else None

@@ -36,13 +36,67 @@ def _fake_user_store(monkeypatch):
     return store
 
 
-def test_dev_accounts_still_work():
+@pytest.fixture(autouse=True)
+def _clean_auth_env(monkeypatch):
+    for name in ("GLASSBOX_ENABLE_DEV_USERS", "GLASSBOX_ENV", "GLASSBOX_ADMIN_PASSWORD", "GLASSBOX_ADMIN_PASSWORD_HASH"):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_hardcoded_admin_admin_no_longer_works_by_default():
+    # The old built-in admin/admin was a live admin login on the public
+    # deployment. It must not exist unless explicitly opted into.
+    assert auth.authenticate("admin", "admin") is None
+    assert auth.authenticate("user", "user") is None
+
+
+def test_dev_accounts_work_only_when_explicitly_enabled(monkeypatch):
+    monkeypatch.setenv("GLASSBOX_ENABLE_DEV_USERS", "1")
     assert auth.authenticate("admin", "admin") == auth.TokenPayload(sub="admin", role="admin")
     assert auth.authenticate("user", "user") == auth.TokenPayload(sub="user", role="viewer")
 
 
-def test_dev_account_wrong_password_rejected():
+def test_dev_accounts_never_work_in_production(monkeypatch):
+    monkeypatch.setenv("GLASSBOX_ENABLE_DEV_USERS", "1")
+    monkeypatch.setenv("GLASSBOX_ENV", "production")
+    assert auth.authenticate("admin", "admin") is None
+    assert auth.authenticate("user", "user") is None
+
+
+def test_dev_account_wrong_password_rejected(monkeypatch):
+    monkeypatch.setenv("GLASSBOX_ENABLE_DEV_USERS", "1")
     assert auth.authenticate("admin", "wrong") is None
+
+
+def test_bootstrap_admin_from_plain_env_password(monkeypatch):
+    monkeypatch.setenv("GLASSBOX_ADMIN_PASSWORD", "a-long-real-admin-password")
+    assert auth.authenticate("admin", "a-long-real-admin-password") == auth.TokenPayload(sub="admin", role="admin")
+    assert auth.authenticate("admin", "a-long-real-admin-passwor") is None
+    assert auth.authenticate("admin", "admin") is None
+
+
+def test_bootstrap_admin_from_bcrypt_hash_env(monkeypatch):
+    monkeypatch.setenv("GLASSBOX_ADMIN_PASSWORD_HASH", auth._hash_password("another-long-admin-pass"))
+    assert auth.authenticate("admin", "another-long-admin-pass") == auth.TokenPayload(sub="admin", role="admin")
+    assert auth.authenticate("admin", "wrong-password-here") is None
+
+
+def test_hash_takes_precedence_over_plain_password(monkeypatch):
+    monkeypatch.setenv("GLASSBOX_ADMIN_PASSWORD_HASH", auth._hash_password("the-hashed-admin-pw"))
+    monkeypatch.setenv("GLASSBOX_ADMIN_PASSWORD", "the-plain-admin-password")
+    assert auth.authenticate("admin", "the-hashed-admin-pw") is not None
+    assert auth.authenticate("admin", "the-plain-admin-password") is None
+
+
+def test_weak_plain_admin_password_is_refused(monkeypatch):
+    # Under MIN_ADMIN_PASSWORD_LEN: rather than accept a guessable admin
+    # password from a typo'd .env, admin login is simply disabled.
+    monkeypatch.setenv("GLASSBOX_ADMIN_PASSWORD", "short")
+    assert auth.authenticate("admin", "short") is None
+
+
+def test_no_admin_configured_means_no_admin_login():
+    assert auth.authenticate("admin", "") is None
+    assert auth.authenticate("admin", "anything-at-all") is None
 
 
 def test_unknown_username_rejected():

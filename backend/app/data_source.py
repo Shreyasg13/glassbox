@@ -385,25 +385,20 @@ def run_monte_carlo(days: int, simulations: int, confidence: float) -> Optional[
     sigma = float(np.std(returns))
     current_value = data[-1]["portfolio_value"]
 
-    paths: List[List[float]] = []
-    final_values: List[float] = []
-    for _ in range(simulations):
-        path = [current_value]
-        value = current_value
-        for _day in range(days):
-            daily_return = np.random.normal(mu, sigma)
-            value *= 1 + daily_return
-            path.append(value)
-        paths.append(path)
-        final_values.append(value)
-
-    final_values_arr = np.array(final_values)
+    # Vectorized: one (simulations x days) draw and a cumulative product,
+    # instead of simulations*days Python-level iterations. Same model (each
+    # day's return ~ N(mu, sigma), compounded), ~100x faster -- which is what
+    # keeps this public endpoint from being a cheap way to pin a CPU core.
+    daily_returns = np.random.normal(mu, sigma, size=(simulations, days))
+    growth = np.cumprod(1 + daily_returns, axis=1)
+    values = current_value * np.concatenate([np.ones((simulations, 1)), growth], axis=1)
+    final_values_arr = values[:, -1]
     return {
         "mean": float(np.mean(final_values_arr)),
         "percentile_5": float(np.percentile(final_values_arr, 5)),
         "percentile_95": float(np.percentile(final_values_arr, 95)),
         "prob_profit": float((final_values_arr > current_value).sum() / simulations * 100),
-        "paths": paths[:100],
+        "paths": values[:100].tolist(),
         "final_values": final_values_arr.tolist(),
     }
 

@@ -15,8 +15,8 @@ or scope changes — this is the single place to check "where are we" and
 | Database | Neon Postgres (`console.neon.tech`, org `spring-hill-60129601`, `neondb` / `production` branch) |
 | Source | `github.com/Shreyasg13/glassbox` (private, `main` branch) |
 | Host | GCP VM `instance-20260902-033025`, project `project-f015cf71-9e01-4a2a-8f5`, zone `us-central1-a` |
-| Admin login | `admin` / `admin` (still hardcoded — real signup exists now, but self-serve accounts can never be admin) |
-| Dev viewer login | `user` / `user` (still hardcoded, unchanged) |
+| Admin login | username `admin` + the password from `GLASSBOX_ADMIN_PASSWORD_HASH` / `GLASSBOX_ADMIN_PASSWORD` in the VM's `.env`. **No built-in default any more** (see "Security & cost hardening" below) |
+| Dev viewer login | none in production. `admin`/`admin` and `user`/`user` exist only locally when `GLASSBOX_ENABLE_DEV_USERS=1` (refused if `GLASSBOX_ENV=production`) |
 | Signup | `/signup` — real accounts, bcrypt-hashed, role="viewer" always |
 
 ## Phase status
@@ -71,8 +71,8 @@ data specifically (row 3), not historical price depth generally.
   `/signup` create genuine bcrypt-hashed accounts in a `users` table
   (`backend/app/auth.py`, `db.py`) — self-serve accounts are always
   role="viewer" (admin is never grantable via signup, by design). The
-  original `admin`/`admin` hardcoded dev account is kept unconditionally
-  (every deployment doc points people at it) rather than replaced.
+  original hardcoded `admin`/`admin` was REMOVED (it was a live admin login on the
+  public deployment) -- see "Security & cost hardening" below.
   **Google sign-in is real** (`backend/app/oauth_google.py`,
   `routers/oauth.py`) — server-side OAuth 2.0 authorization code flow,
   OAuth accounts keyed on (provider, subject) with no password_hash,
@@ -532,7 +532,57 @@ so it isn't lost, per the user's own ask to track rather than rush it:
 - [ ] Decide: sequential-mode fallback for LLM committee runs (works around
       the Gemini RPM ceiling without needing a paid tier)?
 - [ ] Decide: news API provider for Phase 9, once reached.
-- [ ] Real user auth (replace hardcoded dev accounts) — no phase assigned yet,
-      raise if this becomes a priority before a public launch.
+- [x] Real user auth (replace hardcoded dev accounts) — done, see "Security & cost hardening".
 - [ ] Consider pushing the `glassbox` repo's visibility/CI setup if the
       project moves toward a team rather than solo-dev workflow.
+
+## Security & cost hardening (2026-09-19)
+
+Backend pass aimed at "safe to demo publicly and cheap to run". Everything
+below is free/open-source -- no new paid services, no new containers.
+
+**Auth**
+- Removed the hardcoded `admin`/`admin` and `user`/`user` logins. Admin is now
+  `admin` + a password supplied only via env (`GLASSBOX_ADMIN_PASSWORD_HASH`
+  bcrypt, preferred, or `GLASSBOX_ADMIN_PASSWORD` >= 12 chars). Unset = no admin.
+  Dev logins exist only with `GLASSBOX_ENABLE_DEV_USERS=1` and never in production.
+- `GLASSBOX_ENV=production` (set in docker-compose.yml) makes the backend refuse
+  to boot with a missing/default `GLASSBOX_JWT_SECRET`.
+- JWT: `python-jose` (open CVEs) replaced by **PyJWT**; algorithm pinned, `exp` +
+  `sub` required, malformed role claims are 401 not 500, tokens carry `iat`.
+- Passwords: min 10 chars, max 72 bytes (bcrypt truncates silently), common-
+  password and password==username rejected. bcrypt runs in a threadpool.
+- Login: unknown-user and wrong-password take the same time; per-IP limit plus a
+  per-account failed-attempt lockout (20 / 15 min, temporary).
+
+**Rate limiting** -- the old limiter only ever saw Caddy's IP, so all visitors shared
+one bucket. The Dockerfile now trusts Caddy's X-Forwarded-For
+(`--forwarded-allow-ips`; port 8000 must stay unpublished). Added limits for
+/api/tts (cache misses only), /api/monte-carlo, per-user report runs
+(6/hour) and verify; the limiter's memory is bounded.
+
+**Cost control** -- /api/tts audio is cached (memory + `/data/tts-cache` on the
+existing volume) and concurrent identical requests share one provider call;
+ElevenLabs is skipped after `TTS_DAILY_CHAR_BUDGET` chars/day. Provider failures
+are now logged (status + error code only) and each response carries an
+`X-TTS-Provider: cache|elevenlabs|kokoro` header. `/api/monte-carlo` is bounded
+and vectorized (~100x faster).
+
+**Dependencies** -- fastapi 0.115 -> 0.141 (starlette 0.38 -> 1.6), pyarrow, yfinance /
+curl_cffi, pydantic, uvicorn upgraded and pinned; `pip-audit` reports no known
+vulnerabilities (was ~30). CI (`.github/workflows/backend.yml`) runs tests +
+pip-audit; Dependabot watches pip/npm/docker/actions.
+
+**Edge** -- Caddy adds HSTS, nosniff, frame-deny, referrer/permissions policies, a
+1 MB body cap, and hides the Server header. CORS methods/headers are allow-listed;
+/auth responses are `no-store`; the signals websocket is capped at 300 connections.
+
+**Deliberately NOT done yet** (each needs a decision or a testable environment):
+- Content-Security-Policy: needs nonce support in the Next.js frontend first.
+- Running the backend container as non-root: needs the `glassbox-db` volume and
+  `./trading-storage` bind mount re-owned, and the daily-sync cron re-tested.
+- `uvicorn.workers` is deprecated upstream (works in the pinned uvicorn); move to
+  the `uvicorn-worker` package before unpinning uvicorn.
+- `GET /api/reports/narratives/{id}` is still public (UUID-guarded) -- decide
+  whether shared report links are intended.
+- Redis-backed rate limits (only needed once there is more than one VM).

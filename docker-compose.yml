@@ -7,6 +7,22 @@ services:
     restart: unless-stopped
     environment:
       GLASSBOX_JWT_SECRET: ${GLASSBOX_JWT_SECRET:?set a real secret in .env}
+      # production = the backend refuses to boot with a missing/default JWT
+      # secret and refuses the built-in dev logins (see app/auth.py).
+      GLASSBOX_ENV: production
+      # The ONLY way to get an admin login: set the hash (preferred; make it
+      # with `docker compose run --rm backend python -m app.scripts.gen_secrets
+      # --admin`) or a plain password of 12+ chars. Neither set = no admin.
+      GLASSBOX_ADMIN_PASSWORD_HASH: ${GLASSBOX_ADMIN_PASSWORD_HASH:-}
+      GLASSBOX_ADMIN_PASSWORD: ${GLASSBOX_ADMIN_PASSWORD:-}
+      GLASSBOX_TOKEN_TTL_MINUTES: ${GLASSBOX_TOKEN_TTL_MINUTES:-480}
+      # Voice cost controls (see app/tts.py): ElevenLabs is skipped once this
+      # many characters have been spent in a UTC day; per-client limits apply
+      # to cache misses only.
+      TTS_DAILY_CHAR_BUDGET: ${TTS_DAILY_CHAR_BUDGET:-30000}
+      RATE_LIMIT_TTS_PER_MIN: ${RATE_LIMIT_TTS_PER_MIN:-10}
+      RATE_LIMIT_TTS_PER_DAY: ${RATE_LIMIT_TTS_PER_DAY:-150}
+      RATE_LIMIT_USER_REPORTS_PER_HOUR: ${RATE_LIMIT_USER_REPORTS_PER_HOUR:-6}
       CORS_ALLOWED_ORIGINS: https://${APP_DOMAIN:?set in .env}
       # Also used directly (not just for CORS) to build the Google OAuth
       # redirect_uri and the post-login redirect back to the frontend --

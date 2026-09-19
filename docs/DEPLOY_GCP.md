@@ -75,9 +75,21 @@ git clone <this-repo-url> glassbox   # or however you're hosting it
 cd glassbox
 git clone https://github.com/Shreyasg13/multi-agent-trading-system backend-source
 cp .env.example .env
-nano .env   # fill in APP_DOMAIN, PUBLIC_API_URL, PUBLIC_WS_URL,
-            # GLASSBOX_JWT_SECRET (openssl rand -hex 32), any provider keys
+nano .env   # fill in APP_DOMAIN, PUBLIC_API_URL, PUBLIC_WS_URL, any provider keys,
+            # and the auth secrets generated below
 ```
+
+Generate the auth secrets (prints lines to paste into `.env`; nothing is stored):
+
+```bash
+docker compose run --rm backend python -m app.scripts.gen_secrets --admin
+# -> GLASSBOX_JWT_SECRET=...  and  GLASSBOX_ADMIN_PASSWORD_HASH='$2b$12$...'
+```
+
+The admin login is username `admin` plus the password you type at that prompt.
+There is no built-in default admin, and the backend refuses to start in
+production without a real `GLASSBOX_JWT_SECRET`. Keep the single quotes around
+the hash (it contains `$` characters, which compose would otherwise expand).
 
 `backend-source` must sit inside the `glassbox` repo directory, alongside
 `backend/` and `frontend/` (the compose file mounts `./backend-source` —

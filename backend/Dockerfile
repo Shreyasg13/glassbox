@@ -11,8 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
+# gunicorn is pinned in requirements.txt with everything else, so a rebuild
+# can never silently pull in a different major version.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 
@@ -21,4 +23,12 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
 # 2 workers is a sane default for a single small VM; bump via WEB_CONCURRENCY.
-CMD ["sh", "-c", "gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-2} -b 0.0.0.0:8000 --access-logfile -"]
+#
+# --forwarded-allow-ips="*": this container is only reachable from Caddy over
+# the compose network (docker-compose.yml `expose`s 8000, it never publishes
+# it), and Caddy replaces any client-supplied X-Forwarded-For with the real
+# client address. Trusting it is what makes request.client.host the actual
+# visitor's IP instead of Caddy's -- without it every visitor shares ONE
+# rate-limit bucket (see app/rate_limit.py). Do NOT publish port 8000 to the
+# host while this is set.
+CMD ["sh", "-c", "gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-2} -b 0.0.0.0:8000 --forwarded-allow-ips='*' --access-logfile -"]
