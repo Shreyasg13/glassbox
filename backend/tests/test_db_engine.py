@@ -17,6 +17,8 @@ comment.
 """
 from __future__ import annotations
 
+import pytest
+
 from app import db
 
 
@@ -44,3 +46,60 @@ def test_postgres_url_keeps_existing_sslmode():
     different value if the caller already specified one."""
     engine = db.build_engine("postgresql+psycopg://user:pass@example.com/db?sslmode=verify-full")
     assert engine.url.query.get("sslmode") == "verify-full"
+
+
+# ------------------------------------------------ first-boot schema creation is retry-safe --
+
+
+def _dup_error():
+    from sqlalchemy.exc import IntegrityError
+
+    return IntegrityError("CREATE TABLE committee_runs", {}, Exception('duplicate key value violates unique constraint "pg_type_typname_nsp_index"'))
+
+
+def test_init_schema_retries_a_concurrent_create_race_then_succeeds(monkeypatch):
+    from app import db
+
+    calls = []
+
+    def flaky(engine):
+        calls.append(1)
+        if len(calls) < 3:
+            raise _dup_error()  # the other worker won the CREATE TABLE race
+
+    slept = []
+    monkeypatch.setattr(db.metadata, "create_all", flaky)
+    monkeypatch.setattr(db.time, "sleep", lambda s: slept.append(s))
+    db.init_schema()
+    assert len(calls) == 3 and slept == [0.5, 1.0]  # short, growing backoff
+
+
+def test_init_schema_gives_up_after_the_last_attempt_with_the_original_error(monkeypatch):
+    from sqlalchemy.exc import IntegrityError
+
+    from app import db
+
+    monkeypatch.setattr(db.metadata, "create_all", lambda engine: (_ for _ in ()).throw(_dup_error()))
+    monkeypatch.setattr(db.time, "sleep", lambda s: None)
+    with pytest.raises(IntegrityError):
+        db.init_schema(attempts=3)
+
+
+def test_init_schema_does_not_retry_or_sleep_when_it_works(monkeypatch):
+    from app import db
+
+    calls = []
+    monkeypatch.setattr(db.metadata, "create_all", lambda engine: calls.append(1))
+    monkeypatch.setattr(db.time, "sleep", lambda s: (_ for _ in ()).throw(AssertionError("must not sleep")))
+    db.init_schema()
+    assert calls == [1]
+
+
+def test_init_schema_does_not_swallow_programming_mistakes(monkeypatch):
+    from app import db
+
+    calls = []
+    monkeypatch.setattr(db.metadata, "create_all", lambda engine: calls.append(1) or (_ for _ in ()).throw(ValueError("bug")))
+    with pytest.raises(ValueError):
+        db.init_schema()
+    assert calls == [1]  # a non-database error is a bug, not something to retry

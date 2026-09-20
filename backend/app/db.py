@@ -30,7 +30,9 @@ pre_ping alone doesn't cover (a connection can go stale between pings).
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,6 +40,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import Column, String, Boolean, create_engine, MetaData, Table, select, delete, update, insert
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import SQLAlchemyError
+
+log = logging.getLogger("glassbox.db")
 
 DB_PATH = Path(os.environ.get("GLASSBOX_DB_PATH", str(Path(__file__).parent / "glassbox.db")))
 _env_url = os.environ.get("DATABASE_URL")
@@ -148,7 +153,32 @@ committee_runs_table = Table(
     Column("config", String, nullable=False),
 )
 
-metadata.create_all(engine)
+
+
+def init_schema(attempts: int = 5) -> None:
+    """Create any missing tables, tolerating a crowded first boot.
+
+    gunicorn starts several workers and each imports this module at the same instant.
+    On the first boot after a release adds a table, they can all try to CREATE it at
+    once and the losers raise (a duplicate-relation error on Postgres); a brief hiccup
+    reaching the database at that moment fails the import the same way, and a worker
+    that cannot import kills its container (exit 3, "worker failed to boot"). Trying
+    again is safe -- create_all skips tables that now exist -- so retry a few times
+    with a short backoff (well inside the container's 40 s health start period) and
+    log each retry so the cause is visible instead of a bare crash."""
+    for attempt in range(1, attempts + 1):
+        try:
+            metadata.create_all(engine)
+            return
+        except SQLAlchemyError as exc:
+            if attempt == attempts:
+                raise
+            delay = 0.5 * attempt
+            log.warning("schema init attempt %d/%d failed (%s); retrying in %.1fs", attempt, attempts, type(exc).__name__, delay)
+            time.sleep(delay)
+
+
+init_schema()
 
 
 def _list(table: Table) -> List[Dict[str, Any]]:

@@ -71,6 +71,9 @@ if rollout "$NEW"; then
   echo "==> done. roll back with: deploy/deploy.sh --rollback   (previous: ${OLD:-none})"
 else
   echo "!! '$NEW' did not become healthy."
+  FAILLOG="$HOME/deploy-failure-$NEW.log"
+  docker compose logs --no-color --tail=120 $SERVICES > "$FAILLOG" 2>&1 || true   # BEFORE rollback recreates them
+  echo "==> logs of the failed containers saved to $FAILLOG"
   if [ -n "$OLD" ] && [ "$OLD" != "$NEW" ]; then
     echo "==> rolling back to '$OLD'"
     rollout "$OLD" && echo "==> rolled back; site is on '$OLD'" || echo "!! rollback failed too -- check: docker compose logs"
