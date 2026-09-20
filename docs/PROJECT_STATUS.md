@@ -589,6 +589,8 @@ pip-audit; Dependabot watches pip/npm/docker/actions.
 
 ## Phase 1 -- paper trading, backtests and the admin master view (2026-09-19)
 
+**Deployed 2026-09-20** (commit 8d74a82): bootstrapped on the VM (27 accounts, live tracking from 2026-09-19) and the daily cron added (`15 22 * * 1-5`, after the data sync). The first live day and the first 11 reports arrive with Monday 2026-09-21's run.
+
 **What exists now.** The quant engine's BUY/SELL/HOLD signals drive simulated
 portfolios so the strategy can be measured. Nothing places real orders.
 
