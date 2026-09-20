@@ -52,6 +52,24 @@ class CycleError(RuntimeError):
 # ------------------------------------------------------------------ setup --
 
 
+def committee_views() -> Dict[str, Dict[str, str]]:
+    """symbol -> decision date -> the committee's risk-checked action, for every reliable
+    review on record (a low-quorum call carries no action and is left out, so the
+    committee account falls back to the engine there). Best-effort: a database hiccup must
+    never stop the paper cycle -- the account then simply follows the engine that day."""
+    try:
+        runs = db.list_all_committee_runs()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("committee views unavailable (%s); committee_tilt follows the engine", type(exc).__name__)
+        return {}
+    out: Dict[str, Dict[str, str]] = {}
+    for r in runs:
+        action = r.get("action") or (r.get("decision") if r.get("quorum_ok") else None)
+        if action in ("BUY", "SELL", "HOLD") and r.get("date") and r.get("symbol"):
+            out.setdefault(r["symbol"], {})[r["date"]] = action
+    return out
+
+
 def load_book() -> paper.PriceBook:
     params = ds._load_trained_params()
     frames = {}
@@ -59,7 +77,9 @@ def load_book() -> paper.PriceBook:
         df = ds._load_parquet_row(sym)
         if df is not None:
             frames[sym] = df
-    return paper.PriceBook.from_frames(frames, params)
+    book = paper.PriceBook.from_frames(frames, params)
+    book.set_committee(committee_views())
+    return book
 
 
 def _control_accounts(book: paper.PriceBook) -> List[Dict[str, Any]]:
@@ -71,6 +91,9 @@ def _control_accounts(book: paper.PriceBook) -> List[Dict[str, Any]]:
         ("ctl_engine", "Engine on all symbols", "engine_tilt", equal, moderate, "moderate", "The quant engine's own signals across the whole universe."),
         ("ctl_placebo", "Placebo (shifted signals)", "random_tilt", equal, moderate, "moderate",
          "Same as the engine, but each symbol acts on a DIFFERENT symbol's signals. If the engine can't beat this its signals carry no information."),
+        ("ctl_committee", "Committee on all symbols", "committee_tilt", equal, moderate, "moderate",
+         "Trades exactly like 'Engine on all symbols', except a symbol the Investment Committee reviewed follows the committee's risk-checked call. "
+         "The gap between the two is what the committee added -- and it can only differ on live days."),
         ("ctl_cash", "Cash", "cash", {}, 0.0, None, "Sits in cash. The floor any strategy must beat."),
     ]
     out = []
@@ -141,6 +164,7 @@ def _refresh_holdings(acct: Dict[str, Any], book: paper.PriceBook) -> None:
         holdings[sym] = {"shares": round(shares, 6), "price": round(px, 4), "value": round(shares * px, 2), "weight": round(shares * px / eq, 4) if eq else 0.0}
     acct["holdings"] = holdings
     acct["equity"] = round(eq, 2)
+    paper.refresh_unrealized(acct, book, d)
 
 
 # ----------------------------------------------------------------- reports --
@@ -235,6 +259,40 @@ def _write_reports(accounts: Dict[str, Dict[str, Any]], book: paper.PriceBook, d
         )
         written += 1
     return written
+
+
+# ---------------------------------------------------------------- rebuild --
+
+
+def rebuild_accounts(*, apply: bool = False, book: Optional[paper.PriceBook] = None) -> Dict[str, Any]:
+    """Replay every stored account from scratch, from ITS OWN stored definition (not the
+    users' current profiles, which may have changed since -- accounts are frozen).
+
+    The engine is deterministic, so a fresh replay must reproduce the stored equity curve to
+    the cent. That is what makes this safe: it is how accounts created before tax tracking get
+    their lots, and the check proves nothing else changed. An account whose replay does not
+    match (e.g. a committee account after a forced re-review) is reported and left alone.
+    With apply=False nothing is written."""
+    meta = db.get_paper_meta()
+    if meta is None:
+        raise CycleError("paper trading is not initialised")
+    book = book or load_book()
+    report: Dict[str, str] = {}
+    replaced = 0
+    for old in db.list_paper_accounts():
+        fresh = paper.new_account(
+            old["id"], old["name"], old["kind"], old["strategy"], old["weights"], invested=old["invested"], start_cash=old["start_cash"],
+            risk_level=old.get("risk_level"), username=old.get("username"), benchmark_id=old.get("benchmark_id"), profile=old.get("profile"), note=old.get("note", ""),
+        )
+        paper.advance(fresh, book, live_from=meta["live_from"], start=meta["start"], upto=old["last_date"])
+        _refresh_holdings(fresh, book)
+        n = len(old["curve"])
+        same = len(fresh["curve"]) == n and all(a[0] == b[0] and abs(a[1] - b[1]) < 0.01 and a[2] == b[2] for a, b in zip(old["curve"], fresh["curve"]))
+        report[old["id"]] = "identical" if same else "DIFFERS"
+        if same and apply:
+            db.save_paper_account(fresh)
+            replaced += 1
+    return {"applied": apply, "identical": sum(v == "identical" for v in report.values()), "differs": sorted(k for k, v in report.items() if v != "identical"), "replaced": replaced, "accounts": report}
 
 
 # ------------------------------------------------------------------ cycle --

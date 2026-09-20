@@ -121,6 +121,11 @@ def _lean_from_text(text: str) -> str:
     return m.group(1).upper() if m else "HOLD"
 
 
+# An LLM analyst's self-reported confidence is not calibrated, so it can only nudge its vote:
+# clamped to this band, an over-confident analyst cannot outvote the engine's own confidence.
+VIEW_WEIGHT_MIN, VIEW_WEIGHT_MAX = 0.3, 0.8
+
+
 def _reduce_committee_vote(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Deterministic committee reducer -- confidence-weighted majority
     vote, NOT an LLM judge (guardrail in PERFORMANCE_AND_ORCHESTRATION.md).
@@ -145,6 +150,9 @@ def _reduce_committee_vote(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         if "signal" in r:
             lean = r["signal"]["signal"]
             weight = r["signal"].get("confidence", 50) / 100
+        elif "view" in r:  # a structured analyst answer (committee_graph): its own lean and self-reported confidence
+            lean = r["view"]["decision"]
+            weight = min(VIEW_WEIGHT_MAX, max(VIEW_WEIGHT_MIN, r["view"]["confidence"] / 100))
         elif "output" in r:
             lean = _lean_from_text(r["output"])
             weight = 0.5

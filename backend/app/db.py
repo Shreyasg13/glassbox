@@ -403,8 +403,27 @@ def save_committee_run(doc: Dict[str, Any]) -> Dict[str, Any]:
 COMMITTEE_LOCK_ID = "__lock__"
 
 
+COMMITTEE_ASK_PREFIX = "ask:"  # admin sandbox questions live in this table too, but are not decisions
+
+
 def _committee_rows() -> List[Dict[str, Any]]:
-    return [r for r in _list(committee_runs_table) if r.get("id") != COMMITTEE_LOCK_ID]
+    return [r for r in _list(committee_runs_table) if r.get("id") != COMMITTEE_LOCK_ID and not str(r.get("id", "")).startswith(COMMITTEE_ASK_PREFIX)]
+
+
+def save_committee_ask(doc: Dict[str, Any]) -> Dict[str, Any]:
+    if _update(committee_runs_table, doc["id"], doc) is None:
+        return _create(committee_runs_table, doc)
+    return doc
+
+
+def get_committee_ask(ask_id: str) -> Optional[Dict[str, Any]]:
+    return _get(committee_runs_table, ask_id) if ask_id.startswith(COMMITTEE_ASK_PREFIX) else None
+
+
+def list_committee_asks(limit: int = 15) -> List[Dict[str, Any]]:
+    items = [r for r in _list(committee_runs_table) if str(r.get("id", "")).startswith(COMMITTEE_ASK_PREFIX)]
+    items.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+    return items[:limit]
 
 
 def acquire_committee_lock(owner: str, ttl_s: float, now: Optional[float] = None) -> bool:

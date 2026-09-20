@@ -42,7 +42,8 @@ from datetime import date, datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from . import data_source as ds
-from . import db, orchestration, paper, paper_cycle
+from . import committee_graph, db, orchestration, paper, paper_cycle
+from . import risk as risk_mod
 from .models import OrchestrationConfig
 from .scripts.seed_agents import ORCHESTRATION_NAME
 
@@ -127,9 +128,13 @@ def select_candidates(
 # ----------------------------------------------------------------- context --
 
 
-def build_context(sym: str, d: str, book: paper.PriceBook, live: Optional[Dict[str, Any]] = None) -> str:
+def build_context(
+    sym: str, d: str, book: paper.PriceBook, live: Optional[Dict[str, Any]] = None, *, risk: Optional[Dict[str, Any]] = None, ask: bool = True
+) -> str:
     """The prompt every agent in the committee receives. The FIRST LINE starts with
-    the ticker -- the deterministic agents read the symbol from it."""
+    the ticker -- the deterministic agents read the symbol from it. `ask=False` returns
+    the facts only, for the LangGraph committee which appends its own structured
+    (JSON) question; `ask=True` ends with the plain-text 'Decision:' request."""
     info = ds.STOCK_INFO.get(sym, {"name": sym, "sector": "n/a", "beta": None})
     sig, conf = book.signal_at(sym, d)
     close = book.close[sym][d]
@@ -154,11 +159,19 @@ def build_context(sym: str, d: str, book: paper.PriceBook, live: Optional[Dict[s
         f"win rate {live.get('win_rate', float('nan')):.0f}%.",
         f"Recent moves: 1-day {pct(r1)}, 5-day {pct(r5)}, 20-day {pct(r20)}; {drawdown:+.1%} from its 60-day high; "
         f"20-day volatility {vol:.0%} annualised; beta {info.get('beta', 'n/a')}.",
-        "",
-        "Reply with your recommendation for the next 1-5 trading days. Start with EXACTLY one line: "
-        "'Decision: BUY', 'Decision: SELL' or 'Decision: HOLD'. Then give 2-3 sentences of reasoning using ONLY the numbers above -- "
-        "do not invent news, earnings, prices or events. If the data does not justify a change, choose HOLD and say what would change your view.",
     ]
+    if risk:
+        lines.append(
+            f"Risk regime (rule-based, not a forecast): {risk['level']} (score {risk['score']:.0f}/100) -- volatility at the {risk['vol_pct']:.0f}th percentile "
+            f"of its own history, {risk['drawdown']:+.1%} from its 252-day high, price {'below' if risk['below_ma200'] else 'above'} its 200-day average."
+        )
+    if ask:
+        lines += [
+            "",
+            "Reply with your recommendation for the next 1-5 trading days. Start with EXACTLY one line: "
+            "'Decision: BUY', 'Decision: SELL' or 'Decision: HOLD'. Then give 2-3 sentences of reasoning using ONLY the numbers above -- "
+            "do not invent news, earnings, prices or events. If the data does not justify a change, choose HOLD and say what would change your view.",
+        ]
     return "\n".join(lines)
 
 
@@ -180,19 +193,64 @@ def _agent_rows(result: Dict[str, Any]) -> List[Dict[str, Any]]:
         else:
             text = a.get("output", "")
             body = re.sub(r"^\s*decision\s*[:\-].*?(\n|$)", "", text, count=1, flags=re.I)
-            rows.append(
-                {"agent": a["agent"], "type": "llm", "ok": True, "provider": a.get("provider"), "model": a.get("model"),
-                 "lean": orchestration._lean_from_text(text), "summary": _squash(body or text, 260)}
-            )
+            view = a.get("view") or {}
+            row = {"agent": a["agent"], "type": "llm", "ok": True, "provider": a.get("provider"), "model": a.get("model"),
+                   "lean": view.get("decision") or orchestration._lean_from_text(text), "summary": _squash(body or text, 260)}
+            if view:
+                row.update({"confidence": view["confidence"], "risk_level": view["risk_level"]})
+            row["structured"] = bool(view)
+            if a.get("failed_over_from"):
+                row["failed_over_from"] = a["failed_over_from"]
+            if a.get("raw"):
+                row["raw"] = a["raw"][:1500]
+            if a.get("latency_s") is not None:
+                row["latency_s"] = a["latency_s"]
+            rows.append(row)
     return rows
 
 
-def _run_doc(d: str, pick: Dict[str, Any], book: paper.PriceBook, result: Optional[Dict[str, Any]], error: Optional[str], seconds: float, quorum: int) -> Dict[str, Any]:
+def ceo_brief(decision: Optional[str], action: Optional[str], gate: Optional[str], votes: Optional[Dict[str, float]], agents: List[Dict[str, Any]], tally: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The CEO view of one decision: how strongly the committee agreed, whether the three
+    engine agents and the seven analysts saw it the same way, who dissented, and what the
+    risk check did. Pure arithmetic over the stored votes -- deterministic and auditable."""
+    if not decision or not votes:
+        return None
+    total = sum(votes.values()) or 1.0
+    share = votes.get(decision, 0.0) / total
+    ranked = sorted(votes.values(), reverse=True)
+    margin = (ranked[0] - ranked[1]) if len(ranked) > 1 else ranked[0]
+    label = "strong consensus" if share >= 0.8 else "majority" if share >= 0.6 else "split"
+    types = {a["agent"]: a.get("type") for a in agents if a.get("ok")}
+
+    def group_lean(kind: str) -> Optional[str]:
+        w: Dict[str, float] = {}
+        for t in tally:
+            if types.get(t["agent"]) == kind:
+                w[t["lean"]] = w.get(t["lean"], 0.0) + t["weight"]
+        return max(w, key=w.get) if w else None
+
+    trio, panel = group_lean("deterministic"), group_lean("llm")
+    dissent = [t["agent"] for t in tally if t["lean"] != decision]
+    headline = f"{action or decision} - {label} ({share:.0%} of the vote weight)"
+    if trio and panel:
+        headline += "; engine trio and analyst panel " + ("agree" if trio == panel else f"DISAGREE (trio {trio}, panel {panel})")
+    if dissent:
+        headline += f"; {len(dissent)} dissent"
+    if gate:
+        headline += f"; risk check: {gate}"
+    return {"call": action or decision, "vote": decision, "consensus": round(share, 3), "label": label, "margin": round(margin, 2), "engine_trio": trio, "analyst_panel": panel,
+            "trio_panel_agree": (trio == panel) if trio and panel else None, "dissenters": dissent, "gate": gate, "headline": headline}
+
+
+def _run_doc(
+    d: str, pick: Dict[str, Any], book: paper.PriceBook, result: Optional[Dict[str, Any]], error: Optional[str], seconds: float, quorum: int, context: Optional[str] = None
+) -> Dict[str, Any]:
     sym = pick["symbol"]
     agents = _agent_rows(result) if result else []
     ok = [a for a in agents if a.get("ok")]
     cd = (result or {}).get("committee_decision") or {}
     decision = cd.get("decision")
+    action = (cd.get("action") or decision) if len(ok) >= quorum else None  # a low-quorum call is not acted on
     return {
         "id": f"{d}:{sym}",
         "date": d,
@@ -202,7 +260,14 @@ def _run_doc(d: str, pick: Dict[str, Any], book: paper.PriceBook, result: Option
         "engine_confidence": pick["engine_confidence"],
         "price": book.close[sym][d],
         "decision": decision,
+        "action": action,
+        "gate": cd.get("gate"),
+        "risk": cd.get("risk"),
+        "analyst_risk": cd.get("analyst_risk"),
         "votes": cd.get("votes"),
+        "ceo": ceo_brief(decision, action, cd.get("gate"), cd.get("votes"), agents, cd.get("tally") or []),
+        "context": context,
+        "engine": (result or {}).get("engine", "legacy"),
         "agrees_with_engine": (decision == pick["engine_signal"]) if decision else None,
         "agents": agents,
         "answered": len(ok),
@@ -299,7 +364,7 @@ async def run_daily(
     if orch_row is None:
         raise CommitteeError(f"orchestration {ORCHESTRATION_NAME!r} is not seeded -- run app.scripts.seed_agents")
     orch = OrchestrationConfig(**orch_row)
-    run = runner or orchestration.run_orchestration
+    run = runner or committee_graph.run_committee_graph
     quorum = _env_int("COMMITTEE_QUORUM", QUORUM_DEFAULT)
     budget = _env_int("COMMITTEE_DAILY_BUDGET_S", 1500)
     live = live_rows if live_rows is not None else {r["symbol"]: r for r in (await asyncio.to_thread(ds.get_live_signals))["signals"]}
@@ -314,16 +379,17 @@ async def run_daily(
             if saved and time.monotonic() - started > budget:
                 log.warning("committee time budget (%ss) spent; %d symbol(s) left for the next run", budget, len(todo) - len(saved))
                 break
-            ctx = build_context(pick["symbol"], d, book, live.get(pick["symbol"]))
+            risk_now = risk_mod.risk_at(book, pick["symbol"], d)
+            ctx = build_context(pick["symbol"], d, book, live.get(pick["symbol"]), risk=risk_now, ask=False)
             t0 = time.monotonic()
             result: Optional[Dict[str, Any]] = None
             error: Optional[str] = None
             try:
-                result = await run(orch, ctx, job_id=None, allow_failover=True)
+                result = await run(orch, ctx, job_id=None, allow_failover=True, risk=risk_now)
             except Exception as exc:  # noqa: BLE001 -- one symbol failing must not stop the rest
                 error = f"{type(exc).__name__}: {_squash(str(exc), 160)}"
                 log.error("committee run for %s failed: %s", pick["symbol"], error)
-            doc = _run_doc(d, pick, book, result, error, time.monotonic() - t0, quorum)
+            doc = _run_doc(d, pick, book, result, error, time.monotonic() - t0, quorum, ctx)
             db.save_committee_run(doc)
             saved.append(doc)
             log.info("committee %s %s -> %s (%d/%d answered, engine %s)", d, pick["symbol"], doc["decision"], doc["answered"], doc["total"], pick["engine_signal"])

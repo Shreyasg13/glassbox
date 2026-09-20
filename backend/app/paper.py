@@ -36,6 +36,17 @@ RULES (deliberately simple, all stated so results can be audited):
   or "live". Backtest results are IN-SAMPLE: the trained parameters
   (RSI thresholds, MA windows) were fitted on this same history, so backtest
   returns are optimistic. Live results are genuine out-of-sample paper trading.
+* committee_tilt: engine_tilt, except that a symbol the Investment Committee reviewed
+  in the last COMMITTEE_MAX_AGE_DAYS trading days is tilted by the committee's
+  risk-gated action instead of the raw engine signal. Same universe and rules as the
+  "engine on all symbols" control, so the difference between the two is exactly what
+  the committee added. It only differs from the engine on live days (there is no
+  committee history to replay).
+* Tax lens (an ESTIMATE, not advice): every buy opens a FIFO lot and every sell closes
+  lots, splitting realised gains into short-term (held 365 days or less) and long-term.
+  est_tax applies PAPER_TAX_ST / PAPER_TAX_LT (assumed 32% / 15%) to the net gains, so
+  the leaderboard can show what an active strategy keeps AFTER tax versus buy-and-hold,
+  where the gain stays unrealised and untaxed.
 """
 from __future__ import annotations
 
@@ -43,6 +54,7 @@ import bisect
 import hashlib
 import math
 import os
+from datetime import date as _date
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import data_source as ds
@@ -63,7 +75,12 @@ RISK_POLICY = {
     "aggressive": {"invested": 0.95, "max_position": 0.60},
 }
 
-STRATEGIES = ("engine_tilt", "static_hold", "static_rebalanced", "random_tilt", "cash")
+STRATEGIES = ("engine_tilt", "static_hold", "static_rebalanced", "random_tilt", "cash", "committee_tilt")
+
+COMMITTEE_MAX_AGE_DAYS = 5  # a committee call stays in force this many trading days (its own 1-5 day horizon)
+TAX_ST = float(os.environ.get("PAPER_TAX_ST", "0.32"))  # assumed rate on gains held <= 1 year (ordinary income)
+TAX_LT = float(os.environ.get("PAPER_TAX_LT", "0.15"))  # assumed rate on gains held > 1 year
+LONG_TERM_DAYS = 365
 
 
 # --------------------------------------------------------------- price data --
@@ -78,6 +95,23 @@ class PriceBook:
         self.signal: Dict[str, Dict[str, Tuple[str, float, float]]] = {}  # date -> (signal, confidence, rsi)
         self._sorted_dates: Dict[str, List[str]] = {}
         self.dates: List[str] = []
+        self.committee: Dict[str, Dict[str, str]] = {}  # symbol -> decision date -> committee action
+        self._committee_dates: Dict[str, List[str]] = {}
+
+    def set_committee(self, decisions: Dict[str, Dict[str, str]]) -> None:
+        self.committee = {sym: dict(by_date) for sym, by_date in decisions.items() if by_date}
+        self._committee_dates = {sym: sorted(by_date) for sym, by_date in self.committee.items()}
+
+    def committee_at(self, sym: str, d: str, max_age: int = COMMITTEE_MAX_AGE_DAYS) -> Optional[str]:
+        """The committee's action on `sym` as known after day d's close, if it is still fresh."""
+        dts = self._committee_dates.get(sym)
+        if not dts:
+            return None
+        i = bisect.bisect_right(dts, d)
+        if not i:
+            return None
+        age = bisect.bisect_right(self.dates, d) - bisect.bisect_right(self.dates, dts[i - 1])
+        return self.committee[sym][dts[i - 1]] if age <= max_age else None
 
     @classmethod
     def from_frames(cls, frames: Dict[str, Any], params: Dict[str, Any]) -> "PriceBook":
@@ -207,7 +241,71 @@ def new_account(
         "last_targets": {},
         "last_tilt_key": None,
         "since_rebalance": 10**6,  # first decision is always "due"
+        "lots": {},  # symbol -> [[buy date, shares, price], ...] oldest first (FIFO)
+        "tax": new_tax(),
     }
+
+
+def new_tax() -> Dict[str, Any]:
+    return {"tracked": True, "st": 0.0, "lt": 0.0, "held_notional_days": 0.0, "sold_notional": 0.0, "unrealized_st": 0.0, "unrealized_lt": 0.0}
+
+
+def _open_lot(acct: Dict[str, Any], sym: str, d: str, shares: float, price: float) -> None:
+    if acct.get("tax", {}).get("tracked"):
+        acct.setdefault("lots", {}).setdefault(sym, []).append([d, shares, price])
+
+
+def _close_lots(acct: Dict[str, Any], sym: str, d: str, shares: float, price: float, cost: float) -> None:
+    """FIFO: realise the gain on `shares` sold at `price` (sell commission `cost` reduces it)."""
+    tax = acct.get("tax")
+    if not tax or not tax.get("tracked"):
+        return
+    lots = acct.setdefault("lots", {}).get(sym) or []
+    sale = _date.fromisoformat(d)
+    remaining = shares
+    while remaining > 1e-12 and lots:
+        lot_d, lot_shares, lot_px = lots[0]
+        take = min(remaining, lot_shares)
+        days = (sale - _date.fromisoformat(lot_d)).days
+        tax["lt" if days > LONG_TERM_DAYS else "st"] += take * (price - lot_px) - cost * (take / shares)
+        tax["held_notional_days"] += days * take * price
+        tax["sold_notional"] += take * price
+        remaining -= take
+        if take >= lot_shares - 1e-12:
+            lots.pop(0)
+        else:
+            lots[0][1] = lot_shares - take
+    if not lots:
+        acct.get("lots", {}).pop(sym, None)
+
+
+def refresh_unrealized(acct: Dict[str, Any], book: PriceBook, d: str) -> None:
+    """Gains still sitting in open lots at day d, split by how long they have been held."""
+    tax = acct.get("tax")
+    if not tax or not tax.get("tracked"):
+        return
+    now, st, lt = _date.fromisoformat(d), 0.0, 0.0
+    for sym, lots in (acct.get("lots") or {}).items():
+        px = book.close_on(sym, d)
+        if not px:
+            continue
+        for lot_d, shares, lot_px in lots:
+            gain = shares * (px - lot_px)
+            if (now - _date.fromisoformat(lot_d)).days > LONG_TERM_DAYS:
+                lt += gain
+            else:
+                st += gain
+    tax["unrealized_st"], tax["unrealized_lt"] = st, lt
+
+
+def estimate_tax(st: float, lt: float) -> float:
+    """Tax on realised gains at the assumed rates. A loss in one bucket offsets gains in the
+    other; a net loss overall is simply zero tax (no carry-forward modelled)."""
+    if st < 0 <= lt:
+        lt, st = max(0.0, lt + st), 0.0
+    elif lt < 0 <= st:
+        st, lt = max(0.0, st + lt), 0.0
+    return max(st, 0.0) * TAX_ST + max(lt, 0.0) * TAX_LT
 
 
 def equity(acct: Dict[str, Any], book: PriceBook, d: str) -> float:
@@ -260,11 +358,17 @@ def _target_weights(acct: Dict[str, Any], book: PriceBook, d: str) -> Tuple[Dict
             sig, conf = "HOLD", 50.0
         elif strategy == "random_tilt":
             sig, conf = book.signal_at(_placebo_symbol(acct["id"], sym, symbols), d)
+        elif strategy == "committee_tilt":
+            view = book.committee_at(sym, d)
+            sig, conf = (view, 50.0) if view else book.signal_at(sym, d)
         else:
             sig, conf = book.signal_at(sym, d)
         sigs[sym] = sig
         raw[sym] = invested * w * TILT[sig]
-        reasons[sym] = f"{sig} ({conf:.0f}%)" if strategy == "engine_tilt" else ("policy weight" if strategy == "static_rebalanced" else f"placebo {sig}")
+        if strategy == "committee_tilt":
+            reasons[sym] = f"committee {sig}" if book.committee_at(sym, d) else f"engine {sig} ({conf:.0f}%), no committee view"
+        else:
+            reasons[sym] = f"{sig} ({conf:.0f}%)" if strategy == "engine_tilt" else ("policy weight" if strategy == "static_rebalanced" else f"placebo {sig}")
     total = sum(raw.values())
     if total > 1.0:
         raw = {s: v / total for s, v in raw.items()}
@@ -316,6 +420,9 @@ def _execute_pending(acct: Dict[str, Any], book: PriceBook, d: str) -> None:
             acct["positions"][sym] = left
         else:
             acct["positions"].pop(sym, None)
+        _close_lots(acct, sym, d, shares, price, cost)
+        if left <= 1e-9:
+            acct.get("lots", {}).pop(sym, None)
         _record_trade(acct, d, sym, "SELL", shares, price, cost, reasons.get(sym, "rebalance"))
 
     want = sum(delta for _s, delta, _p in buys)
@@ -329,6 +436,7 @@ def _execute_pending(acct: Dict[str, Any], book: PriceBook, d: str) -> None:
             cost = notional * bps
             acct["cash"] -= notional + cost
             acct["positions"][sym] = acct["positions"].get(sym, 0.0) + shares
+            _open_lot(acct, sym, d, shares, price)
             _record_trade(acct, d, sym, "BUY", shares, price, cost, reasons.get(sym, "rebalance"))
 
 
@@ -421,6 +529,25 @@ def annual_volatility(values: List[float]) -> float:
     return math.sqrt(sum((x - mean) ** 2 for x in r) / (len(r) - 1)) * math.sqrt(TRADING_DAYS)
 
 
+def _tax_summary(acct: Dict[str, Any], last: float) -> Dict[str, Any]:
+    tax = acct.get("tax")
+    if not tax or not tax.get("tracked"):  # an account created before tax tracking: unknown, not zero
+        return {"tax_tracked": False, "realized_st": None, "realized_lt": None, "est_tax": None, "after_tax_return": None, "tax_drag": None, "avg_holding_days": None, "unrealized_st": None, "unrealized_lt": None}
+    est = estimate_tax(tax["st"], tax["lt"])
+    start = acct["start_cash"]
+    return {
+        "tax_tracked": True,
+        "realized_st": round(tax["st"], 2),
+        "realized_lt": round(tax["lt"], 2),
+        "est_tax": round(est, 2),
+        "after_tax_return": (last - est) / start - 1,
+        "tax_drag": est / start,
+        "avg_holding_days": (tax["held_notional_days"] / tax["sold_notional"]) if tax["sold_notional"] else None,
+        "unrealized_st": round(tax.get("unrealized_st", 0.0), 2),
+        "unrealized_lt": round(tax.get("unrealized_lt", 0.0), 2),
+    }
+
+
 def summarize(acct: Dict[str, Any], bench: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Leaderboard row: total and live-only return, risk, cost, and alpha vs
     the account's benchmark over the same dates."""
@@ -461,6 +588,7 @@ def summarize(acct: Dict[str, Any], bench: Optional[Dict[str, Any]] = None) -> D
         "benchmark_id": acct.get("benchmark_id"),
         "alpha": None,
         "live_alpha": None,
+        **_tax_summary(acct, last),
     }
     if bench and bench["curve"]:
         b_last = bench["curve"][-1][1]

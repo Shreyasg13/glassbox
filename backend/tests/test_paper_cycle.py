@@ -98,9 +98,9 @@ def fake(monkeypatch):
 def test_bootstrap_creates_controls_profiles_and_benchmarks(fake):
     r = paper_cycle.run_cycle(bootstrap=True, start=day(0), book=make_book(N_SHORT))
     ids = set(fake.accounts)
-    assert {"ctl_spy", "ctl_equal", "ctl_engine", "ctl_placebo", "ctl_cash"} <= ids
+    assert {"ctl_spy", "ctl_equal", "ctl_engine", "ctl_placebo", "ctl_committee", "ctl_cash"} <= ids
     assert {"profile:demo_a", "bench:demo_a", "profile:demo_b", "bench:demo_b"} <= ids
-    assert r["accounts"] == len(ids) == 9  # 5 controls + 2 profiles + 2 benchmarks
+    assert r["accounts"] == len(ids) == 10  # 6 controls + 2 profiles + 2 benchmarks
     assert not any(k for k in ids if "no_profile" in k or "an_admin" in k or "no_tickers" in k)  # skipped users
 
 
@@ -125,7 +125,7 @@ def test_profile_accounts_honour_strategic_weights_starting_cash_and_drop_unpric
 
 def test_dry_run_saves_nothing(fake):
     r = paper_cycle.run_cycle(bootstrap=True, start=day(0), dry_run=True, book=make_book(N_SHORT))
-    assert r["dry_run"] and r["accounts"] == 9
+    assert r["dry_run"] and r["accounts"] == 10
     assert fake.accounts == {} and fake.meta is None and fake.narratives == []
 
 
@@ -310,7 +310,7 @@ def test_api_run_needs_bootstrap_then_bootstraps_once_then_runs_daily(client, fa
     r = client.post("/api/admin/paper/run", json={}, headers=ADMIN)
     assert r.status_code == 409 and "bootstrap" in r.json()["detail"]
     r = client.post("/api/admin/paper/run", json={"bootstrap": True, "start": day(0)}, headers=ADMIN)
-    assert r.status_code == 200 and r.json()["accounts"] == 9
+    assert r.status_code == 200 and r.json()["accounts"] == 10
     assert client.post("/api/admin/paper/run", json={"bootstrap": True}, headers=ADMIN).status_code == 409
     monkeypatch.setattr(paper_cycle, "load_book", lambda: make_book(N_FULL))
     r = client.post("/api/admin/paper/run", json={}, headers=ADMIN)
@@ -328,7 +328,7 @@ def test_api_overview_account_and_signals_after_a_run(client, fake, monkeypatch)
     monkeypatch.setattr(paper_cycle, "load_book", lambda: make_book(N_FULL))
     client.post("/api/admin/paper/run", json={}, headers=ADMIN)
     ov = client.get("/api/admin/paper/overview", headers=ADMIN).json()
-    assert ov["initialised"] and len(ov["accounts"]) == 9
+    assert ov["initialised"] and len(ov["accounts"]) == 10
     acc = client.get("/api/admin/paper/accounts/profile:demo_a", headers=ADMIN)  # ids contain ':'
     assert acc.status_code == 200 and acc.json()["summary"]["id"] == "profile:demo_a"
     assert client.get("/api/admin/paper/accounts/nope", headers=ADMIN).status_code == 404
@@ -385,7 +385,7 @@ def test_registry_wins_a_username_clash_and_real_users_with_profiles_are_still_a
     assert sum(1 for k in fake.accounts if k == "profile:demo_a") == 1  # no duplicate
 
 
-def test_the_real_registry_builds_all_27_accounts_on_a_full_universe_with_no_users(fake, monkeypatch):
+def test_the_real_registry_builds_all_28_accounts_on_a_full_universe_with_no_users(fake, monkeypatch):
     monkeypatch.undo()  # drop the fixture's empty-registry patch, keep everything else below explicit
     f = FakeDB([])
     with pytest.MonkeyPatch.context() as mp:
@@ -395,7 +395,7 @@ def test_the_real_registry_builds_all_27_accounts_on_a_full_universe_with_no_use
         book = paper.PriceBook.from_frames(frames, {sym: PARAMS for sym in frames})
         r = paper_cycle.run_cycle(bootstrap=True, start=day(0), book=book)
     assert len(paper_profiles.DEMO_PROFILES) == 11
-    assert r["accounts"] == len(f.accounts) == 5 + 11 * 2  # controls + (profile + benchmark) per registry entry
+    assert r["accounts"] == len(f.accounts) == 6 + 11 * 2  # controls + (profile + benchmark) per registry entry
     assert sum(1 for a in f.accounts.values() if a["kind"] == "profile") == 11
 
 
