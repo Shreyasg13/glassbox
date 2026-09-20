@@ -141,8 +141,9 @@ def _stub_orchestration_and_capture_task(monkeypatch, captured):
     loop."""
     monkeypatch.setattr(me.db, "log_audit", lambda *a, **k: None)
 
-    async def fake_run_orchestration(orch, input, *, job_id=None):
+    async def fake_run_orchestration(orch, input, *, job_id=None, allow_failover=True):
         captured["agent_ids"] = orch.agent_ids
+        captured["allow_failover"] = allow_failover
         return {"mode": orch.mode, "agents": []}
 
     monkeypatch.setattr(me.orchestration, "run_orchestration", fake_run_orchestration)

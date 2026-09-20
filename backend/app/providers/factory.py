@@ -13,6 +13,7 @@ from .base import LLMProvider
 from .claude import ClaudeProvider
 from .gemini import GeminiProvider
 from .ollama import OllamaProvider
+from .openai_compat import SPECS, OpenAICompatProvider
 from .vllm import VLLMProvider
 
 _REGISTRY = {
@@ -25,7 +26,14 @@ _REGISTRY = {
 
 @lru_cache(maxsize=None)
 def get_provider(name: Provider) -> LLMProvider:
+    if name in SPECS:
+        return OpenAICompatProvider(SPECS[name])
     cls = _REGISTRY.get(name)
     if cls is None:
         raise ValueError(f"Unknown provider: {name}")
     return cls()
+
+
+def all_provider_names() -> list:
+    """Every provider the app can talk to, native ones first."""
+    return [*_REGISTRY, *SPECS]

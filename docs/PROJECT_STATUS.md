@@ -640,3 +640,25 @@ These are the targets for Phase 3 (re-weighting, challenger orchestrations).
 drawdown views), Phase 3 (shadow challengers, proposals queue, re-weighting),
 per-agent recommendation logging for the LLM committee, per-user paper portfolios
 for real customers.
+
+## LLM failover routing (2026-09-20)
+
+Billing is not enabled on the Gemini key, whose free tier is ~20 requests/day on
+flash models -- so the Investment Committee could never finish. Requests now fail
+over instead of stalling (full guide: docs/FREE_LLM_ROUTING.md).
+
+- `app/providers/openai_compat.py` -- one class for every OpenAI-compatible host:
+  OpenRouter (free `:free` models + the `openrouter/free` auto-router, discovered
+  live), Groq, Cerebras, GitHub Models, Qwen (DashScope), DeepSeek, xAI Grok and a
+  custom `gateway` slot (OmniRoute / LiteLLM / vLLM ...). Errors carry only the
+  provider name + HTTP status, never a key, URL, prompt or response body.
+- `app/llm_router.py` -- `complete_routed()`: the requested provider first, then a
+  failover order; a quota error puts a provider to rest (~1h for a per-day limit)
+  so it is not hammered; failover targets get their own model ids; total time
+  budget; if nothing else is usable the original error is raised unchanged.
+- Wired into agent runs, report/insight narration and the daily paper-report note.
+  Agent results record the provider that really answered (`failed_over_from`).
+- Admin -> Observability: routing table + "Test failover"; `/api/admin/providers/routing[/test]`.
+- **A provider with no key is skipped -- nothing changes until a key is added.**
+- Privacy: failover providers see the prompt; `LLM_FAILOVER_USER_RUNS=0` keeps
+  end-user runs off third parties.

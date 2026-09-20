@@ -5,7 +5,7 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { ProviderHealth } from "@/lib/types";
 
-const PROVIDERS = ["vllm", "ollama", "gemini", "claude"] as const;
+const NATIVE = ["vllm", "ollama", "gemini", "claude"] as const;
 
 export function ProviderHealthStrip() {
   const { token } = useAuth();
@@ -17,6 +17,12 @@ export function ProviderHealthStrip() {
   });
 
   const byProvider = new Map((data ?? []).map((h) => [h.provider, h]));
+  // The four native providers always show. A failover provider only shows once it is set up
+  // (or is actually reachable), so an admin isn't greeted by a row of red "not configured" dots.
+  const PROVIDERS = [
+    ...NATIVE,
+    ...(data ?? []).map((h) => h.provider).filter((p) => !(NATIVE as readonly string[]).includes(p) && (byProvider.get(p)?.reachable || !/not set/i.test(byProvider.get(p)?.detail ?? ""))),
+  ];
 
   return (
     <div className="flex flex-wrap gap-sp3">

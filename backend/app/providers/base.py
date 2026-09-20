@@ -45,6 +45,27 @@ class NotConfiguredError(RuntimeError):
     """Raised by cloud providers when a required API key is absent."""
 
 
+class RateLimitedError(RuntimeError):
+    """The provider is throttling us (HTTP 429) or out of quota/credits (402).
+
+    `retry_after_s` is the provider's own hint when it gave one. `daily` means
+    the limit looks like a per-day / credit quota rather than a per-minute one,
+    so waiting a minute won't help -- the failover router (app/llm_router.py)
+    uses both to decide how long to stop sending this provider traffic."""
+
+    def __init__(self, message: str, *, retry_after_s: Optional[float] = None, daily: bool = False) -> None:
+        super().__init__(message)
+        self.retry_after_s = retry_after_s
+        self.daily = daily
+
+
+class ModelUnavailableError(RuntimeError):
+    """HTTP 404: this model id doesn't exist, or isn't served to this key.
+    Never retryable, and worth remembering -- distinct from 429/503, which are
+    transient. (Defined here so every provider can raise it; gemini re-exports
+    it for backwards compatibility.)"""
+
+
 class BaseProvider:
     name: Provider
 

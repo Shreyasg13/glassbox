@@ -1,7 +1,20 @@
 // Mirrors backend/app/models.py exactly (Phase 4/5 section). Keep in sync.
 
 export type AgentType = "deterministic" | "llm";
-export type Provider = "vllm" | "ollama" | "gemini" | "claude";
+export type Provider =
+  | "vllm"
+  | "ollama"
+  | "gemini"
+  | "claude"
+  // OpenAI-compatible failover providers (see backend/app/llm_router.py)
+  | "openrouter"
+  | "groq"
+  | "cerebras"
+  | "github"
+  | "qwen"
+  | "deepseek"
+  | "xai"
+  | "gateway";
 export type OrchestrationMode = "sequential" | "parallel" | "committee_vote";
 export type Role = "admin" | "viewer";
 
@@ -201,3 +214,22 @@ export type PaperRunResult = {
   new_live_days: string[];
   reports_written: number;
 };
+
+// ---- LLM routing / failover (admin) ----
+
+export type RoutingProvider = {
+  provider: string;
+  label: string;
+  tier: "free" | "freemium" | "paid" | "custom" | "local" | string;
+  configured: boolean;
+  not_configured_reason: string;
+  in_failover_order: boolean;
+  cooling_down_s: number;
+  cooldown_reason: string;
+  last: { ok: boolean; at: string; detail: string } | null;
+  get_a_key: string;
+};
+
+export type RoutingStatus = { enabled: boolean; order: string[]; budget_s: number; user_runs_may_fail_over: boolean; providers: RoutingProvider[] };
+
+export type RoutingTestResult = { ok: boolean; answered_by: string; model: string; failed_over: boolean; reply: string; skipped_or_failed: { provider: string; result: string }[] };

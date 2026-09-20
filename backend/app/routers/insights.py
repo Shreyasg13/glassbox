@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 from .. import db
 from .. import jobs
 from ..auth import TokenPayload, require_admin
-from ..llm_call_logging import complete_with_logging
+from .. import llm_router
 from ..models import InsightNarrateRequest, JobAccepted
 
 router = APIRouter(prefix="/api/insights", tags=["insights"])
@@ -59,13 +59,11 @@ async def narrate_insights(body: InsightNarrateRequest, user: TokenPayload = Dep
         async def _on_token(piece: str) -> None:
             await jobs.token(job_id, piece)
 
-        text, model_used = await complete_with_logging(
-            body.provider,
-            body.model,
-            prompt,
-            on_token=_on_token,
-        )
-        return {"narrative": text, "model": model_used}
+        async def _on_fallback(candidate: str, reason: str) -> None:
+            await jobs.log(job_id, f"trying '{candidate}' ({reason})")
+
+        routed = await llm_router.complete_routed(body.provider, body.model, prompt, on_token=_on_token, on_fallback=_on_fallback)
+        return {"narrative": routed.text, "model": routed.model, "provider": routed.provider}
 
     asyncio.create_task(jobs.run_job(job_id, _work))
     return JobAccepted(job_id=job_id)

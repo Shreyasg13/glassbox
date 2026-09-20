@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth";
 import type { AgentConfig, Provider } from "@/lib/types";
 import { JobOutputPanel } from "./JobOutputPanel";
 
-const PROVIDERS: Provider[] = ["vllm", "ollama", "gemini", "claude"];
+const PROVIDERS: Provider[] = ["vllm", "ollama", "gemini", "claude", "openrouter", "groq", "cerebras", "github", "qwen", "deepseek", "xai", "gateway"];
 
 /** Add/remove chip list for an ordered string array -- same interaction
  * pattern as components/onboarding/StepPortfolio.tsx's ticker input,

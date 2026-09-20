@@ -25,7 +25,7 @@ from typing import Optional, Set
 
 import httpx
 
-from .base import BaseProvider, NotConfiguredError, OnToken
+from .base import BaseProvider, ModelUnavailableError, NotConfiguredError, OnToken, RateLimitedError
 
 # 429 (rate limit) and 503 (transient overload) are the only Gemini errors
 # worth retrying here -- both observed live: a fresh free-tier key firing
@@ -37,13 +37,6 @@ from .base import BaseProvider, NotConfiguredError, OnToken
 # lower than initially assumed: staggering launches 0.4s apart still
 # left 6 of 7 calls 429'd), while a 503 "high demand" typically clears
 # in a couple seconds and doesn't need as long a wait.
-class ModelUnavailableError(RuntimeError):
-    """HTTP 404: this model id doesn't exist, or isn't served to this key.
-    Never retryable, and worth remembering (see gemini_quota.mark_unavailable)
-    -- distinct from 429/503, which are transient. Message text is kept
-    identical to the old generic 404 error so existing log filters still match."""
-
-
 _MODELS_TTL_S = 6 * 60 * 60.0  # how long a successful ListModels result is trusted
 _MODELS_FAIL_TTL_S = 5 * 60.0  # how long a FAILED lookup suppresses re-asking
 _RETRYABLE_STATUS = {429, 503}
@@ -165,6 +158,16 @@ class GeminiProvider(BaseProvider):
                         await asyncio.sleep(delay)
                         last_exc = RuntimeError(f"Gemini API error: HTTP {status}")
                         continue
+                    if status == 429:
+                        # A per-DAY quota ("...PerDay...") won't clear in a minute --
+                        # tell the failover router so it stops asking for a while.
+                        body = exc.response.text or ""
+                        retry_hdr = exc.response.headers.get("retry-after")
+                        raise RateLimitedError(
+                            "Gemini API error: HTTP 429",
+                            retry_after_s=float(retry_hdr) if retry_hdr and retry_hdr.replace(".", "", 1).isdigit() else None,
+                            daily="PerDay" in body or "per day" in body.lower(),
+                        ) from None
                     raise RuntimeError(f"Gemini API error: HTTP {status}") from None
                 except httpx.HTTPError as exc:
                     raise RuntimeError(f"Gemini API request failed: {exc.__class__.__name__}") from None

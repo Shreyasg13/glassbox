@@ -192,18 +192,19 @@ def _llm_note(context: str) -> Optional[str]:
     if os.environ.get("PAPER_LLM_NARRATIVES") != "1":
         return None
     try:
-        from .llm_call_logging import complete_with_logging
+        from . import llm_router
 
         prompt = (
             "You are reviewing a SIMULATED paper-trading portfolio. In 2-3 plain sentences, say what drove today's result "
             "and one thing worth watching. Do not give investment advice.\n\n" + context
         )
-        text, _model = asyncio.run(
+        # Routed: if Gemini's free quota is spent, any configured failover provider answers.
+        routed = asyncio.run(
             asyncio.wait_for(
-                complete_with_logging("gemini", LLM_NOTE_CHAIN[0], prompt, fallback_models=LLM_NOTE_CHAIN[1:], max_tokens=200, temperature=0.3), 60
+                llm_router.complete_routed("gemini", LLM_NOTE_CHAIN[0], prompt, fallback_models=LLM_NOTE_CHAIN[1:], max_tokens=200, temperature=0.3), 90
             )
         )
-        return text.strip() or None
+        return routed.text.strip() or None
     except Exception as exc:  # noqa: BLE001 -- deliberately best-effort
         log.warning("paper llm note skipped: %s", type(exc).__name__)
         return None

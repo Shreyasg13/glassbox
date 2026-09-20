@@ -26,6 +26,21 @@ services:
       PAPER_LLM_NARRATIVES: ${PAPER_LLM_NARRATIVES:-}
       PAPER_BACKTEST_START: ${PAPER_BACKTEST_START:-2021-01-04}
       PAPER_COMMISSION_BPS: ${PAPER_COMMISSION_BPS:-5}
+      # LLM failover providers (docs/FREE_LLM_ROUTING.md). Unset = that provider is skipped.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
+      GITHUB_MODELS_TOKEN: ${GITHUB_MODELS_TOKEN:-}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      LLM_GATEWAY_BASE_URL: ${LLM_GATEWAY_BASE_URL:-}
+      LLM_GATEWAY_API_KEY: ${LLM_GATEWAY_API_KEY:-}
+      LLM_GATEWAY_MODELS: ${LLM_GATEWAY_MODELS:-}
+      LLM_FAILOVER: ${LLM_FAILOVER:-}
+      LLM_FAILOVER_ENABLED: ${LLM_FAILOVER_ENABLED:-1}
+      LLM_FAILOVER_USER_RUNS: ${LLM_FAILOVER_USER_RUNS:-1}
+      LLM_ROUTE_BUDGET_S: ${LLM_ROUTE_BUDGET_S:-120}
       CORS_ALLOWED_ORIGINS: https://${APP_DOMAIN:?set in .env}
       # Also used directly (not just for CORS) to build the Google OAuth
       # redirect_uri and the post-login redirect back to the frontend --

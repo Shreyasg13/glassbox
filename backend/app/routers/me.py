@@ -26,6 +26,7 @@ from .. import db
 from .. import jobs
 from .. import orchestration
 from ..auth import RESERVED_USERNAMES, TokenPayload, get_current_user
+from .. import llm_router
 from ..rate_limit import check_user_heavy, check_user_report
 from ..models import (
     AgentSubscriptions,
@@ -124,7 +125,9 @@ async def run_my_report(body: OrchestrationRunRequest, user: TokenPayload = Depe
     db.log_audit(user.sub, "me.run_report", "orchestration", orch_data["id"], {"job_id": job_id, "agent_count": len(orch.agent_ids)})
 
     async def _work():
-        return await orchestration.run_orchestration(orch, body.input, job_id=job_id)
+        # Runs started by end users may carry their own text; LLM_FAILOVER_USER_RUNS=0
+        # keeps those on the requested provider only (see llm_router's PRIVACY note).
+        return await orchestration.run_orchestration(orch, body.input, job_id=job_id, allow_failover=llm_router.user_runs_may_fail_over())
 
     asyncio.create_task(jobs.run_job(job_id, _work))
     return JobAccepted(job_id=job_id)

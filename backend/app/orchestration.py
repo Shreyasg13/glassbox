@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 from . import data_source as ds
 from . import db
 from . import jobs
-from .llm_call_logging import complete_with_logging
+from . import llm_router
 from .models import AgentConfig, OrchestrationConfig
 
 
@@ -43,7 +43,7 @@ async def run_deterministic_agent(agent: AgentConfig, input: str) -> Dict[str, A
     return {"agent": agent.name, "type": "deterministic", "symbol": symbol, "signal": match}
 
 
-async def run_llm_agent(agent: AgentConfig, input: str, job_id: Optional[str]) -> Dict[str, Any]:
+async def run_llm_agent(agent: AgentConfig, input: str, job_id: Optional[str], allow_failover: bool = True) -> Dict[str, Any]:
     if not agent.provider or not agent.model:
         raise ValueError(f"LLM agent '{agent.name}' is missing provider/model")
     params = agent.params
@@ -54,9 +54,11 @@ async def run_llm_agent(agent: AgentConfig, input: str, job_id: Optional[str]) -
 
     async def _on_fallback(candidate: str, reason: str) -> None:
         if job_id:
-            await jobs.log(job_id, f"agent '{agent.name}': trying model '{candidate}' ({reason})")
+            await jobs.log(job_id, f"agent '{agent.name}': trying '{candidate}' ({reason})")
 
-    text, model_used = await complete_with_logging(
+    # Routed: if the agent's own provider is out of quota, the run fails over to
+    # the next available provider instead of stalling (app/llm_router.py).
+    routed = await llm_router.complete_routed(
         agent.provider,
         agent.model,
         input,
@@ -68,16 +70,20 @@ async def run_llm_agent(agent: AgentConfig, input: str, job_id: Optional[str]) -
         on_token=_on_token,
         fallback_models=agent.fallback_models,
         on_fallback=_on_fallback,
+        allow_failover=allow_failover,
     )
-    return {"agent": agent.name, "type": "llm", "provider": agent.provider, "model": model_used, "output": text}
+    out = {"agent": agent.name, "type": "llm", "provider": routed.provider, "model": routed.model, "output": routed.text}
+    if routed.provider != agent.provider:
+        out["failed_over_from"] = agent.provider  # so the admin can see this answer came from a different provider
+    return out
 
 
-async def run_agent(agent: AgentConfig, input: str, *, job_id: Optional[str] = None) -> Dict[str, Any]:
+async def run_agent(agent: AgentConfig, input: str, *, job_id: Optional[str] = None, allow_failover: bool = True) -> Dict[str, Any]:
     if job_id:
         await jobs.log(job_id, f"Running agent '{agent.name}' ({agent.type})")
     if agent.type == "deterministic":
         return await run_deterministic_agent(agent, input)
-    return await run_llm_agent(agent, input, job_id)
+    return await run_llm_agent(agent, input, job_id, allow_failover)
 
 
 def _reduce_committee_vote(results: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -131,7 +137,8 @@ immediately with no stagger."""
 
 
 async def _run_bounded(
-    agents: List[AgentConfig], ctx_input: str, agent_timeout_s: float, run_budget_s: float, job_id: Optional[str]
+    agents: List[AgentConfig], ctx_input: str, agent_timeout_s: float, run_budget_s: float, job_id: Optional[str],
+    allow_failover: bool = True,
 ) -> List[Dict[str, Any]]:
     """Run all agents concurrently (LLM agents staggered slightly to avoid
     a rate-limit-tripping burst); a per-agent timeout and an overall run
@@ -142,7 +149,7 @@ async def _run_bounded(
         if delay_s:
             await asyncio.sleep(delay_s)
         try:
-            return await asyncio.wait_for(run_agent(agent, ctx_input, job_id=job_id), timeout=agent_timeout_s)
+            return await asyncio.wait_for(run_agent(agent, ctx_input, job_id=job_id, allow_failover=allow_failover), timeout=agent_timeout_s)
         except Exception as exc:
             if job_id:
                 await jobs.log(job_id, f"agent '{agent.name}' failed: {exc}")
@@ -170,7 +177,7 @@ async def _run_bounded(
 
 
 async def run_orchestration(
-    orch: OrchestrationConfig, input: Optional[str], *, job_id: Optional[str] = None
+    orch: OrchestrationConfig, input: Optional[str], *, job_id: Optional[str] = None, allow_failover: bool = True
 ) -> Dict[str, Any]:
     agent_rows = [(aid, db.get_agent(aid)) for aid in orch.agent_ids]
     missing = [aid for aid, row in agent_rows if row is None]
@@ -189,7 +196,7 @@ async def run_orchestration(
                     await jobs.log(job_id, "Run budget exceeded; stopping sequential run early")
                 break
             try:
-                r = await asyncio.wait_for(run_agent(agent, ctx_input, job_id=job_id), timeout=orch.agent_timeout_s)
+                r = await asyncio.wait_for(run_agent(agent, ctx_input, job_id=job_id, allow_failover=allow_failover), timeout=orch.agent_timeout_s)
             except Exception as exc:
                 r = {"agent": agent.name, "error": str(exc), "degraded": True}
             results.append(r)
@@ -200,11 +207,11 @@ async def run_orchestration(
         return {"mode": orch.mode, "agents": results}
 
     if orch.mode == "parallel":
-        results = await _run_bounded(agents, ctx_input, orch.agent_timeout_s, orch.run_budget_s, job_id)
+        results = await _run_bounded(agents, ctx_input, orch.agent_timeout_s, orch.run_budget_s, job_id, allow_failover)
         return {"mode": orch.mode, "agents": results}
 
     if orch.mode == "committee_vote":
-        results = await _run_bounded(agents, ctx_input, orch.agent_timeout_s, orch.run_budget_s, job_id)
+        results = await _run_bounded(agents, ctx_input, orch.agent_timeout_s, orch.run_budget_s, job_id, allow_failover)
         vote = _reduce_committee_vote(results)
         return {"mode": orch.mode, "agents": results, "committee_decision": vote}
 

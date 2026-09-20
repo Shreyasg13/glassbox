@@ -17,6 +17,7 @@ import asyncio
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from .. import db, jobs, orchestration
 from ..auth import TokenPayload, require_admin
@@ -201,9 +202,43 @@ async def gemini_models():
 
 @router.get("/providers/health", response_model=List[ProviderHealth])
 async def providers_health():
-    names: List[Provider] = ["ollama", "vllm", "gemini", "claude"]
+    from ..providers.factory import all_provider_names
+
+    names: List[Provider] = all_provider_names()  # native + every OpenAI-compatible failover provider
     results = await asyncio.gather(*(get_provider(name).health_check() for name in names))
     return list(results)
+
+
+class RoutingTestRequest(BaseModel):
+    provider: Provider = "gemini"
+    model: str = "gemini-2.5-flash-lite"
+    prompt: str = Field(default="Reply with the single word: ready", max_length=500)
+
+
+@router.get("/providers/routing")
+async def routing_status(models: bool = False):
+    """Failover routing: the order, which providers are configured (a key is all
+    it takes), which are cooling down after a quota error and for how long, and
+    where to get a free key for the rest."""
+    from .. import llm_router
+
+    return await llm_router.status(include_models=models)
+
+
+@router.post("/providers/routing/test")
+async def routing_test(body: RoutingTestRequest, user: TokenPayload = Depends(require_admin)):
+    """Send one tiny prompt through the router and report which provider answered
+    (or why every one failed). The quickest way to prove failover works."""
+    from .. import llm_router
+
+    try:
+        r = await llm_router.complete_routed(body.provider, body.model, body.prompt, max_tokens=40, temperature=0.0)
+    except Exception as exc:  # noqa: BLE001
+        tried = getattr(exc, "tried", [])
+        db.log_audit(user.sub, "routing.test_failed", "provider", None, {"requested": body.provider})
+        raise HTTPException(status_code=503, detail={"error": str(exc)[:300], "tried": tried}) from None
+    db.log_audit(user.sub, "routing.test", "provider", None, {"requested": body.provider, "answered": r.provider})
+    return {"ok": True, "answered_by": r.provider, "model": r.model, "failed_over": r.provider != body.provider, "reply": r.text[:120], "skipped_or_failed": r.tried}
 
 
 # ---- Observability (Phase 6) ----

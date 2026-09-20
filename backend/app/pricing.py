@@ -56,6 +56,12 @@ def _match_claude_rate(model: str) -> Optional[Tuple[float, float]]:
 def estimate_cost(provider: str, model: str, tokens_in: Optional[int], tokens_out: Optional[int]) -> Optional[float]:
     if provider in ("ollama", "vllm"):
         return 0.0
+    # OpenRouter's ":free" models and its "openrouter/free" router cost exactly
+    # nothing -- a known answer. Every other OpenAI-compatible provider's price
+    # depends on the plan/model and is deliberately left unknown (None -> "--")
+    # rather than guessed.
+    if provider == "openrouter" and (model.endswith(":free") or model == "openrouter/free"):
+        return 0.0
 
     tokens_in = tokens_in or 0
     tokens_out = tokens_out or 0

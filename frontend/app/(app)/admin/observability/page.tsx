@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { RoutingPanel } from "@/components/admin/RoutingPanel";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -180,6 +181,7 @@ export default function ObservabilityPage() {
   return (
     <div className="flex flex-col gap-sp5">
       <h1 className="text-[18px] font-bold text-t1">Observability</h1>
+      <RoutingPanel />
       <LLMCallsTable />
       <AuditLogTable />
     </div>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Provider } from "@/lib/types";
 import { JobOutputPanel } from "./JobOutputPanel";
 
-const PROVIDERS: Provider[] = ["vllm", "ollama", "gemini", "claude"];
+const PROVIDERS: Provider[] = ["vllm", "ollama", "gemini", "claude", "openrouter", "groq", "cerebras", "github", "qwen", "deepseek", "xai", "gateway"];
 
 export function ReportGenerateForm() {
   const router = useRouter();

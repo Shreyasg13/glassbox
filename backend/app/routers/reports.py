@@ -25,7 +25,7 @@ from .. import data_source as ds
 from .. import db
 from .. import jobs
 from ..auth import TokenPayload, require_admin
-from ..llm_call_logging import complete_with_logging
+from .. import llm_router
 from ..models import DailyReportNarrative, JobAccepted, ReportGenerateRequest
 
 # /api/reports, not /reports -- the frontend's own /reports/* pages live
@@ -83,20 +83,25 @@ async def generate_report(body: ReportGenerateRequest, user: TokenPayload = Depe
             await jobs.token(job_id, piece)
 
         await jobs.log(job_id, f"Calling {body.provider}/{body.model}")
-        text, model_used = await complete_with_logging(
+        async def _on_fallback(candidate: str, reason: str) -> None:
+            await jobs.log(job_id, f"trying '{candidate}' ({reason})")
+
+        routed = await llm_router.complete_routed(
             body.provider,
             body.model,
             prompt,
             agent_id=body.agent_id,
             system=system_prompt,
             on_token=_on_token,
+            on_fallback=_on_fallback,
         )
+        text = routed.text
 
         narrative = {
             "id": str(uuid.uuid4()),
             "date": report_date,
-            "provider": body.provider,
-            "model": model_used,
+            "provider": routed.provider,  # the provider that ACTUALLY answered (may differ if the requested one was out of quota)
+            "model": routed.model,
             "narrative": text,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
