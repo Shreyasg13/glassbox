@@ -38,7 +38,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="flex flex-col gap-sp5">
       <ProviderHealthStrip />
       <div className="border-b border-border pb-sp3">
-        <nav className="flex gap-sp5">
+        <nav className="flex flex-wrap gap-x-sp5 gap-y-sp2">
           {tabs.map((t) => (
             <Link
               key={t.href}
