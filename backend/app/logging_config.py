@@ -25,7 +25,16 @@ class JSONRequestFormatter(logging.Formatter):
         return json.dumps(payload)
 
 
+def quiet_http_clients() -> None:
+    """httpx logs every request line at INFO, URL included -- and Gemini takes its API key
+    as a `?key=` query parameter, so the key landed in the container log (and anything that
+    ships it). Warnings and errors still come through; they carry no URL."""
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
 def setup_logging() -> logging.Logger:
+    quiet_http_clients()
     logger = logging.getLogger("glassbox.request")
     if logger.handlers:
         return logger

@@ -19,8 +19,10 @@ import logging
 import sys
 
 from .. import paper_cycle
+from ..logging_config import quiet_http_clients
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+quiet_http_clients()  # httpx INFO lines carry the Gemini ?key= URL
 log = logging.getLogger("run_paper_cycle")
 
 

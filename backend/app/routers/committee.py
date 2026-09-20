@@ -32,7 +32,7 @@ class CommitteeRunRequest(BaseModel):
 
 @router.get("/runs")
 async def runs(limit: int = Query(40, ge=1, le=300)):
-    return {"running": committee_daily.is_running(), "runs": await run_in_threadpool(db.list_committee_runs, limit)}
+    return {"running": await run_in_threadpool(committee_daily.is_running), "runs": await run_in_threadpool(db.list_committee_runs, limit)}
 
 
 @router.get("/scorecard")
@@ -57,7 +57,7 @@ async def run(body: CommitteeRunRequest, user: TokenPayload = Depends(require_ad
     try:
         if body.dry_run:
             return await committee_daily.run_daily(symbols=symbols, dry_run=True, force=body.force)
-        if committee_daily.is_running():
+        if await run_in_threadpool(committee_daily.is_running):
             raise HTTPException(status_code=409, detail="A committee review is already running")
 
         async def _bg():

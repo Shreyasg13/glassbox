@@ -180,11 +180,22 @@ def test_the_prompt_survives_missing_history_and_missing_live_data():
 class FakeDB:
     def __init__(self, seeded=True):
         self.runs, self.narratives, self.audit = {}, [], []
+        self.lock = None  # owner of the single-flight lock, as the DB row would record it
         self.orchs = (
             [{"id": "o1", "name": "Investment Committee", "mode": "committee_vote", "agent_ids": ["a"], "coordinator": "vn_engine", "schedule": None,
               "agent_timeout_s": 60.0, "run_budget_s": 240.0}]
             if seeded else []
         )
+
+    def _acquire(self, owner, ttl, now=None):
+        if self.lock is not None:
+            return False
+        self.lock = owner
+        return True
+
+    def _release(self, owner):
+        if self.lock == owner:
+            self.lock = None
 
     def install(self, mp):
         d = committee_daily.db
@@ -192,6 +203,9 @@ class FakeDB:
         mp.setattr(d, "save_committee_run", lambda doc: self.runs.__setitem__(doc["id"], copy.deepcopy(doc)) or doc)
         mp.setattr(d, "list_committee_runs", lambda limit=60: sorted((copy.deepcopy(r) for r in self.runs.values()), key=lambda r: (r["date"], r["symbol"]), reverse=True)[:limit])
         mp.setattr(d, "list_all_committee_runs", lambda: [copy.deepcopy(r) for r in self.runs.values()])
+        mp.setattr(d, "acquire_committee_lock", self._acquire)
+        mp.setattr(d, "release_committee_lock", self._release)
+        mp.setattr(d, "committee_lock_active", lambda ttl, now=None: self.lock is not None)
         mp.setattr(d, "list_orchestrations", lambda: copy.deepcopy(self.orchs))
         mp.setattr(d, "list_report_narratives", lambda: list(self.narratives))
         mp.setattr(d, "create_report_narrative", lambda n: self.narratives.append(n) or n)
@@ -204,7 +218,6 @@ def fake(monkeypatch):
     f.install(monkeypatch)
     for k in ("COMMITTEE_MIN_SYMBOLS", "COMMITTEE_MAX_SYMBOLS", "COMMITTEE_DAILY_BUDGET_S", "COMMITTEE_QUORUM", "COMMITTEE_MAX_DATA_AGE_DAYS"):
         monkeypatch.delenv(k, raising=False)
-    monkeypatch.setattr(committee_daily, "_running", False)
     rate_limit._admin_limiter._hits.clear()
     return f
 
@@ -363,8 +376,9 @@ async def test_the_running_flag_resets_even_after_an_unexpected_error_and_blocks
     monkeypatch.setattr(committee_daily.db, "save_committee_run", lambda doc: (_ for _ in ()).throw(RuntimeError("db down")))
     with pytest.raises(RuntimeError, match="db down"):
         await go(runner=make_runner(), symbols=["AAPL"])
-    assert committee_daily.is_running() is False
-    monkeypatch.setattr(committee_daily, "_running", True)
+    assert committee_daily.is_running() is False and fake.lock is None  # released despite the crash
+    fake.lock = "another-worker"
+    assert committee_daily.is_running() is True
     with pytest.raises(committee_daily.CommitteeError, match="already running"):
         await go(runner=make_runner(), symbols=["AAPL"])
 
@@ -470,7 +484,7 @@ def test_the_api_lists_runs_previews_picks_and_starts_a_background_review(fake, 
 
 
 def test_the_api_rejects_a_second_concurrent_run_and_bad_input(fake, monkeypatch):
-    monkeypatch.setattr(committee_daily, "_running", True)
+    fake.lock = "another-worker"
     c = TestClient(app)
     assert c.post("/api/admin/committee/run", json={}, headers=ADMIN).status_code == 409
     assert c.post("/api/admin/committee/run", json={"symbols": ["A"] * 16}, headers=ADMIN).status_code == 422
@@ -483,3 +497,57 @@ def test_the_scorecard_endpoint_reports_503_when_price_data_is_unavailable(fake,
     monkeypatch.setattr(paper_cycle, "load_book", boom)
     r = TestClient(app).get("/api/admin/committee/scorecard", headers=ADMIN)
     assert r.status_code == 503 and "FileNotFoundError" in r.json()["detail"]
+
+
+# ------------------------------------------------- the lock itself (a real database) --
+
+
+@pytest.fixture
+def real_db(tmp_path, monkeypatch):
+    """The actual lock SQL against a throwaway SQLite file, shared across threads."""
+    from sqlalchemy import create_engine
+
+    from app import db as real
+
+    eng = create_engine(f"sqlite:///{tmp_path / 'lock.db'}", connect_args={"check_same_thread": False, "timeout": 30})
+    real.metadata.create_all(eng)
+    monkeypatch.setattr(real, "engine", eng)
+    return real
+
+
+def test_the_lock_is_exclusive_and_only_its_owner_can_release_it(real_db):
+    assert real_db.committee_lock_active(60) is False
+    assert real_db.acquire_committee_lock("a", 60) is True
+    assert real_db.acquire_committee_lock("b", 60) is False
+    assert real_db.committee_lock_active(60) is True
+    real_db.release_committee_lock("b")  # not the holder: no effect
+    assert real_db.committee_lock_active(60) is True
+    real_db.release_committee_lock("a")
+    assert real_db.committee_lock_active(60) is False
+    assert real_db.acquire_committee_lock("b", 60) is True
+
+
+def test_an_abandoned_lock_is_taken_over_after_the_ttl_but_not_before(real_db):
+    assert real_db.acquire_committee_lock("dead", 100, now=1_000.0) is True
+    assert real_db.acquire_committee_lock("late", 100, now=1_099.0) is False  # still fresh
+    assert real_db.committee_lock_active(100, now=1_099.0) is True
+    assert real_db.committee_lock_active(100, now=1_101.0) is False  # stale = not running
+    assert real_db.acquire_committee_lock("late", 100, now=1_101.0) is True
+    real_db.release_committee_lock("dead")  # the crashed holder waking up must not free the new owner's lock
+    assert real_db.committee_lock_active(100, now=1_102.0) is True
+
+
+def test_many_simultaneous_callers_produce_exactly_one_winner(real_db):
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        wins = list(pool.map(lambda i: real_db.acquire_committee_lock(f"w{i}", 60), range(12)))
+    assert wins.count(True) == 1
+
+
+def test_the_lock_row_never_shows_up_as_a_committee_decision(real_db):
+    real_db.save_committee_run({"id": "2026-09-18:GOOGL", "date": "2026-09-18", "symbol": "GOOGL", "decision": "HOLD"})
+    real_db.acquire_committee_lock("a", 60)
+    assert [r["symbol"] for r in real_db.list_committee_runs()] == ["GOOGL"]
+    assert [r["symbol"] for r in real_db.list_all_committee_runs()] == ["GOOGL"]
+    assert [r["symbol"] for r in real_db.list_committee_runs_for_date("2026-09-18")] == ["GOOGL"]

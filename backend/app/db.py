@@ -40,7 +40,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import Column, String, Boolean, create_engine, MetaData, Table, select, delete, update, insert
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 log = logging.getLogger("glassbox.db")
 
@@ -397,18 +397,73 @@ def save_committee_run(doc: Dict[str, Any]) -> Dict[str, Any]:
     return doc
 
 
+# The single-flight lock lives in this table too, as one reserved row. It has to be in the
+# database, not a module global: gunicorn runs several workers and the cron job is a separate
+# process, so an in-memory flag only ever guards a single one of them.
+COMMITTEE_LOCK_ID = "__lock__"
+
+
+def _committee_rows() -> List[Dict[str, Any]]:
+    return [r for r in _list(committee_runs_table) if r.get("id") != COMMITTEE_LOCK_ID]
+
+
+def acquire_committee_lock(owner: str, ttl_s: float, now: Optional[float] = None) -> bool:
+    """Take the committee lock; False if another live run holds it.
+
+    The INSERT is the atomic step (primary key), so two callers can never both win. A lock
+    older than ttl_s is treated as abandoned (the holder crashed or was killed mid-run) and
+    taken over with a compare-and-swap on the exact stored row, so two callers noticing the
+    same stale lock cannot both take it."""
+    now = time.time() if now is None else now
+    blob = json.dumps({"id": COMMITTEE_LOCK_ID, "owner": owner, "acquired_at": now})
+    for _ in range(2):
+        try:
+            with engine.begin() as conn:
+                conn.execute(insert(committee_runs_table).values(id=COMMITTEE_LOCK_ID, config=blob))
+            return True
+        except IntegrityError:
+            pass
+        with engine.begin() as conn:
+            row = conn.execute(select(committee_runs_table).where(committee_runs_table.c.id == COMMITTEE_LOCK_ID)).fetchone()
+            if row is None:  # released between our insert and this read: try the insert again
+                continue
+            if now - float(json.loads(row.config).get("acquired_at", 0)) < ttl_s:
+                return False
+            taken = conn.execute(
+                update(committee_runs_table)
+                .where(committee_runs_table.c.id == COMMITTEE_LOCK_ID, committee_runs_table.c.config == row.config)
+                .values(config=blob)
+            )
+            return taken.rowcount == 1
+    return False
+
+
+def release_committee_lock(owner: str) -> None:
+    """Drop the lock, but only if we still hold it (a stale one may have been taken over)."""
+    with engine.begin() as conn:
+        row = conn.execute(select(committee_runs_table).where(committee_runs_table.c.id == COMMITTEE_LOCK_ID)).fetchone()
+        if row is not None and json.loads(row.config).get("owner") == owner:
+            conn.execute(delete(committee_runs_table).where(committee_runs_table.c.id == COMMITTEE_LOCK_ID, committee_runs_table.c.config == row.config))
+
+
+def committee_lock_active(ttl_s: float, now: Optional[float] = None) -> bool:
+    now = time.time() if now is None else now
+    held = _get(committee_runs_table, COMMITTEE_LOCK_ID)
+    return held is not None and now - float(held.get("acquired_at", 0)) < ttl_s
+
+
 def list_committee_runs_for_date(d: str) -> List[Dict[str, Any]]:
-    return sorted((r for r in _list(committee_runs_table) if r.get("date") == d), key=lambda r: r.get("symbol", ""))
+    return sorted((r for r in _committee_rows() if r.get("date") == d), key=lambda r: r.get("symbol", ""))
 
 
 def list_committee_runs(limit: int = 60) -> List[Dict[str, Any]]:
-    items = _list(committee_runs_table)
+    items = _committee_rows()
     items.sort(key=lambda r: (r.get("date", ""), r.get("symbol", "")), reverse=True)
     return items[:limit]
 
 
 def list_all_committee_runs() -> List[Dict[str, Any]]:
-    return _list(committee_runs_table)
+    return _committee_rows()
 
 
 # ---- Pagination + audit log (Phase 6) ----

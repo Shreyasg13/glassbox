@@ -35,6 +35,7 @@ import math
 import os
 import re
 import time
+import uuid
 from bisect import bisect_left
 from collections import Counter
 from datetime import date, datetime, timezone
@@ -48,7 +49,6 @@ from .scripts.seed_agents import ORCHESTRATION_NAME
 log = logging.getLogger("glassbox.committee")
 
 QUORUM_DEFAULT = 6  # of 10 agents must answer for a run to count as reliable
-_running = False
 
 
 class CommitteeError(RuntimeError):
@@ -62,8 +62,15 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _lock_ttl_s() -> float:
+    # a run can overshoot the budget by one symbol (a few minutes); past this the holder is presumed dead
+    return _env_int("COMMITTEE_DAILY_BUDGET_S", 1500) + 900
+
+
 def is_running() -> bool:
-    return _running
+    """True while ANY process (another gunicorn worker, the cron job) is mid-review. The
+    lock is a database row: a module flag would only ever be visible to one worker."""
+    return db.committee_lock_active(_lock_ttl_s())
 
 
 # --------------------------------------------------------------- selection --
@@ -272,7 +279,6 @@ async def run_daily(
     now: Optional[datetime] = None,
     runner: Optional[Runner] = None,
 ) -> Dict[str, Any]:
-    global _running
     now = now or datetime.now(timezone.utc)
     book = book or await asyncio.to_thread(paper_cycle.load_book)
     d = book.latest_date
@@ -291,9 +297,6 @@ async def run_daily(
         return {**base, "dry_run": True, "would_run": [{"symbol": p["symbol"], "why": p["why"]} for p in todo], "ran": 0}
     if not todo:
         return {**base, "ran": 0, "answered_total": 0, "report_written": False, "note": "nothing new to review"}
-    if _running:
-        raise CommitteeError("a committee review is already running")
-
     orch_row = next((o for o in db.list_orchestrations() if o.get("name") == ORCHESTRATION_NAME), None)
     if orch_row is None:
         raise CommitteeError(f"orchestration {ORCHESTRATION_NAME!r} is not seeded -- run app.scripts.seed_agents")
@@ -303,7 +306,9 @@ async def run_daily(
     budget = _env_int("COMMITTEE_DAILY_BUDGET_S", 1500)
     live = live_rows if live_rows is not None else {r["symbol"]: r for r in (await asyncio.to_thread(ds.get_live_signals))["signals"]}
 
-    _running = True
+    owner = uuid.uuid4().hex
+    if not await asyncio.to_thread(db.acquire_committee_lock, owner, _lock_ttl_s()):
+        raise CommitteeError("a committee review is already running")
     started = time.monotonic()
     saved: List[Dict[str, Any]] = []
     try:
@@ -325,7 +330,7 @@ async def run_daily(
             saved.append(doc)
             log.info("committee %s %s -> %s (%d/%d answered, engine %s)", d, pick["symbol"], doc["decision"], doc["answered"], doc["total"], pick["engine_signal"])
     finally:
-        _running = False
+        await asyncio.to_thread(db.release_committee_lock, owner)
 
     all_today = db.list_committee_runs_for_date(d)
     reported = _write_report(d, all_today) if saved else False
