@@ -249,8 +249,6 @@ def _write_report(d: str, docs: List[Dict[str, Any]]) -> bool:
     key = f"committee:{d}:{hashlib.md5(sig.encode()).hexdigest()[:10]}"
     if any(n.get("profile") == key for n in db.list_report_narratives()):
         return False
-    import uuid
-
     db.create_report_narrative(
         {
             "id": str(uuid.uuid4()),

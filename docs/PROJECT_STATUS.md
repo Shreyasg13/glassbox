@@ -688,3 +688,18 @@ sync and 22:15 paper cycle) -- `app/committee_daily.py`, `python -m app.scripts.
   quorum; a daily report goes to Admin -> Reports; Admin -> Paper Trading has the panel, a preview,
   a "Review now" button and (as history builds) a scorecard: forward returns of its calls and how
   often it just echoed the engine. That scorecard is the input for the Phase 3 self-improvement loop.
+
+### Committee hardening after the first live run (2026-09-20)
+
+- **Overlap guard is now a database lock.** The first version was a module global; production runs 2 gunicorn
+  workers plus a separate cron process, so it guarded nothing and `/runs` reported `running: false` from
+  whichever worker answered (an admin polling it stopped early and thought the run had died). The lock is a
+  reserved `__lock__` row in `committee_runs`: atomic INSERT to acquire, compare-and-swap takeover after
+  `COMMITTEE_DAILY_BUDGET_S + 900 s` so a crashed run cannot block the schedule, owner-checked release.
+  Verified live: held while a run is in flight (seen from separate processes), a second run exits 1
+  ("already running"), released afterwards.
+- **Provider API keys were being logged.** Gemini takes its key as `?key=...` and httpx logs each request
+  URL at INFO. httpx/httpcore are now WARNING (API process and both cron scripts). A key that already
+  appeared in a log or a terminal should be rotated.
+- `report_written: false` on a re-run is correct: the report id fingerprints the outcomes, so an identical
+  re-run does not create a duplicate.
