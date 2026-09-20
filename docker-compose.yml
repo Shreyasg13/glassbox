@@ -102,7 +102,8 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }  # container logs can no longer grow without bound
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"]
+      # Next standalone binds to the container's own hostname (Docker sets $HOSTNAME), NOT 127.0.0.1.
+      test: ["CMD", "node", "-e", "fetch('http://' + (process.env.HOSTNAME || '127.0.0.1') + ':3000/').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 15s
       timeout: 6s
       retries: 4

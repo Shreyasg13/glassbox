@@ -35,8 +35,10 @@ registry_login() {
 
 rollout() {  # $1 = tag; returns non-zero if the new containers don't become healthy in time
   set_tag "$1"
-  docker compose pull $SERVICES
-  docker compose up -d --no-deps --wait --wait-timeout 150 $SERVICES
+  # --ignore-pull-failures: a rollback target may exist only locally (e.g. the first-ever tag).
+  # --no-build: this script must NEVER build on the server -- a missing image is a hard error.
+  docker compose pull --ignore-pull-failures $SERVICES
+  docker compose up -d --no-build --no-deps --wait --wait-timeout 150 $SERVICES
 }
 
 case "${1:-}" in

@@ -13,7 +13,7 @@ name: images
 on:
   push:
     branches: [main]
-    paths-ignore: ["docs/**", "**/*.md"]
+    paths-ignore: ["docs/**", "**/*.md", "deploy/**", "docker-compose.yml", ".github/**"]  # none of these end up inside an image
   workflow_dispatch:
 
 permissions:
