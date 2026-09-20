@@ -1,21 +1,25 @@
 # GlassBox backend — FastAPI gateway over the multi-agent-trading-system engine.
 # Data artifacts (reports/, database/) are mounted at runtime from backend-source,
 # NOT baked into this image — see docker-compose.yml volumes.
+#
+# Two stages: dependencies are installed in a "builder" that has a compiler, then
+# only the installed packages are copied into a clean runtime image. Every
+# dependency ships prebuilt wheels, so the ~320 MB build-essential toolchain the
+# old single-stage image carried was pure dead weight at runtime.
 
-FROM python:3.12-slim AS base
-
-WORKDIR /app
-
-# System deps for pandas/pyarrow wheels on slim images.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
+FROM python:3.12-slim AS builder
+WORKDIR /build
+# Only needed if a dependency ever lacks a wheel for this platform.
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
-
-# gunicorn is pinned in requirements.txt with everything else, so a rebuild
-# can never silently pull in a different major version.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# gunicorn is pinned in requirements.txt with everything else, so a rebuild can
+# never silently pull in a different major version.
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
+FROM python:3.12-slim AS runtime
+WORKDIR /app
+COPY --from=builder /install /usr/local
 COPY app ./app
 
 ENV PYTHONUNBUFFERED=1

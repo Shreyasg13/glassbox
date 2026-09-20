@@ -1,10 +1,24 @@
 name: glassbox
 
+# Images are BUILT IN CI (.github/workflows/images.yml) and PULLED on the server, never
+# built on the VM. Deploy = deploy/deploy.sh <tag>; roll back by deploying an older tag.
+# `build:` is kept so `docker compose build` still works for local development.
 services:
   backend:
+    image: ${REGISTRY:-us-central1-docker.pkg.dev/project-f015cf71-9e01-4a2a-8f5/glassbox}/backend:${IMAGE_TAG:-latest}
     build:
       context: ./backend
     restart: unless-stopped
+    mem_limit: 900m   # ~260 MB used today; the cap contains a runaway instead of freezing the VM
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }  # container logs can no longer grow without bound
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)"]
+      interval: 15s
+      timeout: 6s
+      retries: 4
+      start_period: 40s
     environment:
       GLASSBOX_JWT_SECRET: ${GLASSBOX_JWT_SECRET:?set a real secret in .env}
       # production = the backend refuses to boot with a missing/default JWT
@@ -74,6 +88,7 @@ services:
       - "8000"
 
   frontend:
+    image: ${REGISTRY:-us-central1-docker.pkg.dev/project-f015cf71-9e01-4a2a-8f5/glassbox}/frontend:${IMAGE_TAG:-latest}
     build:
       context: ./frontend
       args:
@@ -82,12 +97,26 @@ services:
         NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:?e.g. https://yourdomain.com}
         NEXT_PUBLIC_WS_URL: ${PUBLIC_WS_URL:?e.g. wss://yourdomain.com/ws/signals}
     restart: unless-stopped
+    mem_limit: 384m   # ~110 MB used today
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }  # container logs can no longer grow without bound
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 6s
+      retries: 4
+      start_period: 20s
     expose:
       - "3000"
 
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }  # container logs can no longer grow without bound
     ports:
       - "80:80"
       - "443:443"

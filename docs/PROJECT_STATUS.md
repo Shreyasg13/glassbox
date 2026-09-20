@@ -662,3 +662,11 @@ over instead of stalling (full guide: docs/FREE_LLM_ROUTING.md).
 - **A provider with no key is skipped -- nothing changes until a key is added.**
 - Privacy: failover providers see the prompt; `LLM_FAILOVER_USER_RUNS=0` keeps
   end-user runs off third parties.
+
+## CI-built images and pull-based deploys (2026-09-20)
+
+Images are built and tested in GitHub Actions (`.github/workflows/images.yml`), pushed to Google
+Artifact Registry with keyless Workload Identity auth, and pulled on the VM by
+`deploy/deploy.sh <tag>` (health-checked, auto-rollback). The VM no longer builds anything.
+Backend image is now multi-stage (no compiler at runtime). Compose gained healthchecks,
+memory limits and log rotation. Guide: docs/DEPLOY_IMAGES.md.

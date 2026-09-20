@@ -122,6 +122,11 @@ Then open `https://yourdomain.com` in a browser.
 
 ## 6. Updating
 
+> **Preferred (current) flow: CI-built images, pulled by the VM -- see docs/DEPLOY_IMAGES.md**
+> (`deploy/deploy.sh <tag>`). The build-on-the-VM commands below still work but are what
+> used to exhaust the VM's memory.
+
+
 ```bash
 cd glassbox && git pull
 docker compose up -d --build
