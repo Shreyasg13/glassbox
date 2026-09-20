@@ -20,6 +20,7 @@ strategy, not a freeform admin test-run string).
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from typing import Any, Dict, List, Optional
 
@@ -30,11 +31,28 @@ from . import llm_router
 from .models import AgentConfig, OrchestrationConfig
 
 
+_SYMBOL_RE = re.compile(r"[A-Z][A-Z0-9.\-]{0,9}")
+
+
+def _extract_symbol(text: str) -> str:
+    """The ticker a committee input is about. Plain input ("AAPL") is unchanged.
+    A richer input (the daily committee prompt) starts its FIRST LINE with the
+    ticker followed by context, so the first token of that line that is a
+    tracked symbol wins; anything else falls back to the whole stripped text,
+    exactly as before, so an unknown symbol still yields the same clear error."""
+    raw = text.strip().upper()
+    first_line = raw.split("\n", 1)[0]
+    for tok in _SYMBOL_RE.findall(first_line):
+        if tok in ds.STOCK_INFO:
+            return tok
+    return raw
+
+
 async def run_deterministic_agent(agent: AgentConfig, input: str) -> Dict[str, Any]:
-    """Deterministic path: treat freeform `input` as a ticker symbol and
-    return that symbol's already-computed quant signal. Never calls an
+    """Deterministic path: treat `input` as a ticker symbol (see _extract_symbol)
+    and return that symbol's already-computed quant signal. Never calls an
     LLM provider."""
-    symbol = input.strip().upper()
+    symbol = _extract_symbol(input)
     signals = await asyncio.to_thread(ds.get_live_signals)
     match = next((s for s in signals["signals"] if s["symbol"] == symbol), None)
     if match is None:
@@ -86,6 +104,23 @@ async def run_agent(agent: AgentConfig, input: str, *, job_id: Optional[str] = N
     return await run_llm_agent(agent, input, job_id, allow_failover)
 
 
+_DECISION_RE = re.compile(r"decision\s*[:\-]\s*[*_`\s]*(BUY|SELL|HOLD)\b", re.I)
+_LEAN_TOKEN_RE = re.compile(r"\b(BUY|SELL|HOLD)\b", re.I)
+
+
+def _lean_from_text(text: str) -> str:
+    """An LLM agent's lean. A "Decision: BUY|SELL|HOLD" line (which the daily
+    committee prompt demands) wins; otherwise the EARLIEST BUY/SELL/HOLD word in
+    the text; otherwise HOLD. The old rule tested "BUY" in the text before "SELL"
+    before "HOLD" regardless of position, so "HOLD -- I wouldn't buy here" counted
+    as a BUY vote -- a systematic bias toward BUY."""
+    m = _DECISION_RE.search(text)
+    if m:
+        return m.group(1).upper()
+    m = _LEAN_TOKEN_RE.search(text)
+    return m.group(1).upper() if m else "HOLD"
+
+
 def _reduce_committee_vote(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Deterministic committee reducer -- confidence-weighted majority
     vote, NOT an LLM judge (guardrail in PERFORMANCE_AND_ORCHESTRATION.md).
@@ -96,8 +131,9 @@ def _reduce_committee_vote(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     reduction over their outputs, so wiring it in directly would require
     market-regime state a freeform admin test-run doesn't have. Each
     participating result is mapped to a lean (deterministic agents already
-    carry a `signal`+`confidence`; an LLM agent's free text is scanned for
-    the first BUY/SELL/HOLD token, defaulting to HOLD, weighted at a flat
+    carry a `signal`+`confidence`; an LLM agent's free text is read for a
+    "Decision:" line or its earliest BUY/SELL/HOLD word (see _lean_from_text),
+    defaulting to HOLD, weighted at a flat
     50% since free text isn't a calibrated confidence score) and the
     highest-weighted lean wins. Still fully deterministic and auditable.
     """
@@ -110,8 +146,7 @@ def _reduce_committee_vote(results: List[Dict[str, Any]]) -> Dict[str, Any]:
             lean = r["signal"]["signal"]
             weight = r["signal"].get("confidence", 50) / 100
         elif "output" in r:
-            text = r["output"].upper()
-            lean = next((s for s in ("BUY", "SELL", "HOLD") if s in text), "HOLD")
+            lean = _lean_from_text(r["output"])
             weight = 0.5
         else:
             continue

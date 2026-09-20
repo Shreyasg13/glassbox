@@ -670,3 +670,21 @@ Artifact Registry with keyless Workload Identity auth, and pulled on the VM by
 `deploy/deploy.sh <tag>` (health-checked, auto-rollback). The VM no longer builds anything.
 Backend image is now multi-stage (no compiler at runtime). Compose gained healthchecks,
 memory limits and log rotation. Guide: docs/DEPLOY_IMAGES.md.
+
+## Daily Investment Committee review (2026-09-20)
+
+The 10-agent committee now runs on its own every weekday at 22:30 UTC (after the 22:00 data
+sync and 22:15 paper cycle) -- `app/committee_daily.py`, `python -m app.scripts.run_committee_daily`.
+
+- Reviews a few symbols a day: engine BUY/SELL and just-changed signals, topped up with the biggest
+  movers (~2-3 runs, 14-21 model calls). Idempotent per date+symbol; a holiday is a no-op.
+- The agents are now GROUNDED: the prompt carries the real numbers (price, signal + confidence, RSI,
+  MA cross, returns, drawdown, volatility, in-sample backtest quality) and demands a
+  `Decision: BUY|SELL|HOLD` line. Previously they received only a ticker.
+- Fixed a vote-parsing bias: an LLM reply was scanned for BUY before SELL before HOLD regardless
+  of position, so "HOLD -- I wouldn't buy here" counted as BUY. Now the Decision line wins, else the
+  earliest of the three words.
+- Every decision is stored (`committee_runs`) with votes, per-agent lean/summary, providers used and
+  quorum; a daily report goes to Admin -> Reports; Admin -> Paper Trading has the panel, a preview,
+  a "Review now" button and (as history builds) a scorecard: forward returns of its calls and how
+  often it just echoed the engine. That scorecard is the input for the Phase 3 self-improvement loop.

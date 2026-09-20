@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { CommitteePanel } from "@/components/admin/CommitteePanel";
 import { EquityCurveChart } from "@/components/admin/EquityCurveChart";
 import type {
   PaperAccountDetail,
@@ -302,6 +303,7 @@ export default function AdminPaperPage() {
           <Leaderboard title="Controls" rows={controls} selected={selected} onSelect={setSelected} note="The placebo runs the engine on other symbols’ signals. If the engine can’t beat it, its signals carry no information." />
           <Leaderboard title="Policy benchmarks" rows={benchmarks} selected={selected} onSelect={setSelected} />
           <Scorecard token={token} />
+          <CommitteePanel />
         </>
       )}
     </div>

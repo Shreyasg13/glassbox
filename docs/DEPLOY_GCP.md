@@ -189,6 +189,27 @@ Then daily, 15 minutes after the data sync (`crontab -e`):
 - Optional env: `PAPER_LLM_NARRATIVES=1` (adds an AI note to reports, best-effort),
   `PAPER_BACKTEST_START`, `PAPER_COMMISSION_BPS`.
 
+## 6d. Daily Investment Committee review (cron)
+
+Runs the 10-agent Investment Committee on a few symbols each trading day and saves every
+decision (Admin -> Paper Trading -> "Investment Committee"; a daily report lands in Admin ->
+Reports). Schedule it AFTER the two jobs it depends on -- 22:00 data sync, 22:15 paper
+cycle -- so today's prices and signals are final. 22:30 UTC = 6:30 pm US Eastern (5:30 pm in
+winter), comfortably after the 4 pm close in both seasons:
+
+```
+30 22 * * 1-5 cd /home/shrey/glassbox && /usr/bin/docker compose exec -T backend python -m app.scripts.run_committee_daily >> /home/shrey/glassbox/logs/committee_daily.log 2>&1
+```
+
+- **Which symbols**: BUY/SELL signals and signals that just changed (up to `COMMITTEE_MAX_SYMBOLS`),
+  topped up to `COMMITTEE_MIN_SYMBOLS` with the biggest 5-day movers -- typically 2-3 symbols,
+  14-21 model calls a day, which fits the free tiers (Gemini, then the failover providers).
+- **Idempotent**: one decision per date+symbol. A holiday (no new price bar) or a second run does nothing.
+- **Try it**: `docker compose exec -T backend python -m app.scripts.run_committee_daily --dry-run`
+  shows today's picks without calling a model; `--force` re-reviews; `--symbols AAPL,NVDA` overrides.
+- **Check it ran**: `tail -30 ~/glassbox/logs/committee_daily.log`. Exit code 1 = it could not run
+  (stale prices) or every model call failed.
+
 ## 7. Claude via Vertex AI instead of the direct Anthropic API (optional)
 
 If you'd rather keep LLM billing entirely inside your GCP project: GCP's

@@ -137,6 +137,17 @@ paper_meta_table = Table(
     Column("config", String, nullable=False),
 )
 
+# ---- Daily Investment Committee decisions (app/committee_daily.py) ----
+# One row per (date, symbol): the decision, the votes, each agent's lean and a
+# short summary, and the evidence it was based on -- so the committee's calls can
+# be scored against what the market then did.
+committee_runs_table = Table(
+    "committee_runs",
+    metadata,
+    Column("id", String, primary_key=True),  # "YYYY-MM-DD:SYMBOL"
+    Column("config", String, nullable=False),
+)
+
 metadata.create_all(engine)
 
 
@@ -346,6 +357,28 @@ def list_paper_signals(limit: int = 30) -> List[Dict[str, Any]]:
     items = _list(paper_signals_table)
     items.sort(key=lambda x: x.get("date", ""), reverse=True)
     return items[:limit]
+
+
+# ---- Committee runs ----
+
+def save_committee_run(doc: Dict[str, Any]) -> Dict[str, Any]:
+    if _update(committee_runs_table, doc["id"], doc) is None:
+        return _create(committee_runs_table, doc)
+    return doc
+
+
+def list_committee_runs_for_date(d: str) -> List[Dict[str, Any]]:
+    return sorted((r for r in _list(committee_runs_table) if r.get("date") == d), key=lambda r: r.get("symbol", ""))
+
+
+def list_committee_runs(limit: int = 60) -> List[Dict[str, Any]]:
+    items = _list(committee_runs_table)
+    items.sort(key=lambda r: (r.get("date", ""), r.get("symbol", "")), reverse=True)
+    return items[:limit]
+
+
+def list_all_committee_runs() -> List[Dict[str, Any]]:
+    return _list(committee_runs_table)
 
 
 # ---- Pagination + audit log (Phase 6) ----

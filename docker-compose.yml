@@ -55,6 +55,12 @@ services:
       LLM_FAILOVER_ENABLED: ${LLM_FAILOVER_ENABLED:-1}
       LLM_FAILOVER_USER_RUNS: ${LLM_FAILOVER_USER_RUNS:-1}
       LLM_ROUTE_BUDGET_S: ${LLM_ROUTE_BUDGET_S:-120}
+      # Daily Investment Committee review (app/committee_daily.py). Empty = built-in default.
+      COMMITTEE_MIN_SYMBOLS: ${COMMITTEE_MIN_SYMBOLS:-}
+      COMMITTEE_MAX_SYMBOLS: ${COMMITTEE_MAX_SYMBOLS:-}
+      COMMITTEE_DAILY_BUDGET_S: ${COMMITTEE_DAILY_BUDGET_S:-}
+      COMMITTEE_QUORUM: ${COMMITTEE_QUORUM:-}
+      COMMITTEE_MAX_DATA_AGE_DAYS: ${COMMITTEE_MAX_DATA_AGE_DAYS:-}
       CORS_ALLOWED_ORIGINS: https://${APP_DOMAIN:?set in .env}
       # Also used directly (not just for CORS) to build the Google OAuth
       # redirect_uri and the post-login redirect back to the frontend --

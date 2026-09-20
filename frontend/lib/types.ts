@@ -233,3 +233,36 @@ export type RoutingProvider = {
 export type RoutingStatus = { enabled: boolean; order: string[]; budget_s: number; user_runs_may_fail_over: boolean; providers: RoutingProvider[] };
 
 export type RoutingTestResult = { ok: boolean; answered_by: string; model: string; failed_over: boolean; reply: string; skipped_or_failed: { provider: string; result: string }[] };
+
+// ---- Daily Investment Committee (admin) ----
+
+export type CommitteeAgentRow = { agent: string; ok: boolean; type?: string; lean?: string; summary?: string; provider?: string; model?: string; error?: string };
+
+export type CommitteeRun = {
+  id: string;
+  date: string;
+  symbol: string;
+  why: string;
+  engine_signal: "BUY" | "SELL" | "HOLD";
+  engine_confidence: number;
+  price: number;
+  decision: "BUY" | "SELL" | "HOLD" | null;
+  votes: { BUY: number; SELL: number; HOLD: number } | null;
+  agrees_with_engine: boolean | null;
+  agents: CommitteeAgentRow[];
+  answered: number;
+  total: number;
+  quorum_ok: boolean;
+  providers: Record<string, number>;
+  error: string | null;
+  seconds: number;
+};
+
+export type CommitteeRunsResponse = { running: boolean; runs: CommitteeRun[] };
+export type CommitteePreview = { date: string; picked: string[]; already_done: string[]; would_run: { symbol: string; why: string }[] };
+export type CommitteeScorecard = {
+  runs: number;
+  reliable_runs: number;
+  agrees_with_engine: number | null;
+  by_decision: Record<"BUY" | "SELL" | "HOLD", Record<string, { n: number; mean_return: number | null; hit_rate: number | null }>>;
+};
