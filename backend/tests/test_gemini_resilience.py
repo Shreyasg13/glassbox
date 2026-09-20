@@ -5,6 +5,8 @@ can never break a working configuration. Live logs showed 14 of 46 calls were
 404s against invented model ids -- each one a wasted call and a noisy row."""
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 import respx
@@ -208,3 +210,61 @@ def test_admin_diagnostics_endpoint_compares_configured_with_offered_models(monk
     assert body["configured_but_not_offered"] == ["gemini-3.8-flash"]
     assert "gemini-3.8-flash" in body["recently_404_retry_in_s"]
     assert body["free_tier_ceilings"]["gemini-2.5-flash-lite"]["rpd"] == 20
+
+
+# ----------------------------------------------- 400s: readable, and thinking-config retry --
+
+
+@respx.mock
+async def test_a_400_now_says_why_with_the_key_scrubbed():
+    respx.post(GEN("gemini-x")).mock(return_value=httpx.Response(400, json={"error": {"message": "Invalid value at 'contents' for key-abc-123\n  (type)"}}))
+    with pytest.raises(RuntimeError) as e:
+        await GeminiProvider(api_key="key-abc-123").complete("hi", model="gemini-x", retry=False)
+    text = str(e.value)
+    assert text.startswith("Gemini API error: HTTP 400 (") and "Invalid value at 'contents'" in text
+    assert "key-abc-123" not in text and "\n" not in text
+
+
+@respx.mock
+async def test_a_400_with_an_unreadable_body_is_still_a_clean_status_only_error():
+    respx.post(GEN("gemini-x")).mock(return_value=httpx.Response(400, text="<html>not json</html>"))
+    with pytest.raises(RuntimeError) as e:
+        await GeminiProvider(api_key="k").complete("hi", model="gemini-x", retry=False)
+    assert str(e.value) == "Gemini API error: HTTP 400"
+
+
+@respx.mock
+async def test_a_model_that_rejects_thinking_disabled_is_retried_without_it_even_with_no_retries_allowed():
+    from app.providers import gemini as g
+
+    g._NO_THINKING.discard("gemini-lite-x")
+    route = respx.post(GEN("gemini-lite-x")).mock(
+        side_effect=[httpx.Response(400, json={"error": {"message": "Budget 0 is invalid. This model only works in thinking mode."}}), httpx.Response(200, json=OK)]
+    )
+    out = await GeminiProvider(api_key="k").complete("hi", model="gemini-lite-x", retry=False)  # retry=False: no ordinary retries
+    assert out == "hello" and route.call_count == 2
+    assert "thinkingConfig" in json.loads(route.calls[0].request.content)["generationConfig"]
+    assert "thinkingConfig" not in json.loads(route.calls[1].request.content)["generationConfig"]
+
+
+@respx.mock
+async def test_the_model_is_remembered_so_the_next_call_omits_thinking_up_front():
+    from app.providers import gemini as g
+
+    g._NO_THINKING.add("gemini-lite-y")
+    route = respx.post(GEN("gemini-lite-y")).mock(return_value=httpx.Response(200, json=OK))
+    await GeminiProvider(api_key="k").complete("hi", model="gemini-lite-y")
+    assert route.call_count == 1 and "thinkingConfig" not in json.loads(route.calls[0].request.content)["generationConfig"]
+    g._NO_THINKING.discard("gemini-lite-y")
+
+
+@respx.mock
+async def test_the_thinking_retry_happens_once_and_a_second_400_surfaces():
+    from app.providers import gemini as g
+
+    g._NO_THINKING.discard("gemini-lite-z")
+    route = respx.post(GEN("gemini-lite-z")).mock(return_value=httpx.Response(400, json={"error": {"message": "thinking is not supported, and something else"}}))
+    with pytest.raises(RuntimeError, match="HTTP 400"):
+        await GeminiProvider(api_key="k").complete("hi", model="gemini-lite-z", retry=False)
+    assert route.call_count == 2  # original + one retry without thinkingConfig, not a loop
+    g._NO_THINKING.discard("gemini-lite-z")

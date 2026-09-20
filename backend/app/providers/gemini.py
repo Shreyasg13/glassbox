@@ -39,6 +39,25 @@ from .base import BaseProvider, ModelUnavailableError, NotConfiguredError, OnTok
 # in a couple seconds and doesn't need as long a wait.
 _MODELS_TTL_S = 6 * 60 * 60.0  # how long a successful ListModels result is trusted
 _MODELS_FAIL_TTL_S = 5 * 60.0  # how long a FAILED lookup suppresses re-asking
+# Models observed to reject "thinking disabled" (thinkingBudget: 0) with HTTP 400 --
+# remembered so later calls omit it up front instead of failing first.
+_NO_THINKING: Set[str] = set()
+
+
+def _error_message(resp: httpx.Response, api_key: Optional[str]) -> str:
+    """The short human message from Google's JSON error body (e.g. "Budget 0 is
+    invalid ..."), whitespace-collapsed and truncated. Google's 400 messages
+    describe the REQUEST SHAPE, not credentials, and the key is scrubbed anyway;
+    used for 400s only so a rejected model says WHY instead of a bare status."""
+    try:
+        msg = str(resp.json()["error"]["message"])
+    except Exception:  # noqa: BLE001 -- any non-JSON / unexpected body
+        return ""
+    if api_key and len(api_key) >= 8:  # real keys are ~39 chars; never mangle text over a trivially short value
+        msg = msg.replace(api_key, "***")
+    return " ".join(msg.split())[:140]
+
+
 _RETRYABLE_STATUS = {429, 503}
 _MAX_ATTEMPTS = 3
 _BACKOFF_BASE_S = {429: 12.0, 503: 2.0}
@@ -131,6 +150,8 @@ class GeminiProvider(BaseProvider):
                 "thinkingConfig": {"thinkingBudget": 0},
             },
         }
+        if model in _NO_THINKING:
+            payload["generationConfig"].pop("thinkingConfig", None)
         url = f"{self.BASE_URL}/models/{model}:generateContent"
         # When a caller has other fallback models ready to try immediately
         # (llm_call_logging.py's chain loop passes retry=False for every
@@ -144,7 +165,9 @@ class GeminiProvider(BaseProvider):
         max_attempts = _MAX_ATTEMPTS if retry else 1
         last_exc: Optional[Exception] = None
         async with httpx.AsyncClient(timeout=None) as client:
-            for attempt in range(1, max_attempts + 1):
+            attempt = 0
+            while attempt < max_attempts:
+                attempt += 1
                 try:
                     resp = await client.post(url, params={"key": self.api_key}, json=payload)
                     resp.raise_for_status()
@@ -152,6 +175,13 @@ class GeminiProvider(BaseProvider):
                     status = exc.response.status_code
                     if status == 404:
                         raise ModelUnavailableError("Gemini API error: HTTP 404") from None
+                    if status == 400 and "thinkingConfig" in payload["generationConfig"] and "thinking" in _error_message(exc.response, self.api_key).lower():
+                        # e.g. the lite tier rejects "thinking disabled". Drop it, remember the
+                        # model, and retry right away without spending a retry attempt.
+                        _NO_THINKING.add(model)
+                        payload["generationConfig"].pop("thinkingConfig", None)
+                        attempt -= 1
+                        continue
                     if status in _RETRYABLE_STATUS and attempt < max_attempts:
                         retry_after = exc.response.headers.get("retry-after")
                         delay = float(retry_after) if retry_after else _BACKOFF_BASE_S[status] * attempt
@@ -168,7 +198,8 @@ class GeminiProvider(BaseProvider):
                             retry_after_s=float(retry_hdr) if retry_hdr and retry_hdr.replace(".", "", 1).isdigit() else None,
                             daily="PerDay" in body or "per day" in body.lower(),
                         ) from None
-                    raise RuntimeError(f"Gemini API error: HTTP {status}") from None
+                    why = _error_message(exc.response, self.api_key) if status == 400 else ""
+                    raise RuntimeError(f"Gemini API error: HTTP {status}" + (f" ({why})" if why else "")) from None
                 except httpx.HTTPError as exc:
                     raise RuntimeError(f"Gemini API request failed: {exc.__class__.__name__}") from None
                 else:

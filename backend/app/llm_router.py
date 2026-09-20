@@ -51,8 +51,11 @@ DEFAULT_ORDER = "gemini,gateway,openrouter,groq,cerebras,github,qwen,deepseek,xa
 
 # Failover model lists for providers that are not OpenAI-compatible.
 _FAILOVER_MODELS = {
-    # The lite Gemini models carry the highest free daily quota (500 vs 20).
-    "gemini": ("GEMINI_FAILOVER_MODELS", "gemini-2.5-flash-lite,gemini-3.1-flash-lite,gemini-3.5-flash-lite"),
+    # The lite Gemini model carries the highest free daily quota (500 vs 20). Names verified
+    # against the live key on 2026-09-20 (the 2.5 models 404, gemini-3.5-flash-lite 400s) --
+    # override with GEMINI_FAILOVER_MODELS, and GET /api/admin/providers/gemini/models
+    # shows what the key offers.
+    "gemini": ("GEMINI_FAILOVER_MODELS", "gemini-3.1-flash-lite,gemini-flash-latest,gemini-3.5-flash"),
     "ollama": ("OLLAMA_FAILOVER_MODELS", "qwen2.5:1.5b-instruct"),
     "claude": ("CLAUDE_FAILOVER_MODELS", ""),
     "vllm": ("VLLM_FAILOVER_MODELS", ""),

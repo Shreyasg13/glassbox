@@ -40,7 +40,7 @@ DEFAULT_CASH = 100_000.0
 # The lite Gemini models carry the highest free-tier daily quota (500/day vs 20
 # for the flash models -- see providers/gemini_quota.py), so the optional daily
 # narration tries them first.
-LLM_NOTE_CHAIN = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"]
+LLM_NOTE_CHAIN = ["gemini-3.1-flash-lite", "gemini-flash-latest"]
 
 _cycle_lock = threading.Lock()
 

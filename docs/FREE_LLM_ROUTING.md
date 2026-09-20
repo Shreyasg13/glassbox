@@ -63,7 +63,7 @@ way for more headroom (each has its own daily allowance).
 | `LLM_FAILOVER_USER_RUNS` | `1` | `0` keeps runs started by end users on the requested provider only (see privacy). |
 | `LLM_ROUTE_BUDGET_S` | `120` | Stop walking the list after this many seconds. |
 | `<NAME>_MODELS` | built-in defaults | Comma-separated model ids for a provider, e.g. `GROQ_MODELS=llama-3.3-70b-versatile`. Names the provider's own model list doesn't offer are dropped automatically. |
-| `GEMINI_FAILOVER_MODELS` | the three `*-flash-lite` models | Used when Gemini is a failover target (they carry the highest free daily quota). |
+| `GEMINI_FAILOVER_MODELS` | `gemini-3.1-flash-lite,gemini-flash-latest,gemini-3.5-flash` | Used when Gemini is a failover target (they carry the highest free daily quota). |
 | `OLLAMA_FAILOVER_MODELS` | `qwen2.5:1.5b-instruct` | Model used from the local container. |
 
 ## Privacy — read before enabling on user data
