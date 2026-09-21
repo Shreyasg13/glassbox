@@ -4,6 +4,13 @@ updates:
     directory: /backend
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
+    ignore:
+      # websockets must stay in 15.x-16.x: langsmith (via langchain-core) needs >=15, langgraph-sdk needs <17.
+      - dependency-name: "websockets"
+        update-types: ["version-update:semver-major"]
+      # pandas 3 is a major release (copy-on-write etc.) that reads our parquet price files: upgrade deliberately, not by bot.
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /frontend
     schedule: { interval: weekly }
