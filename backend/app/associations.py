@@ -15,11 +15,14 @@ lags = 1,050 tests, and at a 5% level ~50 of them would look "significant" by pu
 correction (Bonferroni on a bell-curve p-value) is not enough either: real returns have fat tails and
 volatility clustering, which make chance correlations bigger than a bell curve predicts -- an earlier
 version of this scan "discovered" a relationship in pure noise for exactly that reason. So the bar is
-set empirically: every series is shuffled independently (circular shifts, which keep its own
-volatility clustering but destroy any relationship between series), the LARGEST lagged correlation
-anywhere across all pairs and lags is recorded, and a relationship is only reported if it beats the
-95th percentile of that maximum. On daily bars between liquid large caps the honest usual answer is
-"none".
+set empirically: returns are rank-transformed (so a single 15% earnings day is just "the biggest
+day"), whole DAYS are then shuffled jointly across every stock (which keeps the same-day relationships
+between stocks and destroys only the day-to-day lag structure), the LARGEST lagged correlation anywhere
+across all pairs and lags is recorded, and a relationship is only reported if it beats the 95th
+percentile of that maximum. (Shuffling each stock separately looks equivalent but is not: two stocks that
+are 0.9 correlated on the same day occasionally get shifted into near-alignment, and that same-day
+relationship then masquerades as a lag, inflating the bar to ~0.9 and blinding the test -- seen on real
+SPY/QQQ data.) On daily bars between liquid large caps the honest usual answer is "none".
 """
 from __future__ import annotations
 
@@ -149,11 +152,11 @@ def cohesion(book: Any, d: str) -> Dict[str, Any]:
 def lead_lag_scan(book: Any, d: str, window: int = LEAD_LAG_WINDOW, max_lag: int = MAX_LAG, alpha: float = ALPHA, permutations: int = LEAD_LAG_PERMUTATIONS) -> Dict[str, Any]:
     """Does any name's return today predict another's over the next 1..max_lag days? Every ordered pair and
     lag is tested; a finding is kept only if its correlation beats the (1-alpha) quantile of the LARGEST
-    lagged correlation found in `permutations` independently shuffled copies of the same data."""
+    lagged correlation found in `permutations` day-shuffled copies of the same data."""
     rets = aligned_returns(book, d, window + max_lag)
     syms = sorted(rets)
     n_tests = len(syms) * (len(syms) - 1) * max_lag
-    out: Dict[str, Any] = {"tests": n_tests, "window": window, "findings": [], "threshold_r": None, "method": "max-statistic over shuffled copies, rank-based"}
+    out: Dict[str, Any] = {"tests": n_tests, "window": window, "findings": [], "threshold_r": None, "method": "max-statistic over day-shuffled copies, rank-based"}
     if n_tests == 0:
         return out
     R = np.array([rets[s] for s in syms], dtype=float).T  # days x symbols
@@ -178,8 +181,7 @@ def lead_lag_scan(book: Any, d: str, window: int = LEAD_LAG_WINDOW, max_lag: int
     rng = np.random.default_rng(LEAD_LAG_SEED)
     null_max = np.empty(permutations)
     for i in range(permutations):
-        shifts = rng.integers(max_lag + 1, T - max_lag - 1, size=S)  # every series moved by its own amount
-        shuffled = np.column_stack([np.roll(Z[:, j], int(shifts[j])) for j in range(S)])
+        shuffled = Z[rng.permutation(T)]  # the same reordering of days for every stock: same-day structure kept, lags destroyed
         null_max[i] = np.abs(lagged(shuffled)[:, off_diag]).max()
     thr = float(np.quantile(null_max, 1 - alpha))
     out["threshold_r"] = thr

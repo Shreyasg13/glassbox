@@ -881,3 +881,10 @@ engine +141.2%, placebo +128.3%, trend +115.6%. Equal-weight hold remains the hi
 Analytics after the repair: only IWM/QQQ/SPY form a "one bet" cluster (QQQ-SPY 0.89); no lead-lag relationship survives. The
 lead-lag scan now ranks returns (Spearman) before the shuffle test because single-day jumps (earnings moves) inflated the
 plain-correlation bar to ~0.8 and blinded it; plain-noise datasets flag at about the 5% level by design (tested as a rate).
+
+**Lead-lag null, second correction (2026-09-21).** Instrumenting the scan on real data showed the shuffle null was still wrong:
+shifting each stock independently sometimes aligned two stocks that are ~0.9 correlated on the SAME day (SPY/QQQ) and that
+same-day link posed as a lag, so the null maximum hit 0.93 and the bar sat at ~0.8 (the data's own maximum was 0.22, in line with
+independent noise 0.21). The null now shuffles whole DAYS jointly across every stock (same-day structure kept, lags destroyed) on
+rank-transformed returns; regression tests cover both the jump case and the correlated-pair case, and plain noise is tested as a
+false-positive RATE, not a lucky seed.

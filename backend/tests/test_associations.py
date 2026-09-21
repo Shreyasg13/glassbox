@@ -119,7 +119,7 @@ def test_the_significance_bar_is_empirical_stricter_than_the_naive_one_and_deter
     a, b = A.lead_lag_scan(book, D[N - 1]), A.lead_lag_scan(book, D[N - 1])
     assert a == b  # same data, same answer
     assert a["threshold_r"] > 2 / math.sqrt(A.LEAD_LAG_WINDOW)  # far above the naive 5% bar for one test
-    assert a["method"].startswith("max-statistic")
+    assert a["method"].startswith("max-statistic") and "day-shuffled" in a["method"]
 
 
 def test_lead_lag_declines_to_speak_without_enough_history():
@@ -171,3 +171,13 @@ def test_single_day_jumps_do_not_blind_the_lead_lag_scan():
     follow = [0.0] + [0.5 * lead[i - 1] + x for i, x in zip(range(1, N), noise(401, 0.004))]
     planted = A.lead_lag_scan(make({"LEAD": lead, "FOLLOW": follow, **{f"J{k}": jumpy(410 + k) for k in range(8)}}), D[N - 1])
     assert ("LEAD", "FOLLOW", 1) in [(f["leader"], f["follower"], f["lag_days"]) for f in planted["findings"]]
+
+
+def test_stocks_that_move_together_on_the_same_day_do_not_inflate_the_lead_lag_bar():
+    """Regression from real data: SPY and QQQ are ~0.9 correlated on the same day. Shifting each series independently
+    occasionally aligned them and that same-day link posed as a lag (bar ~0.9, scan blind). Shuffling whole days jointly must not."""
+    base = noise(600)
+    syms = {"SPY": base, "QQQ": [r + x for r, x in zip(base, noise(601, 0.002))], **{f"N{k}": noise(610 + k) for k in range(8)}}
+    scan = A.lead_lag_scan(make(syms), D[N - 1])
+    assert A.correlations(make(syms), D[N - 1])["SPY"]["QQQ"] > 0.9
+    assert scan["threshold_r"] < 0.4 and scan["findings"] == []
