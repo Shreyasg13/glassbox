@@ -851,3 +851,33 @@ volatility-targeted strategy's sizing and the paper accounts' history across tha
 - Repair (prod): backup, backfill by running the sync once, then `run_paper_cycle --rebuild --apply --allow-differences`
   (the replayed accounts legitimately differ because the PRICES changed; old vs new totals are printed).
 - Every backtest figure quoted before this repair spanned the hole and should be re-read from the rebuilt accounts.
+
+### Repair carried out on prod (2026-09-21) and the CORRECTED results
+
+Backups first (`~/data_parquet-backup-2026-09-21.tgz`, `~/paper-accounts-backup-pre-datafix.json`); the sync backfilled 160
+missing bars per symbol (2,533 -> 2,693 dates, no gaps left); all 35 accounts were replayed from scratch on the corrected
+prices (`--rebuild --apply --allow-differences`) and a second dry run matched 35/35. Residual: a one-time dividend-basis
+step where the backfilled prices join the old ones at 2025-12-22 (up to -3.2% for TLT; mostly < 1.3%), because the old rows
+were adjusted at an earlier date. Everything quoted in earlier sections was computed across the hole and is superseded by:
+
+Backtest 2021-01 -> 2026-09-18, taxable "if sold today" (assumed 32% short / 15% long-term), in-sample, params fixed in advance:
+
+| Strategy | Pre-tax | If sold today | Worst drop | Sharpe |
+|---|---|---|---|---|
+| Volatility-targeted | +143.9% | +117.4% | -23.8% | 1.12 |
+| Tax-aware engine | +130.1% | +109.5% | -27.3% | 1.03 |
+| SPY buy & hold | +119.6% | +101.7% | -24.5% | 0.91 |
+| Plain engine | +141.2% | +97.5% | -26.0% | 1.06 |
+| Trend filter (200-day) | +115.6% | +94.3% | -13.7% | 1.17 |
+| Placebo | +128.3% | +89.1% | -27.2% | 1.01 |
+| Equal-weight hold (15 stocks) | +213.3% | +181.3% | -34.2% | 1.01 |
+
+What changed vs the pre-repair numbers: the trend filter was flattered (it had +135% / +112% / Sharpe 1.40 by acting on stale
+trend states across the hole) and now trails SPY after tax, though its drawdown is still about half of SPY's; the engine's
+edge over the placebo is +12.9 pts pre-tax (was +9.4); the tax-aware engine still beats the plain engine after tax by ~12 pts
+and beats SPY; volatility targeting is the best risk-managed result and barely moved. Sheltered (pre-tax): vol-target +143.9%,
+engine +141.2%, placebo +128.3%, trend +115.6%. Equal-weight hold remains the highest, on a universe chosen with hindsight.
+
+Analytics after the repair: only IWM/QQQ/SPY form a "one bet" cluster (QQQ-SPY 0.89); no lead-lag relationship survives. The
+lead-lag scan now ranks returns (Spearman) before the shuffle test because single-day jumps (earnings moves) inflated the
+plain-correlation bar to ~0.8 and blinded it; plain-noise datasets flag at about the 5% level by design (tested as a rate).

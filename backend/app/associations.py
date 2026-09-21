@@ -29,6 +29,7 @@ from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+import pandas as pd
 
 MAX_GAP_DAYS = 5  # calendar days between consecutive bars above which the data has a hole
 CORR_WINDOW = 60  # trading days for correlations and cohesion
@@ -152,7 +153,7 @@ def lead_lag_scan(book: Any, d: str, window: int = LEAD_LAG_WINDOW, max_lag: int
     rets = aligned_returns(book, d, window + max_lag)
     syms = sorted(rets)
     n_tests = len(syms) * (len(syms) - 1) * max_lag
-    out: Dict[str, Any] = {"tests": n_tests, "window": window, "findings": [], "threshold_r": None, "method": "max-statistic over shuffled copies"}
+    out: Dict[str, Any] = {"tests": n_tests, "window": window, "findings": [], "threshold_r": None, "method": "max-statistic over shuffled copies, rank-based"}
     if n_tests == 0:
         return out
     R = np.array([rets[s] for s in syms], dtype=float).T  # days x symbols
@@ -160,6 +161,11 @@ def lead_lag_scan(book: Any, d: str, window: int = LEAD_LAG_WINDOW, max_lag: int
     if T - max_lag < 60:
         out["note"] = "not enough history"
         return out
+    # Rank-transform each series first (Spearman-style). Real returns contain single-day jumps (earnings moves of
+    # 10-15%); under plain correlation one such day is worth ~15 standard deviations, so two jumps that happen to
+    # line up in a shuffled copy alone produce r near 1, the significance bar balloons to ~0.8, and the scan
+    # becomes blind. By rank a jump is simply "the biggest day", so the bar reflects ordinary chance (~0.25).
+    R = pd.DataFrame(R).rank(axis=0).to_numpy(dtype=float)
     sd = R.std(axis=0)
     Z = (R - R.mean(axis=0)) / np.where(sd > 0, sd, 1.0)
     S = len(syms)

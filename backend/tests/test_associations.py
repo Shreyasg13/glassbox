@@ -97,8 +97,14 @@ def test_a_planted_lead_lag_is_found_and_plain_noise_is_not():
     assert scan["tests"] == 10 * 9 * A.MAX_LAG
     found = [(f["leader"], f["follower"], f["lag_days"]) for f in scan["findings"]]
     assert ("LEAD", "FOLLOW", 1) in found and len(found) == 1  # the planted one, and nothing spurious
-    pure_noise = A.lead_lag_scan(make({f"N{k}": noise(50 + k) for k in range(12)}), D[N - 1])
-    assert pure_noise["findings"] == [] and pure_noise["tests"] == 12 * 11 * A.MAX_LAG
+    assert A.lead_lag_scan(make({f"N{k}": noise(50 + k) for k in range(12)}), D[N - 1])["tests"] == 12 * 11 * A.MAX_LAG
+
+
+def test_plain_noise_flags_about_as_often_as_the_significance_level_says_it_should():
+    """At a 5% level roughly 1 dataset in 20 will flag by chance: asserting 'never' from one seed would test luck, so
+    measure the RATE across many independent datasets instead."""
+    flagged = sum(1 for trial in range(20) if A.lead_lag_scan(make({f"N{k}": noise(5000 + 100 * trial + k) for k in range(10)}), D[N - 1])["findings"])
+    assert flagged <= 3, flagged
 
 
 def test_fat_tailed_volatility_clustered_noise_does_not_produce_discoveries():
@@ -144,3 +150,24 @@ def test_a_high_percentile_alone_never_means_crowded_when_the_level_is_near_zero
     # uncorrelated noise: whatever percentile today lands on, the average correlation is ~0, so it cannot be "crowded"
     c = A.cohesion(make({f"N{k}": noise(200 + k) for k in range(8)}), D[N - 1])
     assert abs(c["value"]) < A.CROWDED_MIN_CORR and c["label"] != "crowded"
+
+
+def jumpy(seed, n=N, jumps=3):
+    """Ordinary noise plus a few huge single-day moves, like earnings days."""
+    rnd = random.Random(seed)
+    r = [rnd.gauss(0.0003, 0.008) for _ in range(n)]
+    for _ in range(jumps):
+        r[rnd.randrange(60, n)] += rnd.choice([-1, 1]) * rnd.uniform(0.10, 0.18)
+    return r
+
+
+def test_single_day_jumps_do_not_blind_the_lead_lag_scan():
+    """Regression: with plain correlation, jumps that line up in shuffled data pushed the bar to ~0.8 (blind).
+    By rank the bar stays near ordinary chance, so a genuine relationship is still detectable."""
+    syms = {f"J{k}": jumpy(300 + k) for k in range(12)}
+    scan = A.lead_lag_scan(make(syms), D[N - 1])
+    assert scan["threshold_r"] < 0.4 and scan["findings"] == []
+    lead = jumpy(400)
+    follow = [0.0] + [0.5 * lead[i - 1] + x for i, x in zip(range(1, N), noise(401, 0.004))]
+    planted = A.lead_lag_scan(make({"LEAD": lead, "FOLLOW": follow, **{f"J{k}": jumpy(410 + k) for k in range(8)}}), D[N - 1])
+    assert ("LEAD", "FOLLOW", 1) in [(f["leader"], f["follower"], f["lag_days"]) for f in planted["findings"]]
