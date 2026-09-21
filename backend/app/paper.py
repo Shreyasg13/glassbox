@@ -47,6 +47,21 @@ RULES (deliberately simple, all stated so results can be audited):
   est_tax applies PAPER_TAX_ST / PAPER_TAX_LT (assumed 32% / 15%) to the net gains, so
   the leaderboard can show what an active strategy keeps AFTER tax versus buy-and-hold,
   where the gain stays unrealised and untaxed.
+* Wash sales (taxable accounts): a loss realised on a symbol that was also bought in the 30
+  days before or after is DISALLOWED and added to the replacement shares' cost basis, so a
+  strategy that sells at a loss and rebuys soon after cannot bank the loss. (Simplified: symbol
+  level, holding period of the replacement is not tacked on.)
+* tax_status: "taxable" (the default; the tax lens above applies) or "sheltered" (IRA / 401k /
+  Roth-style: no tax on realised gains and no wash-sale rule, trading costs only). Both wrappers
+  are tracked as separate accounts so the same strategy can be compared in each.
+* engine_taxaware (for the taxable wrapper): the engine, minus what makes it expensive after tax.
+    - Lot selection: sells losses first, then long-term gains, and short-term gains last.
+    - Short-term gain lock: a lot held a year or less at a gain is NOT sold unless that
+      symbol's risk regime is HIGH (then protecting the gain wins over the tax).
+    - Signals must persist TA_DEBOUNCE_DAYS trading days before they are acted on.
+    - Wider rebalance bands (TA_DRIFT_THRESHOLD / TA_REBALANCE_DAYS / TA_MIN_TRADE_FRACTION).
+    - A BUY into a HIGH-risk regime is held at HOLD.
+  The pre-tax return can be lower than the plain engine's; what matters is the return AFTER tax.
 """
 from __future__ import annotations
 
@@ -58,6 +73,7 @@ from datetime import date as _date
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import data_source as ds
+from . import risk as _risk
 
 COMMISSION_BPS = float(os.environ.get("PAPER_COMMISSION_BPS", "5"))
 DRIFT_THRESHOLD = 0.05
@@ -75,7 +91,15 @@ RISK_POLICY = {
     "aggressive": {"invested": 0.95, "max_position": 0.60},
 }
 
-STRATEGIES = ("engine_tilt", "static_hold", "static_rebalanced", "random_tilt", "cash", "committee_tilt")
+STRATEGIES = ("engine_tilt", "static_hold", "static_rebalanced", "random_tilt", "cash", "committee_tilt", "engine_taxaware")
+TAX_STATUSES = ("taxable", "sheltered")
+
+# engine_taxaware knobs (see the module docstring)
+TA_DEBOUNCE_DAYS = 5
+TA_DRIFT_THRESHOLD = 0.10
+TA_REBALANCE_DAYS = 63  # ~quarterly
+TA_MIN_TRADE_FRACTION = 0.01
+WASH_DAYS = 30
 
 COMMITTEE_MAX_AGE_DAYS = 5  # a committee call stays in force this many trading days (its own 1-5 day horizon)
 TAX_ST = float(os.environ.get("PAPER_TAX_ST", "0.32"))  # assumed rate on gains held <= 1 year (ordinary income)
@@ -212,10 +236,16 @@ def new_account(
     benchmark_id: Optional[str] = None,
     profile: Optional[Dict[str, Any]] = None,
     note: str = "",
+    tax_status: str = "taxable",
+    seed: Optional[str] = None,
 ) -> Dict[str, Any]:
     if strategy not in STRATEGIES:
         raise ValueError(f"unknown strategy {strategy!r}")
+    if tax_status not in TAX_STATUSES:
+        raise ValueError(f"unknown tax_status {tax_status!r}")
     return {
+        "tax_status": tax_status,
+        "seed": seed,  # placebo only: which account's shift to reuse, so a sheltered twin draws the SAME placebo
         "id": account_id,
         "name": name,
         "kind": kind,  # profile | benchmark | control
@@ -242,39 +272,122 @@ def new_account(
         "last_tilt_key": None,
         "since_rebalance": 10**6,  # first decision is always "due"
         "lots": {},  # symbol -> [[buy date, shares, price], ...] oldest first (FIFO)
+        "recent_losses": {},  # symbol -> [[sale date, bucket, loss per share, shares not yet matched], ...] (wash-sale watch)
         "tax": new_tax(),
     }
 
 
 def new_tax() -> Dict[str, Any]:
-    return {"tracked": True, "st": 0.0, "lt": 0.0, "held_notional_days": 0.0, "sold_notional": 0.0, "unrealized_st": 0.0, "unrealized_lt": 0.0}
+    return {
+        "tracked": True, "st": 0.0, "lt": 0.0, "held_notional_days": 0.0, "sold_notional": 0.0, "unrealized_st": 0.0, "unrealized_lt": 0.0,
+        "wash_disallowed": 0.0, "deferred_notional": 0.0, "deferred_sells": 0,
+    }
+
+
+def _wash_on(acct: Dict[str, Any]) -> bool:
+    return acct.get("tax_status", "taxable") == "taxable" and bool(acct.get("tax", {}).get("tracked"))
 
 
 def _open_lot(acct: Dict[str, Any], sym: str, d: str, shares: float, price: float) -> None:
-    if acct.get("tax", {}).get("tracked"):
-        acct.setdefault("lots", {}).setdefault(sym, []).append([d, shares, price])
+    if not acct.get("tax", {}).get("tracked"):
+        return
+    if _wash_on(acct):
+        price = _wash_on_buy(acct, sym, d, shares, price)
+    acct.setdefault("lots", {}).setdefault(sym, []).append([d, shares, price])
+
+
+def _wash_on_buy(acct: Dict[str, Any], sym: str, d: str, shares: float, price: float) -> float:
+    """A loss on `sym` sold within WASH_DAYS BEFORE this buy is disallowed (up to the shares bought):
+    it stops counting as a realised loss and is added to the new lot's cost basis instead."""
+    tax = acct["tax"]
+    now, left, disallowed = _date.fromisoformat(d), shares, 0.0
+    for entry in acct.get("recent_losses", {}).get(sym) or []:
+        if left <= 1e-12:
+            break
+        sold_on, bucket, per_share, unmatched = entry
+        if unmatched <= 1e-12 or (now - _date.fromisoformat(sold_on)).days > WASH_DAYS:
+            continue
+        match = min(left, unmatched)
+        tax[bucket] += match * per_share  # the loss no longer counts
+        entry[3] -= match
+        left -= match
+        disallowed += match * per_share
+    if disallowed:
+        tax["wash_disallowed"] = tax.get("wash_disallowed", 0.0) + disallowed
+        price += disallowed / shares
+    return price
+
+
+def _lot_preference(now: _date, price: float):
+    """Tax-aware sell order: short-term losses, long-term losses, long-term gains (smallest first),
+    then short-term gains (smallest first)."""
+
+    def key(lot: List[Any]):
+        gain_ps = price - lot[2]
+        long_term = (now - _date.fromisoformat(lot[0])).days > LONG_TERM_DAYS
+        if gain_ps <= 0:
+            return (0, 1 if long_term else 0, gain_ps)
+        return (1 if long_term else 2, 0, gain_ps)
+
+    return key
+
+
+def _sellable_shares(acct: Dict[str, Any], sym: str, d: str, price: float, risk_high: bool) -> float:
+    """Shares the tax-aware engine may sell today: lots at a loss, lots held over a year, and (only when
+    the symbol's risk regime is HIGH) short-term gains too."""
+    lots = acct.get("lots", {}).get(sym)
+    if lots is None or risk_high:
+        return acct["positions"].get(sym, 0.0)
+    now = _date.fromisoformat(d)
+    return sum(sh for lot_d, sh, px in lots if price <= px or (now - _date.fromisoformat(lot_d)).days > LONG_TERM_DAYS)
 
 
 def _close_lots(acct: Dict[str, Any], sym: str, d: str, shares: float, price: float, cost: float) -> None:
-    """FIFO: realise the gain on `shares` sold at `price` (sell commission `cost` reduces it)."""
+    """Realise the gain on `shares` sold at `price` (sell commission `cost` reduces it). FIFO, except the
+    tax-aware strategy picks lots by tax cost. A loss that a recent purchase makes a wash sale is disallowed."""
     tax = acct.get("tax")
     if not tax or not tax.get("tracked"):
         return
     lots = acct.setdefault("lots", {}).get(sym) or []
     sale = _date.fromisoformat(d)
+    if acct.get("strategy") == "engine_taxaware":
+        lots.sort(key=_lot_preference(sale, price))
+    wash = _wash_on(acct)
+    replacement_used = 0.0
     remaining = shares
     while remaining > 1e-12 and lots:
-        lot_d, lot_shares, lot_px = lots[0]
+        lot = lots[0]
+        lot_d, lot_shares, lot_px = lot
         take = min(remaining, lot_shares)
         days = (sale - _date.fromisoformat(lot_d)).days
-        tax["lt" if days > LONG_TERM_DAYS else "st"] += take * (price - lot_px) - cost * (take / shares)
+        bucket = "lt" if days > LONG_TERM_DAYS else "st"
+        pnl = take * (price - lot_px) - cost * (take / shares)
+        tax[bucket] += pnl
         tax["held_notional_days"] += days * take * price
         tax["sold_notional"] += take * price
         remaining -= take
         if take >= lot_shares - 1e-12:
             lots.pop(0)
         else:
-            lots[0][1] = lot_shares - take
+            lot[1] = lot_shares - take
+        if pnl < 0 and wash:
+            loss = -pnl
+            # shares of this symbol bought in the 30 days BEFORE the sale (and still held) are replacements
+            window = [l for l in lots if l is not lot and 0 <= (sale - _date.fromisoformat(l[0])).days <= WASH_DAYS]
+            avail = max(0.0, sum(l[1] for l in window) - replacement_used)
+            matched = min(take, avail)
+            if matched > 1e-12:
+                dis = loss * matched / take
+                tax[bucket] += dis
+                tax["wash_disallowed"] = tax.get("wash_disallowed", 0.0) + dis
+                newest = max(window, key=lambda l: l[0])
+                newest[2] += dis / newest[1]  # the disallowed loss moves into the replacement's basis
+                replacement_used += matched
+            unmatched = take - matched
+            if unmatched > 1e-12:  # a purchase in the next 30 days would still make it a wash sale
+                book_ = acct.setdefault("recent_losses", {}).setdefault(sym, [])
+                book_[:] = [e for e in book_ if (sale - _date.fromisoformat(e[0])).days <= WASH_DAYS and e[3] > 1e-12]
+                book_.append([d, bucket, loss / take, unmatched])
     if not lots:
         acct.get("lots", {}).pop(sym, None)
 
@@ -329,6 +442,27 @@ def current_weights(acct: Dict[str, Any], book: PriceBook, d: str) -> Dict[str, 
     return out
 
 
+def _persistent_signal(book: PriceBook, sym: str, d: str, n: int = TA_DEBOUNCE_DAYS, lookback: int = 60) -> Tuple[str, float]:
+    """The engine's most recent signal that has held for at least `n` consecutive trading days (HOLD if
+    none lately). Acting only on persistent signals filters the flip-flops that generate taxable trades."""
+    dates = book._sorted_dates.get(sym) or []
+    sigs = book.signal.get(sym, {})
+    end = bisect.bisect_right(dates, d) - 1
+    floor = max(0, end - lookback)
+    while end >= floor:
+        cur = sigs.get(dates[end])
+        if cur is None:
+            break
+        run, j = 1, end - 1
+        while run < n and j >= 0 and sigs.get(dates[j]) is not None and sigs[dates[j]][0] == cur[0]:
+            run += 1
+            j -= 1
+        if run >= n:
+            return cur[0], cur[1]
+        end = j  # this run was too short to act on: look at the one before it
+    return "HOLD", 50.0
+
+
 def _placebo_symbol(seed: str, sym: str, symbols: List[str]) -> str:
     """The symbol whose real signal history stands in for `sym`: a cyclic shift
     of the sorted universe by a seeded amount (never 0, so never itself)."""
@@ -357,7 +491,12 @@ def _target_weights(acct: Dict[str, Any], book: PriceBook, d: str) -> Tuple[Dict
         if strategy == "static_rebalanced":
             sig, conf = "HOLD", 50.0
         elif strategy == "random_tilt":
-            sig, conf = book.signal_at(_placebo_symbol(acct["id"], sym, symbols), d)
+            sig, conf = book.signal_at(_placebo_symbol(acct.get("seed") or acct["id"], sym, symbols), d)
+        elif strategy == "engine_taxaware":
+            sig, conf = _persistent_signal(book, sym, d)
+            rk = _risk.risk_at(book, sym, d)
+            if sig == "BUY" and rk and rk["level"] == "HIGH":  # never add into a HIGH-risk regime
+                sig = "HOLD"
         elif strategy == "committee_tilt":
             view = book.committee_at(sym, d)
             sig, conf = (view, 50.0) if view else book.signal_at(sym, d)
@@ -367,6 +506,8 @@ def _target_weights(acct: Dict[str, Any], book: PriceBook, d: str) -> Tuple[Dict
         raw[sym] = invested * w * TILT[sig]
         if strategy == "committee_tilt":
             reasons[sym] = f"committee {sig}" if book.committee_at(sym, d) else f"engine {sig} ({conf:.0f}%), no committee view"
+        elif strategy == "engine_taxaware":
+            reasons[sym] = f"{sig} (persisted {TA_DEBOUNCE_DAYS}d, {conf:.0f}%)"
         else:
             reasons[sym] = f"{sig} ({conf:.0f}%)" if strategy == "engine_tilt" else ("policy weight" if strategy == "static_rebalanced" else f"placebo {sig}")
     total = sum(raw.values())
@@ -398,6 +539,8 @@ def _execute_pending(acct: Dict[str, Any], book: PriceBook, d: str) -> None:
     if eq <= 0:
         return
     bps = COMMISSION_BPS / 10_000.0
+    taxaware = acct["strategy"] == "engine_taxaware"
+    min_frac = TA_MIN_TRADE_FRACTION if taxaware else MIN_TRADE_FRACTION
     sells: List[Tuple[str, float, float]] = []
     buys: List[Tuple[str, float, float]] = []
     for sym in set(acct["positions"]) | set(targets):
@@ -406,12 +549,22 @@ def _execute_pending(acct: Dict[str, Any], book: PriceBook, d: str) -> None:
             continue
         held_value = acct["positions"].get(sym, 0.0) * price
         delta = targets.get(sym, 0.0) * eq - held_value
-        if abs(delta) < max(1.0, MIN_TRADE_FRACTION * eq):
+        if abs(delta) < max(1.0, min_frac * eq):
             continue
         (sells if delta < 0 else buys).append((sym, delta, price))
 
     for sym, delta, price in sells:
         shares = min(-delta / price, acct["positions"].get(sym, 0.0))
+        if taxaware:
+            rk = _risk.risk_at(book, sym, d)
+            allowed = _sellable_shares(acct, sym, d, price, bool(rk and rk["level"] == "HIGH"))
+            if shares > allowed + 1e-9:  # the rest is locked: a short-term gain we would rather hold a while
+                tax_ = acct.setdefault("tax", new_tax())
+                tax_["deferred_notional"] = tax_.get("deferred_notional", 0.0) + (shares - allowed) * price
+                tax_["deferred_sells"] = tax_.get("deferred_sells", 0) + 1
+                shares = allowed
+            if shares * price < max(1.0, min_frac * eq):
+                continue
         proceeds = shares * price
         cost = proceeds * bps
         acct["cash"] += proceeds - cost
@@ -456,7 +609,8 @@ def _decide(acct: Dict[str, Any], book: PriceBook, d: str) -> None:
     changed = tilt_key != acct["last_tilt_key"]
     now = current_weights(acct, book, d)
     drift = max((abs(targets.get(s, 0.0) - now.get(s, 0.0)) for s in set(targets) | set(now)), default=0.0)
-    due = acct["since_rebalance"] >= REBALANCE_DAYS and drift > DRIFT_THRESHOLD
+    ta = acct["strategy"] == "engine_taxaware"  # wider bands: every rebalance can realise a taxable gain
+    due = acct["since_rebalance"] >= (TA_REBALANCE_DAYS if ta else REBALANCE_DAYS) and drift > (TA_DRIFT_THRESHOLD if ta else DRIFT_THRESHOLD)
     if first or changed or due:
         acct["pending"] = {"weights": targets, "reasons": reasons, "decided": d}
         acct["last_tilt_key"] = tilt_key
@@ -531,11 +685,15 @@ def annual_volatility(values: List[float]) -> float:
 
 def _tax_summary(acct: Dict[str, Any], last: float) -> Dict[str, Any]:
     tax = acct.get("tax")
+    status = acct.get("tax_status", "taxable")
     if not tax or not tax.get("tracked"):  # an account created before tax tracking: unknown, not zero
-        return {"tax_tracked": False, "realized_st": None, "realized_lt": None, "est_tax": None, "after_tax_return": None, "tax_drag": None, "avg_holding_days": None, "unrealized_st": None, "unrealized_lt": None}
-    est = estimate_tax(tax["st"], tax["lt"])
+        return {"tax_status": status, "tax_tracked": False, "realized_st": None, "realized_lt": None, "est_tax": None, "after_tax_return": None, "tax_drag": None,
+                "avg_holding_days": None, "unrealized_st": None, "unrealized_lt": None, "wash_disallowed": None, "deferred_notional": None, "deferred_sells": None}
+    # inside an IRA / 401k / Roth-style wrapper realised gains are not taxed: after-tax == pre-tax
+    est = 0.0 if status == "sheltered" else estimate_tax(tax["st"], tax["lt"])
     start = acct["start_cash"]
     return {
+        "tax_status": status,
         "tax_tracked": True,
         "realized_st": round(tax["st"], 2),
         "realized_lt": round(tax["lt"], 2),
@@ -545,6 +703,9 @@ def _tax_summary(acct: Dict[str, Any], last: float) -> Dict[str, Any]:
         "avg_holding_days": (tax["held_notional_days"] / tax["sold_notional"]) if tax["sold_notional"] else None,
         "unrealized_st": round(tax.get("unrealized_st", 0.0), 2),
         "unrealized_lt": round(tax.get("unrealized_lt", 0.0), 2),
+        "wash_disallowed": round(tax.get("wash_disallowed", 0.0), 2),
+        "deferred_notional": round(tax.get("deferred_notional", 0.0), 2),
+        "deferred_sells": tax.get("deferred_sells", 0),
     }
 
 

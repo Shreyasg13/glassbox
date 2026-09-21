@@ -85,7 +85,7 @@ def load_book() -> paper.PriceBook:
 def _control_accounts(book: paper.PriceBook) -> List[Dict[str, Any]]:
     equal = {s: 1.0 for s in book.symbols}
     moderate = paper.RISK_POLICY["moderate"]["invested"]
-    controls = [
+    controls = [  # (id, name, strategy, weights, invested, risk, note[, tax_status[, placebo seed]])
         ("ctl_spy", "SPY buy & hold", "static_hold", {"SPY": 1.0}, 1.0, None, "The market: 100% SPY, never traded."),
         ("ctl_equal", "Equal-weight buy & hold", "static_hold", equal, 1.0, None, "Every tracked symbol, equal weight, never traded."),
         ("ctl_engine", "Engine on all symbols", "engine_tilt", equal, moderate, "moderate", "The quant engine's own signals across the whole universe."),
@@ -94,14 +94,26 @@ def _control_accounts(book: paper.PriceBook) -> List[Dict[str, Any]]:
         ("ctl_committee", "Committee on all symbols", "committee_tilt", equal, moderate, "moderate",
          "Trades exactly like 'Engine on all symbols', except a symbol the Investment Committee reviewed follows the committee's risk-checked call. "
          "The gap between the two is what the committee added -- and it can only differ on live days."),
+        ("ctl_taxaware", "Tax-aware engine", "engine_taxaware", equal, moderate, "moderate",
+         "The engine built for a TAXABLE account: sells losses and long-term gains first, holds short-term gains unless risk turns HIGH, acts only on signals that persist "
+         "5 days, rebalances less often, and never buys into a HIGH-risk regime. Judge it by its after-tax result."),
+        ("ctl_engine_ira", "Engine in a tax-sheltered account", "engine_tilt", equal, moderate, "moderate",
+         "The same trades as 'Engine on all symbols', but inside an IRA / 401k / Roth-style account: no tax on realised gains, no wash-sale rule, costs only.", "sheltered"),
+        ("ctl_placebo_ira", "Placebo in a tax-sheltered account", "random_tilt", equal, moderate, "moderate",
+         "The placebo (same shifted signals as the taxable placebo) inside a sheltered account: the bar the sheltered engine has to clear.", "sheltered", "ctl_placebo"),
         ("ctl_cash", "Cash", "cash", {}, 0.0, None, "Sits in cash. The floor any strategy must beat."),
     ]
     out = []
-    for cid, name, strat, weights, invested, risk, note in controls:
+    for cid, name, strat, weights, invested, risk, note, *extra in controls:
         weights = {s: w for s, w in weights.items() if s in book.close}
         if strat != "cash" and not weights:
             continue
-        out.append(paper.new_account(cid, name, "control", strat, weights, invested=invested, start_cash=DEFAULT_CASH, risk_level=risk, note=note))
+        out.append(
+            paper.new_account(
+                cid, name, "control", strat, weights, invested=invested, start_cash=DEFAULT_CASH, risk_level=risk, note=note,
+                tax_status=extra[0] if extra else "taxable", seed=extra[1] if len(extra) > 1 else None,
+            )
+        )
     return out
 
 
@@ -283,6 +295,7 @@ def rebuild_accounts(*, apply: bool = False, book: Optional[paper.PriceBook] = N
         fresh = paper.new_account(
             old["id"], old["name"], old["kind"], old["strategy"], old["weights"], invested=old["invested"], start_cash=old["start_cash"],
             risk_level=old.get("risk_level"), username=old.get("username"), benchmark_id=old.get("benchmark_id"), profile=old.get("profile"), note=old.get("note", ""),
+            tax_status=old.get("tax_status", "taxable"), seed=old.get("seed"),
         )
         paper.advance(fresh, book, live_from=meta["live_from"], start=meta["start"], upto=old["last_date"])
         _refresh_holdings(fresh, book)

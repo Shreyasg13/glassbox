@@ -65,3 +65,37 @@ export function Section({ title, note, children, right }: { title: string; note?
     </section>
   );
 }
+
+export type Wrapper = "taxable" | "sheltered";
+
+/** Which account wrapper a strategy row belongs to. Passive references (buy-and-hold, cash) owe no
+ * tax in either wrapper, so they appear in both views as the yardstick. */
+export const inWrapper = (r: { tax_status?: string; strategy: string }, w: Wrapper) =>
+  w === "taxable" ? r.tax_status !== "sheltered" : r.tax_status === "sheltered" || r.strategy === "static_hold" || r.strategy === "cash";
+
+const WRAPPERS: { id: Wrapper; label: string; hint: string }[] = [
+  { id: "taxable", label: "Taxable account", hint: "brokerage — tax on realised gains" },
+  { id: "sheltered", label: "Tax-sheltered account", hint: "IRA · 401k · Roth — no tax on trading" },
+];
+
+/** Keeps the two ledgers apart: the same strategy is judged after tax in a taxable account and
+ * before tax in a sheltered one, and the answer can differ. */
+export function WrapperToggle({ value, onChange }: { value: Wrapper; onChange: (w: Wrapper) => void }) {
+  return (
+    <div className="inline-flex flex-wrap gap-sp2" role="tablist" aria-label="Account type">
+      {WRAPPERS.map((w) => (
+        <button
+          key={w.id}
+          type="button"
+          role="tab"
+          aria-selected={value === w.id}
+          onClick={() => onChange(w.id)}
+          className={`rounded-r2 border px-sp3 py-sp2 text-left ${value === w.id ? "border-teal/60 bg-teal-dim" : "border-border bg-bg2/40 hover:bg-bg3"}`}
+        >
+          <div className={`text-[12px] font-bold ${value === w.id ? "text-teal" : "text-t1"}`}>{w.label}</div>
+          <div className="text-[10px] text-t3">{w.hint}</div>
+        </button>
+      ))}
+    </div>
+  );
+}

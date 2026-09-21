@@ -1,14 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { TrackRecord } from "@/lib/types";
 import { MultiCurveChart } from "@/components/charts/MultiCurveChart";
-import { Section, Th, pct, plainPct, tone } from "@/components/admin/strategy/shared";
+import { Section, Th, WrapperToggle, inWrapper, pct, plainPct, tone, type Wrapper } from "@/components/admin/strategy/shared";
 
 const FRIENDLY: Record<string, { name: string; what: string }> = {
   ctl_engine: { name: "Signal engine", what: "Trades the engine's BUY / SELL / HOLD signals across the whole universe." },
+  ctl_taxaware: { name: "Tax-aware engine", what: "Built for a taxable account: sells losses and long-term gains first, holds short-term gains unless risk turns high, acts only on signals that last, trades less." },
+  ctl_engine_ira: { name: "Engine in an IRA / 401k", what: "The same trades as the signal engine, inside a tax-sheltered account: no tax on trading." },
+  ctl_placebo_ira: { name: "Placebo in an IRA / 401k", what: "The scrambled-signal placebo inside a sheltered account: the bar the sheltered engine has to clear." },
   ctl_committee: { name: "Engine + committee", what: "Same, but where the AI committee reviewed a stock it follows the committee's risk-checked call. Only differs on live days." },
   ctl_placebo: { name: "Placebo", what: "The engine acting on scrambled signals. If the real engine can't beat this, its signals carry no information." },
   ctl_spy: { name: "The market (SPY)", what: "Buy once, never trade. The bar every strategy has to clear." },
@@ -21,6 +25,7 @@ const FRIENDLY: Record<string, { name: string; what: string }> = {
  * and tax changes the ranking. */
 export default function TrackRecordPage() {
   const { token } = useAuth();
+  const [wrapper, setWrapper] = useState<Wrapper>("taxable");
   const q = useQuery({
     queryKey: ["track-record"],
     queryFn: () => apiFetch<TrackRecord>("/api/me/track-record", { token: token ?? undefined }),
@@ -35,7 +40,9 @@ export default function TrackRecordPage() {
   if (!t.initialised || !t.strategies.length) return <p className="py-sp10 text-center text-[13px] text-t3">The simulated track record has not started yet.</p>;
 
   const liveDays = Math.max(...t.strategies.map((s) => s.live_days));
-  const series = t.strategies.filter((s) => t.curves[s.id]).map((s) => ({ id: s.id, label: FRIENDLY[s.id]?.name ?? s.name, curve: t.curves[s.id] }));
+  const rows = t.strategies.filter((s) => inWrapper(s, wrapper));
+  const taxable = wrapper === "taxable";
+  const series = rows.filter((s) => t.curves[s.id]).map((s) => ({ id: s.id, label: FRIENDLY[s.id]?.name ?? s.name, curve: t.curves[s.id] }));
   const engine = t.strategies.find((s) => s.id === "ctl_engine");
   const market = t.strategies.find((s) => s.id === "ctl_spy");
 
@@ -54,16 +61,22 @@ export default function TrackRecordPage() {
         far too few to conclude anything. It will fill in as days pass.
       </div>
 
-      <Section title="Growth of $100" note="Each line starts at 100. Click a name to hide it.">
+      <WrapperToggle value={wrapper} onChange={setWrapper} />
+
+      <Section title="Growth of $100" note="Each line starts at 100, before tax. Click a name to hide it.">
         <MultiCurveChart series={series} />
       </Section>
 
       <Section
-        title="Results, including tax"
-        note={`Long-term investing keeps more of what it earns: gains held over a year are taxed at a lower rate than short-term ones (assumed ${plainPct(t.tax_assumptions.long_term)} vs ${plainPct(t.tax_assumptions.short_term)} here — an estimate, not tax advice).`}
+        title={taxable ? "Results in a taxable account, after tax" : "Results in a tax-sheltered account (IRA · 401k · Roth)"}
+        note={
+          taxable
+            ? `Long-term investing keeps more of what it earns: gains held over a year are taxed at a lower rate than short-term ones (assumed ${plainPct(t.tax_assumptions.long_term)} vs ${plainPct(t.tax_assumptions.short_term)} here, wash-sale rule applied — an estimate, not tax advice).`
+            : "Inside these accounts trading is not taxed, so the pre-tax result is what you keep. Holding the market and cash owe no tax anywhere."
+        }
       >
         <ul className="flex flex-col gap-sp3 md:hidden">
-          {t.strategies.map((s) => (
+          {rows.map((s) => (
             <li key={s.id} className="rounded-r2 border border-border bg-bg2/40 p-sp3">
               <div className="text-[13px] font-semibold text-t1">{FRIENDLY[s.id]?.name ?? s.name}</div>
               <div className="mt-[2px] text-[10px] leading-snug text-t3">{FRIENDLY[s.id]?.what}</div>
@@ -71,7 +84,7 @@ export default function TrackRecordPage() {
                 <div><dt className="text-[9px] font-bold uppercase tracking-wide text-t3">Total return</dt><dd className={`font-semibold ${tone(s.total_return)}`}>{pct(s.total_return)}</dd></div>
                 <div><dt className="text-[9px] font-bold uppercase tracking-wide text-t3">Live so far</dt><dd className={tone(s.live_return)}>{s.live_days ? pct(s.live_return, 2) : "—"}</dd></div>
                 <div><dt className="text-[9px] font-bold uppercase tracking-wide text-t3">Worst drop</dt><dd className="text-red">{pct(s.max_drawdown)}</dd></div>
-                <div><dt className="text-[9px] font-bold uppercase tracking-wide text-t3">After tax</dt><dd className={`font-semibold ${tone(s.after_tax_return)}`}>{s.tax_tracked ? pct(s.after_tax_return) : "—"}</dd></div>
+                <div><dt className="text-[9px] font-bold uppercase tracking-wide text-t3">{taxable ? "After tax" : "Trades / yr"}</dt><dd className={taxable ? `font-semibold ${tone(s.after_tax_return)}` : "text-t2"}>{taxable ? (s.tax_tracked ? pct(s.after_tax_return) : "—") : `${s.turnover.toFixed(1)}× capital`}</dd></div>
               </dl>
             </li>
           ))}
@@ -84,12 +97,12 @@ export default function TrackRecordPage() {
                 <Th right>Total return</Th>
                 <Th right>Live so far</Th>
                 <Th right>Worst drop</Th>
-                <Th right>After tax</Th>
+                <Th right>{taxable ? "After tax" : "Total after costs"}</Th>
                 <Th right>Trades per year</Th>
               </tr>
             </thead>
             <tbody>
-              {t.strategies.map((s) => (
+              {rows.map((s) => (
                 <tr key={s.id} className="border-t border-border text-[12px]">
                   <td className="px-sp3 py-sp2">
                     <div className="font-semibold text-t1">{FRIENDLY[s.id]?.name ?? s.name}</div>
@@ -98,7 +111,7 @@ export default function TrackRecordPage() {
                   <td className={`mono px-sp3 py-sp2 text-right font-semibold ${tone(s.total_return)}`}>{pct(s.total_return)}</td>
                   <td className={`mono px-sp3 py-sp2 text-right ${tone(s.live_return)}`}>{s.live_days ? pct(s.live_return, 2) : "—"}</td>
                   <td className="mono px-sp3 py-sp2 text-right text-red">{pct(s.max_drawdown)}</td>
-                  <td className={`mono px-sp3 py-sp2 text-right font-semibold ${tone(s.after_tax_return)}`}>{s.tax_tracked ? pct(s.after_tax_return) : "—"}</td>
+                  <td className={`mono px-sp3 py-sp2 text-right font-semibold ${tone(s.after_tax_return)}`}>{taxable ? (s.tax_tracked ? pct(s.after_tax_return) : "—") : pct(s.total_return)}</td>
                   <td className="mono px-sp3 py-sp2 text-right text-t3">{s.turnover.toFixed(1)}× capital</td>
                 </tr>
               ))}

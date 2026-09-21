@@ -743,3 +743,29 @@ clear visibility for the admin and for users.
 
 **Not done (deliberately)**: agent re-weighting / self-tuning (needs ~100 scored decisions per agent, roughly 2-3
 months at 2-3 reviews a day; the leaderboard is the input and will say when), intraday anything.
+
+## Tax-aware engine and taxable / sheltered ledgers (2026-09-21)
+
+Finding that motivated it: on the real backtest the plain engine returned +133% before tax but only +102% after
+an estimated tax (mostly short-term gains, ~7x capital turnover), versus +120% for holding SPY and +213% for
+equal-weight buy-and-hold. The engine's SELL signal had negative in-sample edge.
+
+- **`engine_taxaware`** (account `ctl_taxaware`, taxable wrapper): sells lots in tax order (losses, then long-term
+  gains, then short-term gains); a short-term GAIN lot is locked unless that symbol's risk regime is HIGH; a signal
+  must persist 5 trading days before it is acted on; wider rebalance bands (10% drift, ~quarterly, 1% min trade);
+  a BUY into a HIGH-risk regime is held at HOLD. All parameters (`TA_*` in `app/paper.py`) were fixed in advance,
+  NOT tuned on the backtest -- tuning on the same history it is judged on would just be overfitting.
+- **Wash-sale rule** now applies to every taxable account (symbol level, both directions, disallowed loss moves into
+  the replacement's cost basis; holding period is not tacked on). Previously a loss sold and rebought the next day
+  counted in full, which flattered the engine's tax number. Curves are unchanged; only tax figures move.
+- **`tax_status`: "taxable" | "sheltered"** on every account. Sheltered (IRA / 401k / Roth-style): no tax on realised
+  gains, no wash-sale rule. Kept as separate ledgers: `ctl_engine_ira` (same trades as `ctl_engine`) and
+  `ctl_placebo_ira` (same placebo draw via `seed`), so the same strategy can be compared in each wrapper. Realised
+  vs unrealised gains stay split (short-/long-term) in both.
+- UI: Admin -> Strategy -> Capital & tax and the user Track record page have a Taxable | Tax-sheltered toggle. The
+  taxable view adds "Held back" (sells deferred by the lock) and "Wash-sale loss" columns and a tax-aware-vs-engine
+  comparison; the sheltered view shows pre-tax results and costs and where the active strategy should live.
+- After deploy: `run_paper_cycle --rebuild` (dry) then `--rebuild --apply` refreshes tax figures for existing
+  accounts (curves must match to the cent); the next cycle creates the three new accounts by replaying history.
+- Not modelled: tax-loss harvesting on purpose, loss carry-forward, state tax, qualified-dividend treatment,
+  holding-period tacking on wash sales. All rates are placeholders until a CPA confirms them.

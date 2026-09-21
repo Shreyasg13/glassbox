@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 from . import committee_daily, data_source as ds, db, paper, paper_cycle, risk
 
 MIN_RANKED = 30  # scored directional calls before an agent may be ranked
-CONTROL_ORDER = ["ctl_engine", "ctl_committee", "ctl_placebo", "ctl_spy", "ctl_equal", "ctl_cash"]
+CONTROL_ORDER = ["ctl_engine", "ctl_taxaware", "ctl_committee", "ctl_placebo", "ctl_spy", "ctl_equal", "ctl_cash", "ctl_engine_ira", "ctl_placebo_ira"]
 STALE_VIEW_DAYS = paper.COMMITTEE_MAX_AGE_DAYS
 
 _lock = threading.Lock()
@@ -180,7 +180,7 @@ def track_record() -> Dict[str, Any]:
     accounts = db.list_paper_accounts()
     meta = db.get_paper_meta() or {}
     rows = _control_rows(accounts)
-    keep = ("id", "name", "strategy", "equity", "total_return", "live_return", "max_drawdown", "sharpe", "turnover", "cost_paid", "est_tax", "after_tax_return", "tax_drag", "avg_holding_days", "live_days", "days", "tax_tracked")
+    keep = ("id", "name", "strategy", "equity", "total_return", "live_return", "max_drawdown", "sharpe", "turnover", "cost_paid", "est_tax", "after_tax_return", "tax_drag", "avg_holding_days", "live_days", "days", "tax_tracked", "tax_status", "wash_disallowed", "deferred_sells")
     return {
         "initialised": bool(meta),
         "live_from": meta.get("live_from"),

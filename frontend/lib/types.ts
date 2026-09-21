@@ -349,6 +349,10 @@ export type CapitalRow = {
   live_days: number;
   days: number;
   tax_tracked: boolean;
+  tax_status?: "taxable" | "sheltered";
+  wash_disallowed?: number | null;
+  deferred_sells?: number | null;
+  deferred_notional?: number | null;
   est_tax: number | null;
   after_tax_return: number | null;
   tax_drag: number | null;
