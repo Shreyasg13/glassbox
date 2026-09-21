@@ -59,6 +59,31 @@ def test_the_updater_fetches_from_the_last_stored_bar_and_backfills_a_long_hole(
     assert merged["RSI"].iloc[-1] == merged["RSI"].iloc[-1]  # indicators were recomputed over the filled history (not NaN)
 
 
+def test_the_updater_heals_a_hole_in_the_MIDDLE_of_the_file_not_just_at_its_end(tmp_path, monkeypatch):
+    """The real failure: a bad first run left 2025-12-29 -> 2026-08-20 missing, then later runs appended recent days after it."""
+    data = tmp_path / "data_parquet"
+    data.mkdir()
+    holed = pd.bdate_range("2025-01-02", "2025-12-29").append(pd.bdate_range("2026-08-20", "2026-09-17"))
+    ohlcv(holed).to_parquet(data / "AAA.parquet")
+    assert len(ud.find_gaps(holed)) == 1
+    seen = {}
+
+    class T:
+        def __init__(self, sym):
+            pass
+
+        def history(self, **kw):
+            seen.update(kw)
+            return ohlcv(pd.bdate_range(kw["start"], "2026-09-18"), start=130.0, seed=4)
+
+    monkeypatch.setattr(ud, "yf", SimpleNamespace(Ticker=T))
+    ok, msg = ud.update_symbol("AAA", data)
+    assert ok, msg
+    assert seen["start"] == "2025-12-22"  # 7 days before the START of the hole, though the last stored bar was in September
+    merged = pd.read_parquet(data / "AAA.parquet")
+    assert ud.find_gaps(merged.index) == [] and merged.index.max() == pd.Timestamp("2026-09-18") and merged.index.min() == holed.min()
+
+
 def test_the_updater_still_refuses_to_shrink_or_shift_the_history(tmp_path, monkeypatch):
     data = tmp_path / "data_parquet"
     data.mkdir()

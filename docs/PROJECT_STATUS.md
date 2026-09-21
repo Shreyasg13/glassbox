@@ -844,7 +844,7 @@ The new association analytics exposed it: a lead-lag bar of |r| >= 0.90 and "+28
 file ended 2025-12-29, so only the last 10 days were appended and Jan-Aug 2026 (234 calendar days) was never backfilled; the
 whole hole became ONE "daily" return that hit all 15 symbols at once. It corrupted volatility, risk scores, correlations, the
 volatility-targeted strategy's sizing and the paper accounts' history across that date.
-- Fix: the updater now fetches from 7 days before the LAST STORED bar (an outage of any length heals itself), and warns loudly if
+- Fix: the updater now fetches from 7 days before the LAST STORED bar OR before the EARLIEST hole in the file, whichever is earlier (a first version only looked at the last bar and did NOT heal a hole in the middle: caught by verifying on prod), and warns loudly if
   a hole remains. `PriceBook.gaps()` finds holes (> 5 calendar days between bars); risk, correlations and basket volatility now
   treat a return across a hole as unknown (0) instead of a day; the Strategy page shows a red banner and the weekly digest a
   DATA QUALITY WARNING while any hole exists.

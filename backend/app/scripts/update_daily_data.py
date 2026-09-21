@@ -86,7 +86,15 @@ def update_symbol(symbol: str, data_dir: Path) -> tuple[bool, str]:
     # Fetch from just before the last STORED bar, not "the last 10 days". A fixed window silently leaves a
     # hole whenever the file is older than the window: the first run on the VM appended only the last 10
     # days to a file that ended 8 months earlier, and that gap was booked as one enormous "day".
-    start = (pd.Timestamp(existing.index.max()) - pd.Timedelta(days=OVERLAP_DAYS)).date().isoformat()
+    # A hole may also sit in the MIDDLE of the file (the bad first run left one, then later runs appended recent
+    # days after it), so the fetch must reach back to before the EARLIEST hole, not just the last stored bar.
+    overlap = pd.Timedelta(days=OVERLAP_DAYS)
+    start_date = (pd.Timestamp(existing.index.max()) - overlap).date()
+    holes = find_gaps(existing.index)
+    if holes:
+        start_date = min(start_date, (pd.Timestamp(holes[0][0]) - overlap).date())
+        log.warning("[%s] stored history has %d gap(s), first %s->%s (%dd): backfilling from %s", symbol, len(holes), holes[0][0], holes[0][1], holes[0][2], start_date)
+    start = start_date.isoformat()
     fresh = ticker.history(start=start)
     if fresh.empty:
         return False, "yfinance returned no data (network/rate-limit/symbol issue)"
