@@ -282,7 +282,7 @@ def _write_reports(accounts: Dict[str, Dict[str, Any]], book: paper.PriceBook, d
 # ---------------------------------------------------------------- rebuild --
 
 
-def rebuild_accounts(*, apply: bool = False, book: Optional[paper.PriceBook] = None) -> Dict[str, Any]:
+def rebuild_accounts(*, apply: bool = False, book: Optional[paper.PriceBook] = None, allow_differences: bool = False) -> Dict[str, Any]:
     """Replay every stored account from scratch, from ITS OWN stored definition (not the
     users' current profiles, which may have changed since -- accounts are frozen).
 
@@ -290,12 +290,15 @@ def rebuild_accounts(*, apply: bool = False, book: Optional[paper.PriceBook] = N
     the cent. That is what makes this safe: it is how accounts created before tax tracking get
     their lots, and the check proves nothing else changed. An account whose replay does not
     match (e.g. a committee account after a forced re-review) is reported and left alone.
-    With apply=False nothing is written."""
+    With apply=False nothing is written. `allow_differences` is for when the PRICES themselves were corrected
+    (e.g. a data gap was backfilled): every account is then replayed from scratch and replaced, and the result
+    lists each account's old and new total return so the change is visible rather than silent."""
     meta = db.get_paper_meta()
     if meta is None:
         raise CycleError("paper trading is not initialised")
     book = book or load_book()
     report: Dict[str, str] = {}
+    changes: Dict[str, Dict[str, Any]] = {}
     replaced = 0
     for old in db.list_paper_accounts():
         fresh = paper.new_account(
@@ -308,10 +311,11 @@ def rebuild_accounts(*, apply: bool = False, book: Optional[paper.PriceBook] = N
         n = len(old["curve"])
         same = len(fresh["curve"]) == n and all(a[0] == b[0] and abs(a[1] - b[1]) < 0.01 and a[2] == b[2] for a, b in zip(old["curve"], fresh["curve"]))
         report[old["id"]] = "identical" if same else "DIFFERS"
-        if same and apply:
+        changes[old["id"]] = {"old_total": (old["curve"][-1][1] / old["start_cash"] - 1) if old["curve"] else None, "new_total": (fresh["curve"][-1][1] / fresh["start_cash"] - 1) if fresh["curve"] else None}
+        if apply and (same or allow_differences):
             db.save_paper_account(fresh)
             replaced += 1
-    return {"applied": apply, "identical": sum(v == "identical" for v in report.values()), "differs": sorted(k for k, v in report.items() if v != "identical"), "replaced": replaced, "accounts": report}
+    return {"applied": apply, "identical": sum(v == "identical" for v in report.values()), "differs": sorted(k for k, v in report.items() if v != "identical"), "replaced": replaced, "accounts": report, "changes": changes}
 
 
 # ------------------------------------------------------------------ cycle --

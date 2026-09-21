@@ -161,6 +161,10 @@ def build_digest(book: paper.PriceBook, accounts: List[Dict[str, Any]], runs: Li
     proposals = build_proposals(evidence, board)
 
     L: List[str] = [f"{DIGEST_TITLE} — week ending {d}", "Simulated research, not investment advice. Nothing in this digest changes anything automatically.", ""]
+    gaps = book.gaps()
+    if gaps:
+        L += ["DATA QUALITY WARNING: the price history has hole(s): " + "; ".join(f"{g['from']} -> {g['to']} ({g['days']} calendar days)" for g in gaps[:5]) +
+              ". Returns across a hole are not daily returns, so results that span it (backtests, volatility, correlations) are unreliable.", ""]
 
     L.append("1. What was analysed")
     L.append(f"   {now['symbols']} symbols read by the engine and the risk model every day. The committee made {len(reviews)} review(s) this week "

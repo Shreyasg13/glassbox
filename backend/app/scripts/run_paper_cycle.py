@@ -49,10 +49,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="compute and print, but save nothing")
     parser.add_argument("--rebuild", action="store_true", help="replay every account from scratch and verify it reproduces the stored curve")
     parser.add_argument("--apply", action="store_true", help="with --rebuild: replace the accounts whose replay matched")
+    parser.add_argument("--allow-differences", action="store_true", help="with --rebuild --apply: also replace accounts whose replay differs (use only after the PRICES were corrected)")
     args = parser.parse_args(argv)
     try:
         if args.rebuild:
-            print(json.dumps(paper_cycle.rebuild_accounts(apply=args.apply), indent=2))
+            print(json.dumps(paper_cycle.rebuild_accounts(apply=args.apply, allow_differences=args.allow_differences), indent=2))
             return 0
         if not (args.dry_run or args.bootstrap):
             _wait_for_committee()

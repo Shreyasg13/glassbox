@@ -63,6 +63,16 @@ def _recompute_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+OVERLAP_DAYS = 7  # re-fetch this far back from the last stored bar, so late corrections to recent bars are picked up
+MAX_GAP_DAYS = 5  # more calendar days than this between consecutive bars is not a weekend or a holiday
+
+
+def find_gaps(index: pd.Index, max_days: int = MAX_GAP_DAYS) -> list[tuple[str, str, int]]:
+    """Holes in a price history: (last bar before, first bar after, calendar days between)."""
+    dates = [pd.Timestamp(x).date() for x in index]
+    return [(a.isoformat(), b.isoformat(), (b - a).days) for a, b in zip(dates, dates[1:]) if (b - a).days > max_days]
+
+
 def update_symbol(symbol: str, data_dir: Path) -> tuple[bool, str]:
     parquet_path = data_dir / f"{symbol}.parquet"
     if not parquet_path.exists():
@@ -73,7 +83,11 @@ def update_symbol(symbol: str, data_dir: Path) -> tuple[bool, str]:
     original_earliest = existing.index.min()
 
     ticker = yf.Ticker(symbol)
-    fresh = ticker.history(period="10d")
+    # Fetch from just before the last STORED bar, not "the last 10 days". A fixed window silently leaves a
+    # hole whenever the file is older than the window: the first run on the VM appended only the last 10
+    # days to a file that ended 8 months earlier, and that gap was booked as one enormous "day".
+    start = (pd.Timestamp(existing.index.max()) - pd.Timedelta(days=OVERLAP_DAYS)).date().isoformat()
+    fresh = ticker.history(start=start)
     if fresh.empty:
         return False, "yfinance returned no data (network/rate-limit/symbol issue)"
 
@@ -96,6 +110,9 @@ def update_symbol(symbol: str, data_dir: Path) -> tuple[bool, str]:
         )
 
     merged = _recompute_indicators(merged_raw)
+    gaps = find_gaps(merged.index)
+    if gaps:
+        log.warning("[%s] price history still has %d gap(s): %s", symbol, len(gaps), "; ".join(f"{a}->{b} ({n}d)" for a, b, n in gaps[:5]))
 
     tmp_path = parquet_path.with_suffix(".parquet.tmp")
     merged.to_parquet(tmp_path, engine="pyarrow")

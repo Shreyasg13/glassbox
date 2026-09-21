@@ -836,3 +836,18 @@ give hundreds of relationships to "discover". So the loop is split and gated:
   shrunk toward equal weight (+1% edge -> +25%, capped at +/-50%).
 - **Human in the loop**: proposals are text. There is deliberately no code path that edits an agent, prompt, weight or strategy
   (a test asserts this). Closing the loop later means an admin-approved change, applied one at a time, with the gate as evidence.
+
+## Data integrity: an 8-month hole in the price history (found 2026-09-21)
+
+The new association analytics exposed it: a lead-lag bar of |r| >= 0.90 and "+28% JNJ / -25% TSLA / +11% SPY" on a single day
+(2026-08-20). Cause: the daily sync fetched `history(period="10d")` and merged it onto the stored file. On its first VM run the
+file ended 2025-12-29, so only the last 10 days were appended and Jan-Aug 2026 (234 calendar days) was never backfilled; the
+whole hole became ONE "daily" return that hit all 15 symbols at once. It corrupted volatility, risk scores, correlations, the
+volatility-targeted strategy's sizing and the paper accounts' history across that date.
+- Fix: the updater now fetches from 7 days before the LAST STORED bar (an outage of any length heals itself), and warns loudly if
+  a hole remains. `PriceBook.gaps()` finds holes (> 5 calendar days between bars); risk, correlations and basket volatility now
+  treat a return across a hole as unknown (0) instead of a day; the Strategy page shows a red banner and the weekly digest a
+  DATA QUALITY WARNING while any hole exists.
+- Repair (prod): backup, backfill by running the sync once, then `run_paper_cycle --rebuild --apply --allow-differences`
+  (the replayed accounts legitimately differ because the PRICES changed; old vs new totals are printed).
+- Every backtest figure quoted before this repair spanned the hole and should be re-read from the rebuilt accounts.

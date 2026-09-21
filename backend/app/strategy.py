@@ -185,6 +185,7 @@ def overview(book: paper.PriceBook) -> Dict[str, Any]:
         "curves": _curves(accounts),
         "meta": db.get_paper_meta(),
         "tax_assumptions": {"short_term": paper.TAX_ST, "long_term": paper.TAX_LT},
+        "data_quality": {"gaps": book.gaps(), "ok": not book.gaps()},
     }
 
 

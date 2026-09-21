@@ -89,6 +89,7 @@ REBALANCE_DAYS = 21  # trading days between drift-driven rebalances (~monthly)
 MIN_TRADE_FRACTION = 0.002  # ignore rebalances smaller than 0.2% of equity
 TRADING_DAYS = 252
 MAX_STORED_TRADES = 1000
+MAX_GAP_DAYS = 5  # more calendar days than this between consecutive price bars is a hole in the data, not a weekend
 
 TILT = {"BUY": 1.5, "HOLD": 1.0, "SELL": 0.5}
 
@@ -197,6 +198,15 @@ class PriceBook:
     @property
     def symbols(self) -> List[str]:
         return sorted(self.close)
+
+    def gaps(self) -> List[Dict[str, Any]]:
+        """Holes in the shared calendar: [{from, to, days}], where days exceeds MAX_GAP_DAYS."""
+        out = []
+        for a, b in zip(self.dates, self.dates[1:]):
+            n = (_date.fromisoformat(b) - _date.fromisoformat(a)).days
+            if n > MAX_GAP_DAYS:
+                out.append({"from": a, "to": b, "days": n})
+        return out
 
     @property
     def latest_date(self) -> Optional[str]:
@@ -513,12 +523,14 @@ def _basket_vol(book: PriceBook, weights: Dict[str, float], d: str, window: int 
     if len(days) >= window // 2 + 1:
         prev = {s: book.close_on(s, days[0]) for s in weights}
         rets: List[float] = []
-        for day in days[1:]:
+        for k, day in enumerate(days[1:], start=1):
+            gap = (_date.fromisoformat(day) - _date.fromisoformat(days[k - 1])).days > MAX_GAP_DAYS
             r = 0.0
             for s, w in weights.items():
                 px, p0 = book.close_on(s, day), prev[s]
                 if px and p0:
-                    r += w * (px / p0 - 1)
+                    if not gap:  # a return that spans a hole in the data is not a daily return: leave it out of the volatility
+                        r += w * (px / p0 - 1)
                     prev[s] = px
             rets.append(r)
         if len(rets) > 1:

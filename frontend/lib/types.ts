@@ -381,6 +381,7 @@ export type Coverage = { data_date: string | null; review_date: string | null; r
 export type StrategyOverview = {
   data_date: string | null;
   coverage?: Coverage;
+  data_quality?: { ok: boolean; gaps: { from: string; to: number | string; days: number }[] };
   latest_review_date: string | null;
   decisions: StrategyDecision[];
   history: { date: string; symbol: string; decision: Lean | null; action: Lean | null; engine_signal: Lean; consensus: string | null; answered: number; total: number }[];

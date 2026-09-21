@@ -25,10 +25,12 @@ from __future__ import annotations
 
 import bisect
 import math
+from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+MAX_GAP_DAYS = 5  # calendar days between consecutive bars above which the data has a hole
 CORR_WINDOW = 60  # trading days for correlations and cohesion
 CLUSTER_THRESHOLD = 0.70  # single-link: two names this correlated are treated as one group
 CROWDED_MIN_CORR = 0.30  # average pairwise correlation below this is never 'crowded'
@@ -68,11 +70,14 @@ def aligned_returns(book: Any, d: str, window: int = CORR_WINDOW, symbols: Optio
     if len(days) >= min(30, window):
         prev = {s: book.close_on(s, days[0]) for s in syms}
         rets: Dict[str, List[float]] = {s: [] for s in syms if prev[s]}
-        for day in days[1:]:
+        for k, day in enumerate(days[1:], start=1):
+            # a hole in the data (a week or more of missing bars) turns the next "daily" return into a multi-week
+            # move that hits every symbol at once and swamps every correlation: treat it as unknown (0), not as a day
+            gap = (date.fromisoformat(day) - date.fromisoformat(days[k - 1])).days > MAX_GAP_DAYS
             for s in rets:
                 px = book.close.get(s, {}).get(day)
                 if px and prev[s]:
-                    rets[s].append(px / prev[s] - 1)
+                    rets[s].append(0.0 if gap else px / prev[s] - 1)
                     prev[s] = px
                 else:
                     rets[s].append(0.0)

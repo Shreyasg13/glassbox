@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import bisect
 import math
+from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
 VOL_WINDOW = 20
@@ -49,10 +50,17 @@ def _stdev(xs: List[float]) -> float:
     return math.sqrt(sum((x - m) ** 2 for x in xs) / (n - 1))
 
 
-def compute_series(closes: List[float]) -> List[Optional[Dict[str, Any]]]:
-    """Risk for every bar of a close series (None until MIN_HISTORY bars exist)."""
+MAX_GAP_DAYS = 5  # calendar days between consecutive bars above which the data has a hole
+
+
+def compute_series(closes: List[float], dates: Optional[List[str]] = None) -> List[Optional[Dict[str, Any]]]:
+    """Risk for every bar of a close series (None until MIN_HISTORY bars exist). With `dates`, a return that
+    spans a hole in the data (more than MAX_GAP_DAYS calendar days) is not a daily return and counts as 0."""
     n = len(closes)
-    rets = [0.0] + [closes[i] / closes[i - 1] - 1 if closes[i - 1] > 0 else 0.0 for i in range(1, n)]
+    gap = [False] * n
+    if dates:
+        gap = [i > 0 and (date.fromisoformat(dates[i]) - date.fromisoformat(dates[i - 1])).days > MAX_GAP_DAYS for i in range(n)]
+    rets = [0.0] + [0.0 if gap[i] else (closes[i] / closes[i - 1] - 1 if closes[i - 1] > 0 else 0.0) for i in range(1, n)]
     past_vols: List[float] = []  # sorted; only PAST values, so ranking today's vol never peeks
     out: List[Optional[Dict[str, Any]]] = [None] * n
     for i in range(n):
@@ -76,7 +84,7 @@ def series_for(book: Any, sym: str) -> Tuple[List[str], List[Optional[Dict[str, 
     cache = book.__dict__.setdefault("_risk_cache", {})
     if sym not in cache:
         dates = book._sorted_dates.get(sym) or []
-        cache[sym] = (dates, compute_series([book.close[sym][d] for d in dates]) if dates else [])
+        cache[sym] = (dates, compute_series([book.close[sym][d] for d in dates], dates) if dates else [])
     return cache[sym]
 
 

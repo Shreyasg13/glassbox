@@ -45,6 +45,14 @@ export default function StrategyPage() {
         </p>
       </header>
 
+      {q.data?.data_quality && !q.data.data_quality.ok && (
+        <div role="alert" className="rounded-r3 border border-red/50 bg-red-dim p-sp4 text-[12px] leading-snug text-t1">
+          <b className="text-red">Data quality warning.</b> The price history has {q.data.data_quality.gaps.length === 1 ? "a hole" : `${q.data.data_quality.gaps.length} holes`}:{" "}
+          {q.data.data_quality.gaps.slice(0, 3).map((g) => `${g.from} → ${g.to} (${g.days} calendar days)`).join("; ")}. A return across a hole is not a daily return, so backtests,
+          volatility and correlations that span it are unreliable. Run the daily sync; it now backfills from the last stored bar.
+        </div>
+      )}
+
       <nav className="flex flex-wrap gap-sp2" aria-label="Strategy sections">
         {TABS.map((t) => (
           <button
