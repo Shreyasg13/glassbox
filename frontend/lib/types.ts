@@ -355,6 +355,8 @@ export type CapitalRow = {
   deferred_notional?: number | null;
   est_tax: number | null;
   after_tax_return: number | null;
+  after_tax_liquidated_return?: number | null;
+  liquidation_tax?: number | null;
   tax_drag: number | null;
   avg_holding_days: number | null;
   realized_st?: number | null;

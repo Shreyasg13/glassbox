@@ -57,6 +57,7 @@ export function CapitalPanel({ rows, curves, tax }: { rows: CapitalRow[]; curves
                     <Th right>Avg hold</Th>
                     <Th right>Est. tax</Th>
                     <Th right>After tax</Th>
+                    <Th right>If sold today</Th>
                     <Th right>Tax drag</Th>
                     <Th right>Held back</Th>
                     <Th right>Wash-sale loss</Th>
@@ -81,6 +82,7 @@ export function CapitalPanel({ rows, curves, tax }: { rows: CapitalRow[]; curves
                       <td className="mono px-sp3 py-sp2 text-right text-t3">{days(r.avg_holding_days)}</td>
                       <td className="mono px-sp3 py-sp2 text-right text-t3">{r.tax_tracked && r.est_tax !== null ? money(r.est_tax) : "—"}</td>
                       <td className={`mono px-sp3 py-sp2 text-right font-semibold ${tone(r.after_tax_return)}`}>{r.tax_tracked ? pct(r.after_tax_return) : "—"}</td>
+                      <td className={`mono px-sp3 py-sp2 text-right font-semibold ${tone(r.after_tax_liquidated_return)}`} title="After tax if every open position were sold today: also taxes the unrealised gains">{r.tax_tracked ? pct(r.after_tax_liquidated_return) : "—"}</td>
                       <td className="mono px-sp3 py-sp2 text-right text-red">{r.tax_tracked && r.tax_drag !== null ? pct(-r.tax_drag) : "—"}</td>
                       <td className="mono px-sp3 py-sp2 text-right text-t3" title="Sells the tax-aware engine deferred to avoid realising a short-term gain">{r.deferred_sells ? `${r.deferred_sells}` : "—"}</td>
                       <td className="mono px-sp3 py-sp2 text-right text-t3" title="Losses disallowed because the stock was rebought within 30 days">{r.wash_disallowed ? money(r.wash_disallowed) : "—"}</td>
@@ -99,14 +101,15 @@ export function CapitalPanel({ rows, curves, tax }: { rows: CapitalRow[]; curves
 
         {taxable && engine && aware && engine.tax_tracked && aware.tax_tracked && (
           <p className="mt-sp3 text-[12px] leading-snug text-t2">
-            <b className="text-t1">Tax-aware vs plain engine.</b> Before tax {pct(aware.total_return)} vs {pct(engine.total_return)}; after tax <b className={tone((aware.after_tax_return ?? 0) - (engine.after_tax_return ?? 0))}>{pct(aware.after_tax_return)}</b> vs {pct(engine.after_tax_return)}
-            (tax drag {pct(aware.tax_drag === null ? null : -aware.tax_drag)} vs {pct(engine.tax_drag === null ? null : -engine.tax_drag)}). It turned over {aware.turnover.toFixed(1)}× vs {engine.turnover.toFixed(1)}× a year.
-            {spy && spy.tax_tracked && <> Simply holding the market: {pct(spy.after_tax_return)}.</>} Parameters were set in advance, not tuned to this history, and this is still a backtest.
+            <b className="text-t1">Tax-aware vs plain engine.</b> Before tax {pct(aware.total_return)} vs {pct(engine.total_return)}. After realised tax <b className={tone((aware.after_tax_return ?? 0) - (engine.after_tax_return ?? 0))}>{pct(aware.after_tax_return)}</b> vs {pct(engine.after_tax_return)};
+            if everything were sold today (which also taxes gains not yet realised) <b className={tone((aware.after_tax_liquidated_return ?? 0) - (engine.after_tax_liquidated_return ?? 0))}>{pct(aware.after_tax_liquidated_return)}</b> vs {pct(engine.after_tax_liquidated_return)}.
+            It turned over {aware.turnover.toFixed(1)}× vs {engine.turnover.toFixed(1)}× a year.
+            {spy && spy.tax_tracked && <> Holding the market: {pct(spy.after_tax_return)} untaxed so far, {pct(spy.after_tax_liquidated_return)} if sold today.</>} Parameters were set in advance, not tuned to this history, and this is still a backtest.
           </p>
         )}
         {!taxable && ira && engine && spy && (
           <p className="mt-sp3 text-[12px] leading-snug text-t2">
-            <b className="text-t1">Where it should live.</b> The active engine returned {pct(ira.total_return)} in a sheltered account but only {pct(engine.after_tax_return)} after tax in a taxable one; holding the market returns {pct(spy.total_return)} in either.
+            <b className="text-t1">Where it should live.</b> The active engine returned {pct(ira.total_return)} in a sheltered account but only {pct(engine.after_tax_liquidated_return)} after tax (if sold today) in a taxable one; holding the market returns {pct(spy.total_return)} in either.
             Whatever edge the active strategy has is worth most where tax cannot take a share of it.
           </p>
         )}

@@ -84,7 +84,7 @@ export default function TrackRecordPage() {
                 <div><dt className="text-[9px] font-bold uppercase tracking-wide text-t3">Total return</dt><dd className={`font-semibold ${tone(s.total_return)}`}>{pct(s.total_return)}</dd></div>
                 <div><dt className="text-[9px] font-bold uppercase tracking-wide text-t3">Live so far</dt><dd className={tone(s.live_return)}>{s.live_days ? pct(s.live_return, 2) : "—"}</dd></div>
                 <div><dt className="text-[9px] font-bold uppercase tracking-wide text-t3">Worst drop</dt><dd className="text-red">{pct(s.max_drawdown)}</dd></div>
-                <div><dt className="text-[9px] font-bold uppercase tracking-wide text-t3">{taxable ? "After tax" : "Trades / yr"}</dt><dd className={taxable ? `font-semibold ${tone(s.after_tax_return)}` : "text-t2"}>{taxable ? (s.tax_tracked ? pct(s.after_tax_return) : "—") : `${s.turnover.toFixed(1)}× capital`}</dd></div>
+                <div><dt className="text-[9px] font-bold uppercase tracking-wide text-t3">{taxable ? "After tax, if sold" : "Trades / yr"}</dt><dd className={taxable ? `font-semibold ${tone(s.after_tax_liquidated_return)}` : "text-t2"}>{taxable ? (s.tax_tracked ? pct(s.after_tax_liquidated_return) : "—") : `${s.turnover.toFixed(1)}× capital`}</dd></div>
               </dl>
             </li>
           ))}
@@ -97,7 +97,7 @@ export default function TrackRecordPage() {
                 <Th right>Total return</Th>
                 <Th right>Live so far</Th>
                 <Th right>Worst drop</Th>
-                <Th right>{taxable ? "After tax" : "Total after costs"}</Th>
+                <Th right>{taxable ? "After tax, if sold today" : "Total after costs"}</Th>
                 <Th right>Trades per year</Th>
               </tr>
             </thead>
@@ -111,7 +111,7 @@ export default function TrackRecordPage() {
                   <td className={`mono px-sp3 py-sp2 text-right font-semibold ${tone(s.total_return)}`}>{pct(s.total_return)}</td>
                   <td className={`mono px-sp3 py-sp2 text-right ${tone(s.live_return)}`}>{s.live_days ? pct(s.live_return, 2) : "—"}</td>
                   <td className="mono px-sp3 py-sp2 text-right text-red">{pct(s.max_drawdown)}</td>
-                  <td className={`mono px-sp3 py-sp2 text-right font-semibold ${tone(s.after_tax_return)}`}>{taxable ? (s.tax_tracked ? pct(s.after_tax_return) : "—") : pct(s.total_return)}</td>
+                  <td className={`mono px-sp3 py-sp2 text-right font-semibold ${tone(s.after_tax_return)}`}>{taxable ? (s.tax_tracked ? pct(s.after_tax_liquidated_return) : "—") : pct(s.total_return)}</td>
                   <td className="mono px-sp3 py-sp2 text-right text-t3">{s.turnover.toFixed(1)}× capital</td>
                 </tr>
               ))}
@@ -128,7 +128,7 @@ export default function TrackRecordPage() {
           <li className="rounded-r2 border border-border bg-bg2/40 p-sp3">
             <b className="text-t1">Then beat the market after tax.</b>
             {engine && market && engine.tax_tracked && market.tax_tracked
-              ? ` Today the engine's after-tax total is ${pct(engine.after_tax_return)} against ${pct(market.after_tax_return)} for simply holding the market.`
+              ? ` If everything were sold today, the engine's after-tax total is ${pct(engine.after_tax_liquidated_return)} against ${pct(market.after_tax_liquidated_return)} for simply holding the market.`
               : " Trading more means realising more gains, and tax takes its share of every one."}
           </li>
           <li className="rounded-r2 border border-border bg-bg2/40 p-sp3">

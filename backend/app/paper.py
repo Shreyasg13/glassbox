@@ -688,9 +688,14 @@ def _tax_summary(acct: Dict[str, Any], last: float) -> Dict[str, Any]:
     status = acct.get("tax_status", "taxable")
     if not tax or not tax.get("tracked"):  # an account created before tax tracking: unknown, not zero
         return {"tax_status": status, "tax_tracked": False, "realized_st": None, "realized_lt": None, "est_tax": None, "after_tax_return": None, "tax_drag": None,
-                "avg_holding_days": None, "unrealized_st": None, "unrealized_lt": None, "wash_disallowed": None, "deferred_notional": None, "deferred_sells": None}
+                "avg_holding_days": None, "unrealized_st": None, "unrealized_lt": None, "wash_disallowed": None, "deferred_notional": None, "deferred_sells": None,
+                "liquidation_tax": None, "after_tax_liquidated_return": None}
     # inside an IRA / 401k / Roth-style wrapper realised gains are not taxed: after-tax == pre-tax
     est = 0.0 if status == "sheltered" else estimate_tax(tax["st"], tax["lt"])
+    # "If sold today": also tax the gains still sitting in open lots. Without it, buy-and-hold (which never
+    # sells) looks tax-free and any strategy that defers gains looks better than it is; deferral is worth
+    # something, but the liability is real.
+    liq = 0.0 if status == "sheltered" else estimate_tax(tax["st"] + tax.get("unrealized_st", 0.0), tax["lt"] + tax.get("unrealized_lt", 0.0))
     start = acct["start_cash"]
     return {
         "tax_status": status,
@@ -699,6 +704,8 @@ def _tax_summary(acct: Dict[str, Any], last: float) -> Dict[str, Any]:
         "realized_lt": round(tax["lt"], 2),
         "est_tax": round(est, 2),
         "after_tax_return": (last - est) / start - 1,
+        "liquidation_tax": round(liq, 2),
+        "after_tax_liquidated_return": (last - liq) / start - 1,
         "tax_drag": est / start,
         "avg_holding_days": (tax["held_notional_days"] / tax["sold_notional"]) if tax["sold_notional"] else None,
         "unrealized_st": round(tax.get("unrealized_st", 0.0), 2),

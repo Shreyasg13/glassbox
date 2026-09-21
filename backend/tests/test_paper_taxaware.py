@@ -230,3 +230,37 @@ def test_rebuild_keeps_each_accounts_wrapper_and_placebo_seed(fake):
     for aid in ("ctl_engine_ira", "ctl_placebo_ira", "ctl_taxaware", "ctl_engine"):
         assert fake.accounts[aid]["tax_status"] == before[aid]["tax_status"] and fake.accounts[aid]["seed"] == before[aid]["seed"]
         assert fake.accounts[aid]["curve"] == before[aid]["curve"]
+
+
+# ------------------------------------------------------- "if sold today" tax --
+
+
+def test_if_sold_today_taxes_the_gains_not_yet_realised_so_buy_and_hold_is_not_free():
+    book = book_with({"AAA": {0: 100.0, 450: 200.0}})
+    a = acct("static_hold")
+    trade(a, book, 0, {"AAA": 1.0})
+    paper.refresh_unrealized(a, book, D[450])
+    s = paper.summarize(a)
+    assert s["est_tax"] == 0 and s["after_tax_return"] == pytest.approx(s["total_return"])  # nothing realised: untaxed so far
+    assert s["liquidation_tax"] == pytest.approx(100_000 * 0.10)  # a 100,000 long-term gain at the 10% test rate
+    assert s["after_tax_liquidated_return"] == pytest.approx(s["total_return"] - 0.10)
+
+
+def test_liquidation_tax_nets_open_losses_against_open_gains_and_sheltered_accounts_owe_none(monkeypatch):
+    monkeypatch.setattr(paper._risk, "risk_at", risk_is(None))
+    book = book_with({"AAA": {0: 100.0, 100: 120.0}})
+    a = acct("engine_tilt")
+    trade(a, book, 0, {"AAA": 1.0})
+    a["tax"]["st"] = -5_000.0  # an earlier realised short-term loss
+    paper.refresh_unrealized(a, book, D[100])  # + 20,000 short-term unrealised gain
+    assert paper.summarize(a)["liquidation_tax"] == pytest.approx(15_000 * 0.30)
+    a["tax_status"] = "sheltered"
+    s = paper.summarize(a)
+    assert s["liquidation_tax"] == 0 and s["after_tax_liquidated_return"] == pytest.approx(s["total_return"])
+
+
+def test_untracked_accounts_report_no_liquidation_figures():
+    a = acct("engine_tilt")
+    a.pop("tax")
+    s = paper.summarize(a)
+    assert s["liquidation_tax"] is None and s["after_tax_liquidated_return"] is None

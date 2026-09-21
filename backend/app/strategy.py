@@ -180,7 +180,7 @@ def track_record() -> Dict[str, Any]:
     accounts = db.list_paper_accounts()
     meta = db.get_paper_meta() or {}
     rows = _control_rows(accounts)
-    keep = ("id", "name", "strategy", "equity", "total_return", "live_return", "max_drawdown", "sharpe", "turnover", "cost_paid", "est_tax", "after_tax_return", "tax_drag", "avg_holding_days", "live_days", "days", "tax_tracked", "tax_status", "wash_disallowed", "deferred_sells")
+    keep = ("id", "name", "strategy", "equity", "total_return", "live_return", "max_drawdown", "sharpe", "turnover", "cost_paid", "est_tax", "after_tax_return", "tax_drag", "avg_holding_days", "live_days", "days", "tax_tracked", "tax_status", "wash_disallowed", "deferred_sells", "liquidation_tax", "after_tax_liquidated_return")
     return {
         "initialised": bool(meta),
         "live_from": meta.get("live_from"),
