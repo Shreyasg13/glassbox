@@ -344,3 +344,33 @@ def test_an_account_whose_replay_does_not_match_is_reported_and_left_alone(fake)
 def test_rebuild_needs_an_initialised_paper_trader(fake):
     with pytest.raises(paper_cycle.CycleError):
         paper_cycle.rebuild_accounts(book=make_book(N_SHORT))
+
+
+# ------------------------------------------------------------------ coverage --
+
+
+def test_coverage_lists_every_symbol_and_marks_which_ones_the_committee_reviewed(monkeypatch):
+    book = make_book(N_FULL)
+    runs = [{"symbol": "AAA", "date": book.latest_date, "action": "HOLD", "decision": "BUY", "quorum_ok": True}]
+    c = strategy.coverage(book, runs, book.latest_date)
+    assert c["total"] == 3 and c["reviewed"] == 1 and c["data_date"] == book.latest_date
+    assert {r["symbol"] for r in c["rows"]} == {"SPY", "AAA", "BBB"}
+    first = c["rows"][0]
+    assert first["symbol"] == "AAA" and first["reviewed"] and first["committee_action"] == "HOLD"  # reviewed rows lead
+    assert all(not r["reviewed"] and r["committee_action"] is None for r in c["rows"][1:])
+    assert all({"engine_signal", "engine_confidence", "risk", "name"} <= set(r) for r in c["rows"])
+
+
+def test_a_review_from_an_earlier_day_does_not_count_as_reviewed_today():
+    book = make_book(N_FULL)
+    stale = [{"symbol": "AAA", "date": day(N_FULL - 5), "action": "BUY", "decision": "BUY", "quorum_ok": True}]
+    c = strategy.coverage(book, stale, day(N_FULL - 5))
+    assert c["reviewed"] == 0 and c["review_date"] == day(N_FULL - 5) and all(not r["reviewed"] for r in c["rows"])
+
+
+def test_the_overview_carries_the_coverage_block(monkeypatch):
+    monkeypatch.setattr(strategy.db, "list_all_committee_runs", lambda: [])
+    monkeypatch.setattr(strategy.db, "list_paper_accounts", lambda: [])
+    monkeypatch.setattr(strategy.db, "get_paper_meta", lambda: None)
+    out = strategy.overview(make_book(N_FULL))
+    assert out["coverage"]["total"] == 3 and out["coverage"]["reviewed"] == 0

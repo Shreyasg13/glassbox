@@ -65,7 +65,7 @@ export default function StrategyPage() {
       ) : q.isError ? (
         <p className="py-sp6 text-center text-[13px] text-red">{q.error instanceof ApiError ? q.error.message : "Could not load the strategy view"}</p>
       ) : tab === "ceo" ? (
-        <CeoView decisions={q.data.decisions} latestDate={q.data.latest_review_date} risk={q.data.risk_today} history={q.data.history} />
+        <CeoView decisions={q.data.decisions} latestDate={q.data.latest_review_date} risk={q.data.risk_today} history={q.data.history} coverage={q.data.coverage} />
       ) : tab === "ask" ? (
         <AskConsole symbols={q.data.risk_today.map((r) => r.symbol).sort()} />
       ) : (

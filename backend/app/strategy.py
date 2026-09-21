@@ -137,6 +137,32 @@ def _curves(accounts: List[Dict[str, Any]], max_points: int = 150) -> Dict[str, 
     return {a["id"]: paper_cycle.downsample([[p[0], p[1], p[2]] for p in a["curve"]], max_points) for a in accounts if a["kind"] == "control" and a["curve"]}
 
 
+def coverage(book: paper.PriceBook, todays: List[Dict[str, Any]], latest: Optional[str]) -> Dict[str, Any]:
+    """Every tracked symbol, not just the few the committee reviewed: the engine and the risk model
+    read ALL of them every day; the committee (about 7 model calls each) is a second opinion on a few,
+    picked from the engine's BUY/SELL and changed signals and topped up with the biggest movers."""
+    d = book.latest_date
+    reviewed = {r["symbol"]: r for r in todays} if latest == d else {}
+    rows = []
+    for sym in book.symbols:
+        sig, conf = book.signal_at(sym, d) if d else ("HOLD", 50.0)
+        rk = risk.risk_at(book, sym, d) if d else None
+        rev = reviewed.get(sym)
+        rows.append(
+            {
+                "symbol": sym,
+                "name": ds.STOCK_INFO.get(sym, {}).get("name", sym),
+                "engine_signal": sig,
+                "engine_confidence": conf,
+                "risk": {"level": rk["level"], "score": rk["score"]} if rk else None,
+                "reviewed": rev is not None,
+                "committee_action": (rev.get("action") or rev.get("decision")) if rev else None,
+            }
+        )
+    rows.sort(key=lambda r: (not r["reviewed"], r["engine_signal"] == "HOLD", -((r["risk"] or {}).get("score") or 0.0), r["symbol"]))
+    return {"data_date": d, "review_date": latest, "reviewed": len(reviewed), "total": len(rows), "rows": rows}
+
+
 def overview(book: paper.PriceBook) -> Dict[str, Any]:
     d = book.latest_date
     runs = db.list_all_committee_runs()
@@ -152,6 +178,7 @@ def overview(book: paper.PriceBook) -> Dict[str, Any]:
         "data_date": d,
         "latest_review_date": latest,
         "decisions": todays,
+        "coverage": coverage(book, todays, latest),
         "history": history,
         "risk_today": risk.risk_table(book, d) if d else [],
         "capital": _control_rows(accounts),

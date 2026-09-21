@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { RiskRow, StrategyDecision } from "@/lib/types";
+import type { Coverage, RiskRow, StrategyDecision } from "@/lib/types";
 import { AgentInspector } from "./AgentInspector";
 import { LeanChip, RiskChip, Section, VoteBar, leanTone } from "./shared";
 
@@ -112,7 +112,57 @@ export function RiskTable({ rows }: { rows: RiskRow[] }) {
   );
 }
 
-export function CeoView({ decisions, latestDate, risk, history }: { decisions: StrategyDecision[]; latestDate: string | null; risk: RiskRow[]; history: { date: string; symbol: string; decision: string | null; action: string | null; engine_signal: string; consensus: string | null }[] }) {
+/** Every tracked symbol: the engine and the risk model read all of them daily; the committee reviews a few. */
+export function CoverageTable({ c }: { c: Coverage }) {
+  return (
+    <Section
+      title={`Everything analysed today — ${c.total} symbols`}
+      note={`The engine (signals) and the risk model read all ${c.total} symbols every day. The AI committee is a second opinion on a few of them (each review is about 7 model calls): ${
+        c.reviewed ? `${c.reviewed} of ${c.total} today` : c.review_date ? `none on ${c.data_date}; the last review was ${c.review_date}` : "none yet"
+      }. Picks are the engine's BUY/SELL and changed signals first, then the biggest movers.`}
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] text-[12px]">
+          <thead>
+            <tr className="text-left text-[10px] font-bold uppercase tracking-wide text-t3">
+              <th className="px-sp3 py-sp2">Symbol</th>
+              <th className="px-sp3 py-sp2">Engine signal</th>
+              <th className="px-sp3 py-sp2">Risk</th>
+              <th className="px-sp3 py-sp2">Committee review</th>
+            </tr>
+          </thead>
+          <tbody>
+            {c.rows.map((r) => (
+              <tr key={r.symbol} className="border-t border-border">
+                <td className="px-sp3 py-sp2">
+                  <span className="font-semibold text-t1">{r.symbol}</span> <span className="text-[10px] text-t3">{r.name}</span>
+                </td>
+                <td className="px-sp3 py-sp2">
+                  <LeanChip lean={r.engine_signal} small /> <span className="mono text-[10px] text-t3">{Math.round(r.engine_confidence)}%</span>
+                </td>
+                <td className="px-sp3 py-sp2">
+                  <RiskChip level={r.risk?.level} score={r.risk?.score} />
+                </td>
+                <td className="px-sp3 py-sp2">
+                  {r.reviewed ? (
+                    <span className="text-t1">
+                      reviewed → <LeanChip lean={r.committee_action} small />
+                    </span>
+                  ) : (
+                    <span className="text-t3">not reviewed — engine and risk only</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Section>
+  );
+}
+
+export function CeoView({ decisions, latestDate, risk, history, coverage }: {
+  coverage?: Coverage; decisions: StrategyDecision[]; latestDate: string | null; risk: RiskRow[]; history: { date: string; symbol: string; decision: string | null; action: string | null; engine_signal: string; consensus: string | null }[] }) {
   return (
     <div className="flex flex-col gap-sp5">
       <Section
@@ -129,6 +179,8 @@ export function CeoView({ decisions, latestDate, risk, history }: { decisions: S
           </div>
         )}
       </Section>
+
+      {coverage && <CoverageTable c={coverage} />}
 
       <Section title="Risk today" note="Rule-based regime read, no fitted parameters. It says how rough it is likely to be, not which way.">
         <RiskTable rows={risk} />

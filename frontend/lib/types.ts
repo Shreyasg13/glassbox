@@ -367,8 +367,20 @@ export type CapitalRow = {
 
 export type StrategyCurves = Record<string, CurvePoint[]>;
 
+export type CoverageRow = {
+  symbol: string;
+  name: string;
+  engine_signal: Lean;
+  engine_confidence: number;
+  risk: { level: RiskLevel; score: number } | null;
+  reviewed: boolean;
+  committee_action: Lean | null;
+};
+export type Coverage = { data_date: string | null; review_date: string | null; reviewed: number; total: number; rows: CoverageRow[] };
+
 export type StrategyOverview = {
   data_date: string | null;
+  coverage?: Coverage;
   latest_review_date: string | null;
   decisions: StrategyDecision[];
   history: { date: string; symbol: string; decision: Lean | null; action: Lean | null; engine_signal: Lean; consensus: string | null; answered: number; total: number }[];
