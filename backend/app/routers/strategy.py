@@ -13,7 +13,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 
-from .. import db, strategy
+from .. import db, research, strategy
 from ..auth import TokenPayload, get_current_user, require_admin
 from ..rate_limit import rate_limit_admin_mutations
 
@@ -37,6 +37,13 @@ async def overview() -> Dict[str, Any]:
 async def accuracy() -> Dict[str, Any]:
     """Whole-history scorecards (cached per data version) plus the live committee scorecard and leaderboard."""
     return await run_in_threadpool(lambda: strategy.accuracy(_book_or_503()))
+
+
+@admin_router.get("/research")
+async def research_view() -> Dict[str, Any]:
+    """Today's correlations / clusters / cohesion / lead-lag, the live-evidence gate for every strategy,
+    standing proposals (advice only) and the latest weekly digest."""
+    return await run_in_threadpool(lambda: research.view(_book_or_503()))
 
 
 @me_router.get("/track-record")

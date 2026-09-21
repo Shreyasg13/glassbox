@@ -42,7 +42,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from . import data_source as ds
-from . import committee_graph, db, orchestration, paper, paper_cycle
+from . import associations, committee_graph, db, orchestration, paper, paper_cycle
 from . import risk as risk_mod
 from .models import OrchestrationConfig
 from .scripts.seed_agents import ORCHESTRATION_NAME
@@ -129,7 +129,7 @@ def select_candidates(
 
 
 def build_context(
-    sym: str, d: str, book: paper.PriceBook, live: Optional[Dict[str, Any]] = None, *, risk: Optional[Dict[str, Any]] = None, ask: bool = True
+    sym: str, d: str, book: paper.PriceBook, live: Optional[Dict[str, Any]] = None, *, risk: Optional[Dict[str, Any]] = None, ask: bool = True, peers: Optional[str] = None
 ) -> str:
     """The prompt every agent in the committee receives. The FIRST LINE starts with
     the ticker -- the deterministic agents read the symbol from it. `ask=False` returns
@@ -165,6 +165,8 @@ def build_context(
             f"Risk regime (rule-based, not a forecast): {risk['level']} (score {risk['score']:.0f}/100) -- volatility at the {risk['vol_pct']:.0f}th percentile "
             f"of its own history, {risk['drawdown']:+.1%} from its 252-day high, price {'below' if risk['below_ma200'] else 'above'} its 200-day average."
         )
+    if peers:  # who it moves with, what they signal, and whether the whole market is moving as one (associations.py)
+        lines.append(peers)
     if ask:
         lines += [
             "",
@@ -383,7 +385,7 @@ async def run_daily(
                 log.warning("committee time budget (%ss) spent; %d symbol(s) left for the next run", budget, len(todo) - len(saved))
                 break
             risk_now = risk_mod.risk_at(book, pick["symbol"], d)
-            ctx = build_context(pick["symbol"], d, book, live.get(pick["symbol"]), risk=risk_now, ask=False)
+            ctx = build_context(pick["symbol"], d, book, live.get(pick["symbol"]), risk=risk_now, ask=False, peers=associations.peer_context(book, pick["symbol"], d))
             t0 = time.monotonic()
             result: Optional[Dict[str, Any]] = None
             error: Optional[str] = None
@@ -450,7 +452,7 @@ async def run_ask(
         live = live_rows if live_rows is not None else {r["symbol"]: r for r in (await asyncio.to_thread(ds.get_live_signals))["signals"]}
         sig, conf = book.signal_at(sym, d)
         risk_now = risk_mod.risk_at(book, sym, d)
-        ctx = build_context(sym, d, book, live.get(sym), risk=risk_now, ask=False)
+        ctx = build_context(sym, d, book, live.get(sym), risk=risk_now, ask=False, peers=associations.peer_context(book, sym, d))
         question = " ".join((doc.get("question") or "").split())[:ASK_MAX_QUESTION]
         if question:
             ctx += f"\n\nA specific question from the committee chair -- answer it in your rationale: {question}"

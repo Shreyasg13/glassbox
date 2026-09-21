@@ -374,3 +374,27 @@ def test_the_overview_carries_the_coverage_block(monkeypatch):
     monkeypatch.setattr(strategy.db, "get_paper_meta", lambda: None)
     out = strategy.overview(make_book(N_FULL))
     assert out["coverage"]["total"] == 3 and out["coverage"]["reviewed"] == 0
+
+
+# ------------------------------------------------------------------ research --
+
+
+def test_the_committee_prompt_carries_the_peer_context_line_when_there_is_one():
+    from tests.test_committee_daily import make_book as committee_book
+
+    book = committee_book()
+    with_peers = committee_daily.build_context("AAPL", book.latest_date, book, None, ask=False, peers="Moves most with: NVDA (correlation +0.80, engine HOLD) over the last 60 days.")
+    without = committee_daily.build_context("AAPL", book.latest_date, book, None, ask=False)
+    assert "Moves most with: NVDA" in with_peers and "Moves most with" not in without
+
+
+def test_the_research_endpoint_is_admin_only_and_returns_the_gate_and_associations(api, monkeypatch):
+    from app import research
+
+    monkeypatch.setattr(research.db, "list_paper_accounts", lambda: [])
+    monkeypatch.setattr(research.db, "list_all_committee_runs", lambda: [])
+    monkeypatch.setattr(research.db, "list_report_narratives", lambda: [])
+    assert api.get("/api/admin/strategy/research").status_code == 401
+    assert api.get("/api/admin/strategy/research", headers=VIEWER).status_code == 403
+    body = api.get("/api/admin/strategy/research", headers=ADMIN).json()
+    assert body["min_live_days"] == research.MIN_LIVE_DAYS and body["associations"]["symbols"] == 3 and body["proposals"] == [] and body["latest_digest"] is None

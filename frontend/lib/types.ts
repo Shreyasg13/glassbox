@@ -441,3 +441,24 @@ export type TrackRecord = {
   curves: StrategyCurves;
   tax_assumptions: { short_term: number; long_term: number };
 };
+
+export type GateResult = { n_days: number; needed_days: number; mean_excess_bps: number | null; ci_low_bps: number | null; ci_high_bps: number | null; verdict: "insufficient" | "edge" | "no edge yet" | "worse" };
+export type EvidenceRow = { id: string; name: string; live_days: number; live_return: number | null; vs: Record<string, GateResult> };
+export type ResearchView = {
+  as_of: string | null;
+  associations: {
+    date: string;
+    window_days: number;
+    symbols: number;
+    cohesion: { value: number | null; percentile: number | null; label: string; samples: number };
+    clusters: string[][];
+    strongest_pairs: { a: string; b: string; r: number }[];
+    weakest_pairs: { a: string; b: string; r: number }[];
+    lead_lag: { tests: number; window: number; threshold_r: number | null; findings: { leader: string; follower: string; lag_days: number; r: number }[]; note?: string };
+  } | null;
+  evidence: EvidenceRow[];
+  min_live_days: number;
+  baselines: Record<string, string>;
+  proposals: string[];
+  latest_digest: { title: string; date: string; narrative: string } | null;
+};

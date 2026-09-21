@@ -9,12 +9,14 @@ import { AccuracyPanel } from "@/components/admin/strategy/AccuracyPanel";
 import { AskConsole } from "@/components/admin/strategy/AskConsole";
 import { CapitalPanel } from "@/components/admin/strategy/CapitalPanel";
 import { CeoView } from "@/components/admin/strategy/CeoView";
+import { ResearchPanel } from "@/components/admin/strategy/ResearchPanel";
 
 const TABS = [
   { id: "ceo", label: "CEO view", hint: "today's calls" },
   { id: "ask", label: "Ask the committee", hint: "prompt console" },
   { id: "accuracy", label: "Is it working?", hint: "accuracy & leaderboard" },
   { id: "capital", label: "Capital & tax", hint: "results" },
+  { id: "research", label: "Research", hint: "correlations · evidence gate" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -60,6 +62,8 @@ export default function StrategyPage() {
 
       {tab === "accuracy" ? (
         <AccuracyPanel />
+      ) : tab === "research" ? (
+        <ResearchPanel />
       ) : q.isPending ? (
         <p className="py-sp6 text-center text-[13px] text-t3">Loading…</p>
       ) : q.isError ? (

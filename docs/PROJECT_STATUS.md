@@ -811,3 +811,28 @@ engine's BUY/SELL signals. Each exists in a taxable account and a sheltered twin
 - UI: wash-sale column relabelled "Wash-sale deferrals" (a cumulative count of losses deferred into cost basis; the same
   loss can be deferred repeatedly, so it can exceed the account size); chart palette widened to 10 hues; in the sheltered
   view active strategies list before the passive yardsticks.
+
+## Research loop: associations, evidence gate, weekly digest; committee reviews all 15 (2026-09-21)
+
+**Committee scope.** The daily committee now reviews ALL tracked symbols (`COMMITTEE_MIN_SYMBOLS=15`,
+`COMMITTEE_MAX_SYMBOLS=15`, `COMMITTEE_DAILY_BUDGET_S=2400` in the VM `.env`; previous env saved as
+`~/env-backup-pre-all15.txt`). That is ~105 model calls and 20+ minutes a day: watch free-tier quota and the
+`answered x/10` column; a low-quorum review is flagged and not acted on. The paper cycle (22:45) waits for a review still running.
+
+**Why not a self-modifying agent.** The tempting design (agents rewriting their own prompts, weights or strategies daily
+from what they just saw) fits noise: a few reviews a day and a few weeks of live data cannot tell skill from luck, and 15 stocks
+give hundreds of relationships to "discover". So the loop is split and gated:
+- **Daily** (`app/associations.py`): correlations, clusters (groups that are really one bet), market cohesion vs its own
+  history, and a lead-lag scan -- recomputed from prices, no storage. Every committee prompt now carries a peer line (who the stock
+  moves with, what those peers signal, whether the market is moving as one). Lead-lag uses a permutation max-statistic bar
+  (shuffle each series independently, keep the largest chance correlation across ALL pairs and lags, require the real one to beat
+  the 95th percentile). An earlier Bonferroni/bell-curve version reported a false discovery in pure noise (fat tails and
+  volatility clustering); the replacement has a regression test on such noise. "Crowded" cohesion additionally needs avg corr >= 0.30.
+- **Weekly** (`app/research.py`, `python -m app.scripts.run_weekly_research`, cron `30 23 * * 5`): a digest in Admin -> Reports
+  (also Admin -> Strategy -> Research): what was analysed, live results vs yardsticks, association changes, agent status, proposals.
+- **Gate**: a strategy counts as an improvement only with >= 60 LIVE trading days and a bootstrap CI of its daily excess return
+  over the yardstick (equal-weight hold; the placebo) above zero after correcting for the number of comparisons. Until then the
+  verdict is "insufficient" -- expected for weeks. Agent re-weighting is proposed only for agents with >= 30 scored BUY/SELL calls,
+  shrunk toward equal weight (+1% edge -> +25%, capped at +/-50%).
+- **Human in the loop**: proposals are text. There is deliberately no code path that edits an agent, prompt, weight or strategy
+  (a test asserts this). Closing the loop later means an admin-approved change, applied one at a time, with the gate as evidence.
