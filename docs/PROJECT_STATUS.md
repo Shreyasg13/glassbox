@@ -769,3 +769,27 @@ equal-weight buy-and-hold. The engine's SELL signal had negative in-sample edge.
   accounts (curves must match to the cent); the next cycle creates the three new accounts by replaying history.
 - Not modelled: tax-loss harvesting on purpose, loss carry-forward, state tax, qualified-dividend treatment,
   holding-period tacking on wash sales. All rates are placeholders until a CPA confirms them.
+
+### Correction: "after tax" must include gains not yet realised (2026-09-21)
+
+The first after-tax figure taxed only REALISED gains, so buy-and-hold (never sells) looked tax-free and a strategy that
+defers gains looked better than it is. `after_tax_liquidated_return` ("if sold today") also taxes the gains still in open
+lots, netted against realised ones; both are shown on Capital & tax, and the user-facing figure is the liquidated one.
+
+Real backtest, taxable account, in-sample, parameters fixed in advance (assumed 32% short / 15% long-term rates):
+
+| Strategy | Pre-tax | After realised tax | If sold today |
+|---|---|---|---|
+| Plain engine | +133.3% | +100.9% | +95.6% |
+| **Tax-aware engine** | +126.6% | +117.4% | **+107.5%** |
+| Placebo | +123.9% | +91.5% | +87.1% |
+| SPY buy & hold | +119.6% | +119.6% | +101.7% |
+| Equal-weight hold (15 symbols) | +213.3% | +213.3% | +181.3% |
+| Engine in a sheltered account | +133.3% | +133.3% | +133.3% |
+| Placebo in a sheltered account | +123.9% | +123.9% | +123.9% |
+
+Read carefully: the tax-aware engine cut turnover 6.9x -> 1.3x a year (1,716 -> 194 trades, average hold 119 -> 490 days)
+and keeps ~12 points more than the plain engine after tax; the plain engine LOSES to SPY after tax. The active edge is worth
+most in a sheltered account. All in-sample: the engine's edge over the placebo (+9 pts pre-tax) and the tax-aware engine's
+margin over SPY (+6 pts) may not survive out-of-sample; live paper days (from 2026-09-19) are the real test. Equal-weight is
+not a fair market proxy: the 15 symbols were chosen with hindsight.
