@@ -378,8 +378,20 @@ export type CoverageRow = {
 };
 export type Coverage = { data_date: string | null; review_date: string | null; reviewed: number; total: number; rows: CoverageRow[] };
 
+export type PipelineRun = {
+  target: string;
+  status: "running" | "ok" | "partial" | "failed" | "no_bar" | string;
+  message?: string;
+  started?: string;
+  finished?: string;
+  stages: Record<string, { ok: boolean; seconds?: number; detail?: string | null }>;
+  failed_stages?: string[];
+  sync?: { attempts?: number; coverage?: number; new_bars?: number | null; rejected?: number };
+};
+
 export type StrategyOverview = {
   data_date: string | null;
+  pipeline?: PipelineRun | null;
   coverage?: Coverage;
   data_quality?: { ok: boolean; gaps: { from: string; to: number | string; days: number }[] };
   latest_review_date: string | null;

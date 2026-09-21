@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import Column, String, Boolean, create_engine, MetaData, Table, select, delete, update, insert
+from sqlalchemy import Column, Float, String, Boolean, create_engine, MetaData, Table, select, delete, update, insert, func
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -153,6 +153,46 @@ committee_runs_table = Table(
     Column("config", String, nullable=False),
 )
 
+
+# ---- Canonical market data (app/price_store.py) ----
+# One row per (symbol, date): the RAW OHLCV as fetched. Everything else (RSI, moving averages, signals, risk,
+# the matrices in app/panel.py) is derived from these rows, so the database -- not one VM's disk -- is the
+# source of truth, updates are delta upserts (only new or corrected bars are written), and the parquet files
+# the rest of the app reads are just a rebuildable cache.
+price_bars_table = Table(
+    "price_bars",
+    metadata,
+    Column("symbol", String, primary_key=True),
+    Column("d", String, primary_key=True),  # 'YYYY-MM-DD', the trading date in New York
+    Column("open", Float),
+    Column("high", Float),
+    Column("low", Float),
+    Column("close", Float, nullable=False),
+    Column("volume", Float),
+    Column("dividends", Float),
+    Column("splits", Float),
+    Column("updated_at", String),
+)
+
+# Small text artifacts that used to live only on the VM disk (trained engine parameters, the free-data cache),
+# mirrored here so a rebuilt VM restores itself. Content-hashed: unchanged files are never rewritten.
+blobs_table = Table(
+    "blobs",
+    metadata,
+    Column("name", String, primary_key=True),  # relative path, e.g. 'training_results/trained_params.json'
+    Column("sha", String),
+    Column("content", String, nullable=False),
+    Column("updated_at", String),
+)
+
+# What the system believed on each trading day, frozen when it ran: per symbol the engine signal, risk, committee
+# call and prices, plus market-wide context. Point in time, so a later data correction cannot rewrite history.
+snapshots_table = Table(
+    "daily_snapshots",
+    metadata,
+    Column("id", String, primary_key=True),  # the date
+    Column("config", String, nullable=False),
+)
 
 
 def init_schema(attempts: int = 5) -> None:
@@ -500,6 +540,84 @@ def list_committee_runs(limit: int = 60) -> List[Dict[str, Any]]:
 
 def list_all_committee_runs() -> List[Dict[str, Any]]:
     return _committee_rows()
+
+
+# ---- Market data, artifacts and snapshots ----
+
+def _upsert_stmt(table: Table, rows: List[Dict[str, Any]]):
+    if engine.dialect.name == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as dialect_insert
+    else:
+        from sqlalchemy.dialects.sqlite import insert as dialect_insert
+    return dialect_insert(table).values(rows)
+
+
+_BAR_COLS = ("open", "high", "low", "close", "volume", "dividends", "splits", "updated_at")
+
+
+def upsert_price_bars(rows: List[Dict[str, Any]]) -> int:
+    """Insert new bars and overwrite corrected ones, in one transaction. Idempotent: the same rows twice change nothing."""
+    if not rows:
+        return 0
+    with engine.begin() as conn:
+        for i in range(0, len(rows), 400):
+            stmt = _upsert_stmt(price_bars_table, rows[i: i + 400])
+            conn.execute(stmt.on_conflict_do_update(index_elements=["symbol", "d"], set_={c: getattr(stmt.excluded, c) for c in _BAR_COLS}))
+    return len(rows)
+
+
+def price_bars_summary() -> Dict[str, Dict[str, Any]]:
+    """symbol -> {first, last, count}: what is stored, without reading a single bar."""
+    t = price_bars_table
+    with engine.connect() as conn:
+        rows = conn.execute(select(t.c.symbol, func.min(t.c.d), func.max(t.c.d), func.count()).group_by(t.c.symbol)).fetchall()
+    return {r[0]: {"first": r[1], "last": r[2], "count": int(r[3])} for r in rows}
+
+
+def load_price_bars(symbol: Optional[str] = None, since: Optional[str] = None) -> List[Dict[str, Any]]:
+    t = price_bars_table
+    q = select(t).order_by(t.c.symbol, t.c.d)
+    if symbol:
+        q = q.where(t.c.symbol == symbol)
+    if since:
+        q = q.where(t.c.d >= since)
+    with engine.connect() as conn:
+        return [dict(r._mapping) for r in conn.execute(q).fetchall()]
+
+
+def put_blob(name: str, content: str, sha: str, updated_at: str) -> None:
+    row = {"name": name, "sha": sha, "content": content, "updated_at": updated_at}
+    with engine.begin() as conn:
+        if conn.execute(update(blobs_table).where(blobs_table.c.name == name).values(**{k: v for k, v in row.items() if k != "name"})).rowcount == 0:
+            conn.execute(insert(blobs_table).values(**row))
+
+
+def get_blob(name: str) -> Optional[Dict[str, Any]]:
+    with engine.connect() as conn:
+        r = conn.execute(select(blobs_table).where(blobs_table.c.name == name)).fetchone()
+        return dict(r._mapping) if r else None
+
+
+def list_blob_meta() -> Dict[str, str]:
+    with engine.connect() as conn:
+        return {r[0]: r[1] for r in conn.execute(select(blobs_table.c.name, blobs_table.c.sha)).fetchall()}
+
+
+def save_snapshot(d: str, doc: Dict[str, Any]) -> Dict[str, Any]:
+    doc = dict(doc, id=d, date=d)
+    if _update(snapshots_table, d, doc) is None:
+        return _create(snapshots_table, doc)
+    return doc
+
+
+def list_snapshots(limit: int = 400) -> List[Dict[str, Any]]:
+    items = _list(snapshots_table)
+    items.sort(key=lambda x: x.get("date", ""))
+    return items[-limit:]
+
+
+def get_snapshot(d: str) -> Optional[Dict[str, Any]]:
+    return _get(snapshots_table, d)
 
 
 # ---- Pagination + audit log (Phase 6) ----

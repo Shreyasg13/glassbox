@@ -398,3 +398,35 @@ def test_the_research_endpoint_is_admin_only_and_returns_the_gate_and_associatio
     assert api.get("/api/admin/strategy/research", headers=VIEWER).status_code == 403
     body = api.get("/api/admin/strategy/research", headers=ADMIN).json()
     assert body["min_live_days"] == research.MIN_LIVE_DAYS and body["associations"]["symbols"] == 3 and body["proposals"] == [] and body["latest_digest"] is None
+
+
+# --------------------------------------------- labelled matrices and pipeline status --
+
+
+def test_matrix_endpoints_are_admin_only_and_labelled(api, real_db):
+    for path in ("/api/admin/strategy/matrix", "/api/admin/strategy/correlation", "/api/admin/strategy/snapshots", "/api/admin/strategy/pipeline"):
+        assert api.get(path).status_code == 401 and api.get(path, headers=VIEWER).status_code == 403
+    body = api.get("/api/admin/strategy/matrix?fields=close,ret&symbols=aaa&days=5", headers=ADMIN).json()
+    assert body["symbols"] == ["AAA"] and len(body["dates"]) == 5 and len(body["fields"]["close"]) == 5 and "risk_score" in body["available_fields"]
+    assert api.get("/api/admin/strategy/matrix?fields=nope", headers=ADMIN).status_code == 422
+    assert api.get("/api/admin/strategy/matrix?symbols=ZZZ", headers=ADMIN).status_code == 422
+    inf = api.get("/api/admin/strategy/matrix?fields=committee_code&inference=true&days=3", headers=ADMIN)
+    assert inf.status_code == 200 and "committee_consensus" in inf.json()["available_fields"]
+
+
+def test_correlation_endpoint_returns_a_symmetric_labelled_matrix(api):
+    body = api.get("/api/admin/strategy/correlation?window=60", headers=ADMIN).json()
+    n = len(body["symbols"])
+    assert len(body["values"]) == n and all(len(r) == n for r in body["values"]) and body["values"][0][0] == 1.0
+    assert body["as_of"] and body["window"] == 60
+
+
+def test_snapshot_and_pipeline_endpoints_read_the_stored_history(api, real_db):
+    from app import snapshots
+
+    snapshots.take(strategy.cached_book())
+    m = api.get("/api/admin/strategy/snapshots?field=close", headers=ADMIN).json()
+    assert m["field"] == "close" and len(m["dates"]) == 1 and m["symbols"]
+    assert api.get("/api/admin/strategy/snapshots?field=nope", headers=ADMIN).status_code == 422
+    assert api.get("/api/admin/strategy/pipeline", headers=ADMIN).json() == {"runs": []}
+    assert api.get("/api/admin/strategy/overview", headers=ADMIN).json()["pipeline"] is None

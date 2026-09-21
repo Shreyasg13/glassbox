@@ -1,161 +1,115 @@
-"""Daily refresh of the per-symbol OHLCV + indicator parquet files.
+"""Daily price sync: fetch ONLY what is new, store it in the database, refresh the parquet cache.
 
 Run via: python -m app.scripts.update_daily_data
-Intended to run once per weekday, after US market close, as a cron job
-(see docs/DEPLOY_GCP.md for the deployed schedule).
+Normally started by the daily pipeline (app/pipeline.py) as soon as the US close is final; safe to run any time
+and as often as you like -- it is idempotent, and it never stores a bar for a session that is still open.
 
-Schema note: the existing data_parquet/{symbol}.parquet files were NOT
-produced by backend-source/live_trading/LIVE_DATA_CONNECTOR.py -- that
-script computes a different column set (SMA_20/50/200, MACD, EMA, ATR,
-BB_*) and writes to a different path (data_parquet/prices/daily/, nested)
-than what app/data_source.py actually reads (flat data_parquet/{symbol}.parquet
-with RSI, MA_10/20/30/50/100/200, Volatility, Volume_MA). This script
-targets the real schema, verified by reading the live files directly.
+Flow per symbol (see app/price_store.py for why):
+  1. First run only: import the existing parquet file into the database (history we already trust).
+  2. Fetch from 7 days before the last stored bar, or before the EARLIEST hole in the history, whichever is earlier
+     (so an outage of any length heals itself; the first version fetched "the last 10 days" and left an
+     8-month hole that was then booked as one enormous daily return).
+  3. Keep only FINAL bars (after 16:15 New York time) that pass sanity checks; report the rest.
+  4. Upsert into price_bars (new or corrected bars only), then rebuild the parquet file from the database.
 
-Volatility and Volume_MA have no recoverable "true" original formula (no
-source script producing this exact column set exists in backend-source/).
-Chosen here: Volatility = 20-day rolling std of daily pct-change returns,
-Volume_MA = 20-day rolling mean of Volume. data_source.py reads these via
-.get(key, fallback), so a reasonable reconstruction is sufficient -- exact
-historical replication of an undocumented formula is not achievable.
+Schema note: the parquet files hold raw OHLCV plus RSI, MA_10/20/30/50/100/200, Volatility and Volume_MA -- the columns
+app/data_source.py reads. Volatility and Volume_MA have no recoverable original formula; they are the 20-day rolling
+std of daily returns and the 20-day rolling mean of Volume, which is all data_source.py needs (it reads them via
+.get(key, fallback)).
 """
 from __future__ import annotations
 
 import logging
-import os
 import sys
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Any, Dict, Optional
 
-import numpy as np
 import pandas as pd
 import yfinance as yf
 
+from app import db, price_store
 from app.data_source import STOCK_INFO, TRADING_STORAGE_PATH
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("update_daily_data")
 
-MA_WINDOWS = (10, 20, 30, 50, 100, 200)
-RSI_PERIOD = 14
-VOL_WINDOW = 20
-VOLUME_MA_WINDOW = 20
-
-
-def _compute_rsi(close: pd.Series, period: int = RSI_PERIOD) -> pd.Series:
-    """Wilder's RSI via exponential moving average of gains/losses."""
-    delta = close.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    rsi = 100 - (100 / (1 + rs))
-    return rsi.fillna(50)
-
-
-def _recompute_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    df["RSI"] = _compute_rsi(df["Close"])
-    for window in MA_WINDOWS:
-        df[f"MA_{window}"] = df["Close"].rolling(window=window, min_periods=1).mean()
-    df["Volatility"] = df["Close"].pct_change().rolling(window=VOL_WINDOW, min_periods=1).std()
-    df["Volume_MA"] = df["Volume"].rolling(window=VOLUME_MA_WINDOW, min_periods=1).mean()
-    return df
-
-
-OVERLAP_DAYS = 7  # re-fetch this far back from the last stored bar, so late corrections to recent bars are picked up
-MAX_GAP_DAYS = 5  # more calendar days than this between consecutive bars is not a weekend or a holiday
+# kept for compatibility (tests and older callers import these names from here)
+MA_WINDOWS = price_store.MA_WINDOWS
+_compute_rsi = price_store.compute_rsi
+_recompute_indicators = price_store.recompute_indicators
+OVERLAP_DAYS = price_store.OVERLAP_DAYS
+MAX_GAP_DAYS = price_store.MAX_GAP_DAYS
 
 
 def find_gaps(index: pd.Index, max_days: int = MAX_GAP_DAYS) -> list[tuple[str, str, int]]:
     """Holes in a price history: (last bar before, first bar after, calendar days between)."""
-    dates = [pd.Timestamp(x).date() for x in index]
-    return [(a.isoformat(), b.isoformat(), (b - a).days) for a, b in zip(dates, dates[1:]) if (b - a).days > max_days]
+    return price_store.find_gaps_dates([pd.Timestamp(x).date().isoformat() for x in index], max_days)
 
 
-def update_symbol(symbol: str, data_dir: Path) -> tuple[bool, str]:
-    parquet_path = data_dir / f"{symbol}.parquet"
-    if not parquet_path.exists():
-        return False, f"no existing file at {parquet_path}, skipping (not creating from scratch)"
-
-    existing = pd.read_parquet(parquet_path)
-    original_rows = len(existing)
-    original_earliest = existing.index.min()
-
-    ticker = yf.Ticker(symbol)
-    # Fetch from just before the last STORED bar, not "the last 10 days". A fixed window silently leaves a
-    # hole whenever the file is older than the window: the first run on the VM appended only the last 10
-    # days to a file that ended 8 months earlier, and that gap was booked as one enormous "day".
-    # A hole may also sit in the MIDDLE of the file (the bad first run left one, then later runs appended recent
-    # days after it), so the fetch must reach back to before the EARLIEST hole, not just the last stored bar.
-    overlap = pd.Timedelta(days=OVERLAP_DAYS)
-    start_date = (pd.Timestamp(existing.index.max()) - overlap).date()
-    holes = find_gaps(existing.index)
+def update_symbol(symbol: str, data_dir: Path, now: Optional[datetime] = None) -> tuple[bool, str, Dict[str, Any]]:
+    """Returns (ok, message, info) with info = {new, rejected, not_final, latest}."""
+    info: Dict[str, Any] = {"new": 0, "changed": 0, "rejected": [], "not_final": 0, "latest": None}
+    seeded = price_store.seed_if_empty(symbol, data_dir)
+    before = db.price_bars_summary().get(symbol)
+    if not before:
+        return False, f"no stored history and no parquet file at {data_dir / (symbol + '.parquet')} to seed from (not creating from scratch)", info
+    dates = price_store.stored_dates(symbol)
+    overlap = timedelta(days=price_store.OVERLAP_DAYS)
+    start = date.fromisoformat(dates[-1]) - overlap
+    holes = price_store.find_gaps_dates(dates)
     if holes:
-        start_date = min(start_date, (pd.Timestamp(holes[0][0]) - overlap).date())
-        log.warning("[%s] stored history has %d gap(s), first %s->%s (%dd): backfilling from %s", symbol, len(holes), holes[0][0], holes[0][1], holes[0][2], start_date)
-    start = start_date.isoformat()
-    fresh = ticker.history(start=start)
+        start = min(start, date.fromisoformat(holes[0][0]) - overlap)
+        log.warning("[%s] stored history has %d gap(s), first %s->%s (%dd): backfilling from %s", symbol, len(holes), holes[0][0], holes[0][1], holes[0][2], start)
+
+    fresh = yf.Ticker(symbol).history(start=start.isoformat())
     if fresh.empty:
-        return False, "yfinance returned no data (network/rate-limit/symbol issue)"
-
-    # Keep raw OHLCV + corporate-action columns from both sources; recomputed
-    # indicator columns get dropped and rebuilt below so there's no risk of
-    # stale/duplicate indicator values from either side.
-    indicator_cols = ["RSI", "Volatility", "Volume_MA"] + [f"MA_{w}" for w in MA_WINDOWS]
-    existing_raw = existing.drop(columns=[c for c in indicator_cols if c in existing.columns])
-    fresh_raw = fresh.drop(columns=[c for c in indicator_cols if c in fresh.columns])
-
-    merged_raw = pd.concat([existing_raw, fresh_raw])
-    merged_raw = merged_raw[~merged_raw.index.duplicated(keep="last")].sort_index()
-
-    if len(merged_raw) < original_rows:
-        return False, f"REFUSING TO WRITE: merged rows ({len(merged_raw)}) < original ({original_rows})"
-    if merged_raw.index.min() != original_earliest:
-        return False, (
-            f"REFUSING TO WRITE: earliest date shifted from {original_earliest} "
-            f"to {merged_raw.index.min()}"
-        )
-
-    merged = _recompute_indicators(merged_raw)
-    gaps = find_gaps(merged.index)
-    if gaps:
-        log.warning("[%s] price history still has %d gap(s): %s", symbol, len(gaps), "; ".join(f"{a}->{b} ({n}d)" for a, b, n in gaps[:5]))
-
-    tmp_path = parquet_path.with_suffix(".parquet.tmp")
-    merged.to_parquet(tmp_path, engine="pyarrow")
-    os.replace(tmp_path, parquet_path)
-
-    latest = merged.iloc[-1]
-    summary = (
-        f"rows {original_rows}->{len(merged)}, latest={merged.index[-1].date()} "
-        f"close={latest['Close']:.2f} rsi={latest['RSI']:.1f}"
-    )
-    return True, summary
+        return False, "yfinance returned no data (network/rate-limit/symbol issue)", info
+    prev = next((r["close"] for r in reversed(db.load_price_bars(symbol)) if r["d"] < pd.Timestamp(fresh.index.min()).date().isoformat()), None)
+    rows, rejected, not_final = price_store.frame_to_rows(symbol, fresh, prev_close=prev, now=now)
+    for r in rejected:
+        log.warning("[%s] REJECTED bar %s: %s", symbol, r["date"], r["why"])
+    changed = price_store.delta_rows(symbol, rows)  # write only what is new or corrected
+    db.upsert_price_bars(changed)
+    after = db.price_bars_summary()[symbol]
+    if changed or seeded or not (data_dir / f"{symbol}.parquet").exists():
+        price_store.materialize(symbol, data_dir)  # the cache only moves when the data did (its mtime keys the app's caches)
+    remaining = price_store.find_gaps_dates(price_store.stored_dates(symbol))
+    if remaining:
+        log.warning("[%s] price history still has %d gap(s): %s", symbol, len(remaining), "; ".join(f"{a}->{b} ({n}d)" for a, b, n in remaining[:5]))
+    info.update({"new": after["count"] - before["count"], "changed": len(changed), "rejected": rejected, "not_final": not_final, "latest": after["last"]})
+    msg = f"rows {before['count']}->{after['count']}, latest={after['last']}" + (f", imported {seeded} bars from parquet" if seeded else "") + (f", {len(rejected)} rejected" if rejected else "") + (f", {not_final} provisional bar(s) ignored" if not_final else "")
+    return True, msg, info
 
 
-def main() -> int:
+def run(now: Optional[datetime] = None, symbols: Optional[list[str]] = None) -> Dict[str, Any]:
     data_dir = TRADING_STORAGE_PATH / "data_parquet"
-    log.info("TRADING_STORAGE_PATH=%s", TRADING_STORAGE_PATH)
-    if not data_dir.exists():
-        log.error("data_parquet dir not found at %s -- nothing to update", data_dir)
-        return 1
-
-    ok, failed = [], []
-    for symbol in STOCK_INFO:
+    ok, failed, new_bars, rejected, latest, latest_by_symbol = [], [], 0, [], None, {}
+    for symbol in symbols or STOCK_INFO:
         try:
-            success, message = update_symbol(symbol, data_dir)
+            success, message, info = update_symbol(symbol, data_dir, now)
         except Exception as exc:  # one bad symbol must not abort the rest
-            success, message = False, f"{type(exc).__name__}: {exc}"
+            success, message, info = False, f"{type(exc).__name__}: {exc}", {}
         if success:
             ok.append(symbol)
+            new_bars += info["new"]
+            rejected += info["rejected"]
+            latest = max(filter(None, [latest, info["latest"]]), default=None)
+            latest_by_symbol[symbol] = info["latest"]
             log.info("[%s] OK - %s", symbol, message)
         else:
             failed.append(symbol)
             log.warning("[%s] FAILED - %s", symbol, message)
+    log.info("Done. %d/%d symbols updated, %d new bar(s). Failed: %s", len(ok), len(ok) + len(failed), new_bars, failed or "none")
+    return {"ok": ok, "failed": failed, "new_bars": new_bars, "rejected": rejected, "latest": latest, "latest_by_symbol": latest_by_symbol}
 
-    log.info("Done. %d/%d symbols updated. Failed: %s", len(ok), len(STOCK_INFO), failed or "none")
-    return 0 if not failed else 2
+
+def main() -> int:
+    log.info("TRADING_STORAGE_PATH=%s", TRADING_STORAGE_PATH)
+    if not (TRADING_STORAGE_PATH / "data_parquet").exists():
+        log.error("data_parquet dir not found at %s -- nothing to update", TRADING_STORAGE_PATH / "data_parquet")
+        return 1
+    return 0 if not run()["failed"] else 2
 
 
 if __name__ == "__main__":

@@ -8,12 +8,12 @@ never another user's paper account.
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 
-from .. import db, research, strategy
+from .. import db, pipeline, research, snapshots, strategy
 from ..auth import TokenPayload, get_current_user, require_admin
 from ..rate_limit import rate_limit_admin_mutations
 
@@ -49,6 +49,43 @@ async def research_view() -> Dict[str, Any]:
 @admin_router.get("/data-sources")
 async def data_sources() -> Dict[str, Any]:
     return await run_in_threadpool(lambda: strategy.data_sources(_book_or_503()))
+
+
+@admin_router.get("/matrix")
+async def matrix(
+    fields: str = Query("close,ret,signal,risk_score", description="comma-separated panel fields"),
+    symbols: Optional[str] = Query(None, description="comma-separated tickers (default: all)"),
+    days: int = Query(120, ge=1, le=800),
+    inference: bool = Query(False, description="also include the committee's stored decisions as matrices"),
+) -> Dict[str, Any]:
+    """Prices, returns, signals, risk (and optionally committee decisions) as labelled dates x symbols arrays."""
+    names = [f.strip() for f in fields.split(",") if f.strip()]
+    syms = [s.strip().upper() for s in symbols.split(",") if s.strip()] if symbols else None
+    try:
+        return await run_in_threadpool(lambda: strategy.matrix(_book_or_503(), names, syms, days, inference))
+    except KeyError as exc:
+        raise HTTPException(status_code=422, detail=f"Unknown field or symbol: {exc.args[0]}") from None
+
+
+@admin_router.get("/correlation")
+async def correlation(window: int = Query(60, ge=10, le=500)) -> Dict[str, Any]:
+    """The correlation matrix of daily returns over the last `window` trading days, and its clusters."""
+    return await run_in_threadpool(lambda: strategy.correlation_matrix(_book_or_503(), window))
+
+
+@admin_router.get("/snapshots")
+async def snapshot_history(field: str = Query("committee"), days: int = Query(120, ge=1, le=400)) -> Dict[str, Any]:
+    """What the system believed on each stored day, one field at a time, as a labelled matrix."""
+    try:
+        return await run_in_threadpool(lambda: strategy.snapshot_matrix(field, days))
+    except KeyError:
+        raise HTTPException(status_code=422, detail=f"Unknown snapshot field: {field}. Choose from {sorted(snapshots.SNAPSHOT_FIELDS)}") from None
+
+
+@admin_router.get("/pipeline")
+async def pipeline_runs() -> Dict[str, Any]:
+    """The recent daily-pipeline runs: target day, per-stage result and timing, price coverage."""
+    return {"runs": await run_in_threadpool(lambda: list(reversed(pipeline.status_history()))[:14])}
 
 
 @me_router.get("/track-record")

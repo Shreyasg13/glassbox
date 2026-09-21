@@ -17,7 +17,7 @@ import threading
 from bisect import bisect_left
 from typing import Any, Dict, List, Optional
 
-from . import committee_daily, data_source as ds, db, free_data, paper, paper_cycle, risk
+from . import associations, committee_daily, data_source as ds, db, free_data, panel as panel_mod, paper, paper_cycle, pipeline, risk, snapshots
 
 MIN_RANKED = 30  # scored directional calls before an agent may be ranked
 CONTROL_ORDER = ["ctl_engine", "ctl_taxaware", "ctl_trend", "ctl_voltarget", "ctl_committee", "ctl_placebo", "ctl_spy", "ctl_equal", "ctl_cash", "ctl_engine_ira", "ctl_trend_ira", "ctl_voltarget_ira", "ctl_placebo_ira"]
@@ -186,7 +186,54 @@ def overview(book: paper.PriceBook) -> Dict[str, Any]:
         "meta": db.get_paper_meta(),
         "tax_assumptions": {"short_term": paper.TAX_ST, "long_term": paper.TAX_LT},
         "data_quality": {"gaps": book.gaps(), "ok": not book.gaps()},
+        "pipeline": _pipeline_status(),
     }
+
+
+def _pipeline_status() -> Optional[Dict[str, Any]]:
+    """The last daily-pipeline run (which day, which stages passed), or None if it never ran / the store is unreachable."""
+    try:
+        return pipeline.last_status()
+    except Exception:  # noqa: BLE001 -- a status line must never break the overview
+        return None
+
+
+# ------------------------------------------------------------ labelled matrices --
+
+MATRIX_MAX_DAYS = 800
+
+
+def _panel(book: paper.PriceBook, inference: bool):
+    p = panel_mod.from_book(book)
+    return p.with_inference(db.list_all_committee_runs()) if inference else p
+
+
+def matrix(book: paper.PriceBook, fields: List[str], symbols: Optional[List[str]] = None, days: int = 120, inference: bool = False) -> Dict[str, Any]:
+    """Labelled (dates x symbols) arrays for the requested fields -- the raw material for path retrieval and custom designs."""
+    p = _panel(book, inference)
+    unknown = [f for f in fields if f not in p.fields]
+    if unknown:
+        raise KeyError(", ".join(unknown))
+    bad = [s for s in (symbols or []) if s not in p.symbols]
+    if bad:
+        raise KeyError(", ".join(bad))
+    out = p.to_payload(fields, symbols, min(max(days, 1), MATRIX_MAX_DAYS))
+    out["available_fields"] = sorted(p.fields)
+    out["codes"] = {"signal": panel_mod.SIGNAL_CODE, "risk_level": panel_mod.RISK_CODE, "committee_code": panel_mod.SIGNAL_CODE}
+    return out
+
+
+def correlation_matrix(book: paper.PriceBook, window: int = 60, end: Optional[str] = None) -> Dict[str, Any]:
+    """Pairwise return correlation as a labelled matrix, plus the clusters it implies."""
+    p = panel_mod.from_book(book)
+    d = end or book.latest_date
+    C = p.corr(d, window)
+    groups = associations.clusters({a: {b: float(C[i, j]) for j, b in enumerate(p.symbols)} for i, a in enumerate(p.symbols)})
+    return {"as_of": d, "window": window, "symbols": p.symbols, "values": [[round(float(v), 4) for v in row] for row in C], "clusters": groups}
+
+
+def snapshot_matrix(field: str, days: int = 120) -> Dict[str, Any]:
+    return snapshots.matrix(field, min(max(days, 1), 400))
 
 
 def accuracy(book: paper.PriceBook) -> Dict[str, Any]:

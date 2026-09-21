@@ -19,3 +19,16 @@ def _reset_tts_state(monkeypatch):
     monkeypatch.setattr(tts, "_budget_spent", 0)
     yield
     tts.clear_cache()
+
+
+@pytest.fixture
+def real_db(tmp_path, monkeypatch):
+    """A throwaway SQLite database with the real schema, swapped in for app.db.engine."""
+    from sqlalchemy import create_engine
+
+    from app import db as real
+
+    eng = create_engine(f"sqlite:///{tmp_path / 'test.db'}", connect_args={"check_same_thread": False})
+    real.metadata.create_all(eng)
+    monkeypatch.setattr(real, "engine", eng)
+    return real

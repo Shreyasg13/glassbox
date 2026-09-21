@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import type { StrategyOverview } from "@/lib/types";
+import type { PipelineRun, StrategyOverview } from "@/lib/types";
 import { AccuracyPanel } from "@/components/admin/strategy/AccuracyPanel";
 import { AskConsole } from "@/components/admin/strategy/AskConsole";
 import { CapitalPanel } from "@/components/admin/strategy/CapitalPanel";
@@ -19,6 +19,24 @@ const TABS = [
   { id: "research", label: "Research", hint: "correlations · evidence gate" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
+
+const PIPELINE_TONE: Record<string, string> = { ok: "text-teal", running: "text-t2", partial: "text-gold", failed: "text-red", no_bar: "text-t3" };
+
+/** The last daily-pipeline run: which trading day, did it finish, and which stage (if any) did not. */
+function PipelineLine({ run }: { run: PipelineRun }) {
+  const stages = Object.entries(run.stages ?? {});
+  const failed = run.failed_stages ?? stages.filter(([, s]) => !s.ok).map(([name]) => name);
+  const label = run.status === "no_bar" ? "no final bar" : run.status;
+  return (
+    <p className="text-[11px] text-t3" aria-label="Daily pipeline status">
+      Daily pipeline for <span className="mono">{run.target}</span>:{" "}
+      <b className={PIPELINE_TONE[run.status] ?? "text-t2"}>{label}</b>
+      {stages.length > 0 && <span className="mono"> · {stages.length - failed.length}/{stages.length} stages ok</span>}
+      {failed.length > 0 && <span className="text-red"> · failed: {failed.join(", ")}</span>}
+      {run.message ? <span> · {run.message}</span> : null}
+    </p>
+  );
+}
 
 /** One page to answer: what did the committee decide, is each signal actually delivering,
  * which agent is worth trusting, and what does it earn after cost and tax? */
@@ -52,6 +70,8 @@ export default function StrategyPage() {
           volatility and correlations that span it are unreliable. Run the daily sync; it now backfills from the last stored bar.
         </div>
       )}
+
+      {q.data?.pipeline && <PipelineLine run={q.data.pipeline} />}
 
       <nav className="flex flex-wrap gap-sp2" aria-label="Strategy sections">
         {TABS.map((t) => (
