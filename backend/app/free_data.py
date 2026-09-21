@@ -49,7 +49,7 @@ BLS_SERIES = {"unemployment": "LNS14000000", "cpi": "CUUR0000SA0"}
 SEC_MIN_INTERVAL_S = 0.12  # ~8 requests a second, under the SEC's 10/s ceiling
 TICKER_MAP_TTL_DAYS = 30
 FUNDAMENTALS_TTL_DAYS = 3
-BLS_LAG_DAYS = 45  # a month's figure is not public until about this long after the month ends
+BLS_LAG_DAYS = {"unemployment": 12, "cpi": 20}  # days after a month ends before its figure is public (jobs report ~1 week, CPI ~2 weeks, plus margin)
 
 # XBRL "us-gaap" tags, most specific first. Flow concepts are annual (10-K) values; instant ones are year-end balances.
 CONCEPTS: Dict[str, List[str]] = {
@@ -377,10 +377,10 @@ def _shift_month(month: str, delta: int) -> str:
     return f"{idx // 12:04d}-{idx % 12 + 1:02d}"
 
 
-def _released(month: str, as_of: str) -> bool:
+def _released(month: str, as_of: str, lag_days: int) -> bool:
     y, m = int(month[:4]), int(month[5:7])
     end = date(y + (m == 12), (m % 12) + 1, 1) - timedelta(days=1)
-    return end + timedelta(days=BLS_LAG_DAYS) <= date.fromisoformat(as_of)
+    return end + timedelta(days=lag_days) <= date.fromisoformat(as_of)
 
 
 def macro_from_cache(cache: Optional[Dict[str, Any]], as_of: str) -> Optional[Dict[str, Any]]:
@@ -400,7 +400,7 @@ def macro_from_cache(cache: Optional[Dict[str, Any]], as_of: str) -> Optional[Di
         if old and "y10" in now and "y10" in old:
             out["y10_change_3m"] = now["y10"] - old["y10"]
     for name in ("unemployment", "cpi"):
-        rows = {r["month"]: r["value"] for r in (cache.get("bls") or {}).get(name, []) if _released(r["month"], as_of)}
+        rows = {r["month"]: r["value"] for r in (cache.get("bls") or {}).get(name, []) if _released(r["month"], as_of, BLS_LAG_DAYS[name])}
         if not rows:
             continue
         month = max(rows)

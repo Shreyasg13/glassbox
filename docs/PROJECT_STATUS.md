@@ -895,7 +895,7 @@ false-positive RATE, not a lucky seed.
 i.e. after the price sync and BEFORE the committee): SEC EDGAR company fundamentals (XBRL, latest FULL fiscal year: revenue growth, margins,
 ROE, leverage, free-cash-flow margin, P/E) and the filing feed (8-K events in plain English, 10-K/10-Q dates); US Treasury yield curve and
 BLS unemployment / CPI. Read-only cache under `TRADING_STORAGE_PATH/free_data`; the committee and UI never touch the network. Everything is
-point-in-time (only what had been FILED by the date; a later restatement never leaks backward; BLS months only after a 45-day release lag).
+point-in-time (only what had been FILED by the date; a later restatement never leaks backward; BLS months only after their release (12 days for unemployment, 20 for CPI)).
 Committee prompts now carry fundamentals, recent filings and the macro backdrop; the user's stance raises a flagged filing (CEO change,
 impairment, restructuring, delisting notice, auditor change ...) as a reason to look, and shows the macro line and a fundamentals glance.
 SEC needs `SEC_USER_AGENT` = a project name plus a monitored email (the SEC's fair-access policy; at most 10 requests/second): without it

@@ -168,10 +168,11 @@ def test_macro_uses_only_what_had_been_published_and_computes_changes():
     m = fd.macro_from_cache(macro_cache(), "2026-09-16")
     assert m["treasury_date"] == "2026-09-16" and m["y10"] == 4.25 and m["curve_10y_2y"] == pytest.approx(0.55)
     assert m["y10_change_3m"] == pytest.approx(4.25 - 4.0)  # against the 2026-06-02 row, more than 90 days back
-    assert m["unemployment_month"] == "2026-07" and m["unemployment_6m_ago"] == pytest.approx(4.0 + 1 * 0.05)  # August is not out by mid-September
-    assert m["cpi_month"] == "2026-07" and m["cpi_yoy"] == pytest.approx((310 + 7 * 0.5) / (300 + 7 * 0.5) - 1)
-    early = fd.macro_from_cache(macro_cache(), "2026-08-01")  # July's figures are not public yet
-    assert early["unemployment_month"] == "2026-05" and "y10" in early  # June (ended 06-30) is only public ~45 days later
+    assert m["unemployment_month"] == "2026-08" and m["unemployment_6m_ago"] == pytest.approx(4.0 + 2 * 0.05)  # August's jobs report is out by mid-September
+    assert m["cpi_month"] == "2026-07" and m["cpi_yoy"] == pytest.approx((310 + 7 * 0.5) / (300 + 7 * 0.5) - 1)  # but August CPI (20-day lag) is not yet
+    early = fd.macro_from_cache(macro_cache(), "2026-07-05")  # June's jobs figure (ends 06-30, +12 days) is not public yet
+    assert early["unemployment_month"] == "2026-05" and "y10" in early
+    assert fd.macro_from_cache(macro_cache(), "2026-07-14")["unemployment_month"] == "2026-06"  # now it is
     assert fd.macro_from_cache(macro_cache(), "2026-01-01") is None or "y10" not in fd.macro_from_cache(macro_cache(), "2026-01-01")
     assert fd.macro_from_cache(None, "2026-09-16") is None
 
@@ -179,7 +180,7 @@ def test_macro_uses_only_what_had_been_published_and_computes_changes():
 def test_macro_line_reads_naturally_and_flags_an_inverted_curve():
     line = fd.macro_line(fd.macro_from_cache(macro_cache(), "2026-09-16"))
     assert line.startswith("Macro backdrop: 10-year Treasury 4.25% (+0.25 pts over 3 months); yield curve (10y minus 2y) +0.55 pts (normal)")
-    assert "unemployment 4.3% (2026-07" in line and "consumer prices +" in line
+    assert "unemployment 4.4% (2026-08" in line and "consumer prices +" in line
     inv = fd.macro_line({"y10": 3.9, "curve_10y_2y": -0.2})
     assert "(inverted)" in inv and fd.macro_line(None) is None and fd.macro_line({}) is None
 
