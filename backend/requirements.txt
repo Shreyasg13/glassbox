@@ -7,7 +7,7 @@ PyJWT==2.14.0
 sqlalchemy==2.0.35
 websockets==15.0.1  # >=15 is required by langsmith (via langchain-core); langgraph-sdk needs >=14,<17
 numpy==2.1.1
-pandas==2.3.3
+pandas==3.0.6
 pyarrow==25.0.1
 httpx==0.27.2
 anthropic==0.39.0
