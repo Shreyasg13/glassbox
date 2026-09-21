@@ -266,3 +266,160 @@ export type CommitteeScorecard = {
   agrees_with_engine: number | null;
   by_decision: Record<"BUY" | "SELL" | "HOLD", Record<string, { n: number; mean_return: number | null; hit_rate: number | null }>>;
 };
+
+// ---- Strategy (admin) and stance / track record (users) -------------------------------------------
+
+export type Lean = "BUY" | "SELL" | "HOLD";
+export type RiskLevel = "LOW" | "MEDIUM" | "HIGH";
+export type RiskSnapshot = { level: RiskLevel; score: number; vol: number; vol_pct: number; drawdown: number; below_ma200: boolean };
+export type RiskRow = RiskSnapshot & { symbol: string };
+
+export type StrategyAgent = {
+  agent: string;
+  ok: boolean;
+  type?: "deterministic" | "llm";
+  lean?: Lean;
+  summary?: string;
+  provider?: string;
+  model?: string;
+  error?: string;
+  confidence?: number;
+  risk_level?: RiskLevel;
+  structured?: boolean;
+  latency_s?: number;
+  raw?: string;
+  system_prompt?: string;
+  failed_over_from?: string;
+};
+
+export type CeoBrief = {
+  call: Lean;
+  vote: Lean;
+  consensus: number;
+  label: "strong consensus" | "majority" | "split";
+  margin: number;
+  engine_trio: Lean | null;
+  analyst_panel: Lean | null;
+  trio_panel_agree: boolean | null;
+  dissenters: string[];
+  gate: string | null;
+  headline: string;
+};
+
+export type StrategyDecision = {
+  id: string;
+  date: string;
+  symbol: string;
+  why: string;
+  engine_signal: Lean;
+  engine_confidence: number;
+  price: number;
+  decision: Lean | null;
+  action: Lean | null;
+  gate: string | null;
+  risk: RiskSnapshot | null;
+  analyst_risk: Record<RiskLevel, number> | null;
+  votes: { BUY: number; SELL: number; HOLD: number } | null;
+  ceo: CeoBrief | null;
+  context: string | null;
+  prompt?: string;
+  engine: string;
+  agrees_with_engine: boolean | null;
+  agents: StrategyAgent[];
+  answered: number;
+  total: number;
+  quorum_ok: boolean;
+  error: string | null;
+  seconds: number;
+  question?: string;
+  status?: "running" | "done" | "error";
+};
+
+export type CapitalRow = {
+  id: string;
+  name: string;
+  strategy: string;
+  equity: number;
+  total_return: number;
+  live_return: number | null;
+  max_drawdown: number;
+  sharpe: number;
+  turnover: number;
+  cost_paid: number;
+  live_days: number;
+  days: number;
+  tax_tracked: boolean;
+  est_tax: number | null;
+  after_tax_return: number | null;
+  tax_drag: number | null;
+  avg_holding_days: number | null;
+  realized_st?: number | null;
+  realized_lt?: number | null;
+  unrealized_st?: number | null;
+  unrealized_lt?: number | null;
+};
+
+export type StrategyCurves = Record<string, CurvePoint[]>;
+
+export type StrategyOverview = {
+  data_date: string | null;
+  latest_review_date: string | null;
+  decisions: StrategyDecision[];
+  history: { date: string; symbol: string; decision: Lean | null; action: Lean | null; engine_signal: Lean; consensus: string | null; answered: number; total: number }[];
+  risk_today: RiskRow[];
+  capital: CapitalRow[];
+  curves: StrategyCurves;
+  meta: { live_from?: string } | null;
+  tax_assumptions: { short_term: number; long_term: number };
+};
+
+export type RiskBucket = { n: number; fwd_vol: number | null; fwd_worst_dip: number | null; fwd_return: number | null; p_drop: number | null };
+export type LeaderRow = {
+  agent: string;
+  type: "deterministic" | "llm" | null;
+  answers: number;
+  agrees_with_committee: number;
+  agrees_with_engine: number;
+  avg_confidence: number | null;
+  directional_calls: number;
+  hit_rate: number | null;
+  mean_edge: number | null;
+  ranked: boolean;
+};
+export type StrategyAccuracy = {
+  signal: PaperScorecard;
+  risk: {
+    horizons: number[];
+    drop_threshold: Record<string, number>;
+    levels: Record<"LOW" | "MEDIUM" | "HIGH" | "ALL", Record<string, RiskBucket>>;
+    lift: Record<string, { vol: number | null; dip: number | null; p_drop: number | null }>;
+    note: string;
+  };
+  committee: CommitteeScorecard;
+  leaderboard: { horizon: number; min_ranked: number; agents: LeaderRow[]; note: string };
+};
+
+export type AskSummary = { id: string; symbol: string; question: string; status: "running" | "done" | "error"; created_at: string; action: Lean | null; decision: Lean | null };
+
+export type StanceRow = {
+  symbol: string;
+  name: string;
+  price: number | null;
+  engine: { signal: Lean; confidence: number };
+  committee: { action: Lean | null; consensus: string | null; date: string; headline: string | null } | null;
+  risk: { level: RiskLevel; score: number } | null;
+  attention: boolean;
+  watch: boolean;
+  reasons: string[];
+  summary: string;
+};
+export type StanceResponse = { as_of: string | null; rows: StanceRow[]; attention: number; watch: number; quiet: number };
+
+export type TrackStrategy = Omit<CapitalRow, "realized_st" | "realized_lt" | "unrealized_st" | "unrealized_lt">;
+export type TrackRecord = {
+  initialised: boolean;
+  live_from: string | null;
+  strategies: TrackStrategy[];
+  curves: StrategyCurves;
+  tax_assumptions: { short_term: number; long_term: number };
+};

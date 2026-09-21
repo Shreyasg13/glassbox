@@ -204,7 +204,8 @@ def test_the_ceo_brief_reports_consensus_dissent_and_the_engine_vs_panel_split()
     votes = {"BUY": 1.4, "SELL": 0.0, "HOLD": 1.4}
     b = committee_daily.ceo_brief("BUY", "HOLD", "risk regime is HIGH", votes, agents, tally)
     assert b["label"] == "split" and b["engine_trio"] == "HOLD" and b["analyst_panel"] == "BUY" and b["trio_panel_agree"] is False
-    assert b["dissenters"] == ["E1", "E2", "A3"] and b["call"] == "HOLD" and "DISAGREE" in b["headline"] and "risk check" in b["headline"]
+    assert b["dissenters"] == ["E1", "E2", "A3"] and b["call"] == "HOLD" and "DISAGREE" in b["headline"]
+    assert b["headline"].startswith("vote BUY - split (50% of the weight), held to HOLD by the risk check")  # the % belongs to the vote, not the call
     strong = committee_daily.ceo_brief("HOLD", "HOLD", None, {"BUY": 0.0, "SELL": 0.0, "HOLD": 5.0}, agents, [{"agent": "E1", "lean": "HOLD", "weight": 1.0}])
     assert strong["label"] == "strong consensus" and strong["dissenters"] == [] and strong["consensus"] == 1.0
     assert committee_daily.ceo_brief(None, None, None, None, [], []) is None

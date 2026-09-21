@@ -58,7 +58,7 @@ export function CommitteePanel() {
         <div>
           <h2 className="text-[13px] font-bold uppercase tracking-wide text-t3">Investment Committee — daily review</h2>
           <p className="mt-1 max-w-[72ch] text-[11px] text-t3">
-            Every weekday at 22:30 UTC the committee (3 quant-engine agents + 7 AI analysts) reviews a few symbols: anything the engine flags BUY/SELL, anything that just
+            Every weekday at 22:15 UTC the committee (3 quant-engine agents + 7 AI analysts) reviews a few symbols: anything the engine flags BUY/SELL, anything that just
             changed, topped up with the biggest movers. Each analyst is shown the real numbers and told to use only those. Decisions are saved so they can be scored.
           </p>
         </div>
@@ -97,7 +97,7 @@ export function CommitteePanel() {
 
       <div className="mt-sp3 overflow-x-auto">
         {rows.length === 0 ? (
-          <p className="py-sp3 text-[12px] text-t3">No reviews yet. The first one runs automatically on the next weekday at 22:30 UTC, or click “Review now”.</p>
+          <p className="py-sp3 text-[12px] text-t3">No reviews yet. The first one runs automatically on the next weekday at 22:15 UTC, or click “Review now”.</p>
         ) : (
           <table className="w-full min-w-[720px] text-[12px]">
             <thead>

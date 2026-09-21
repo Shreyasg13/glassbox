@@ -11,11 +11,13 @@ type NavItem = { href: string; label: string; icon: string };
 const userLinks: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "◈" },
   { href: "/onboarding", label: "Onboarding", icon: "✦" },
+  { href: "/track-record", label: "Track record", icon: "◔" },
   { href: "/reports", label: "Reports", icon: "▤" },
   { href: "/agents", label: "My Agents", icon: "⚗" },
 ];
 
 const adminLinks: NavItem[] = [
+  { href: "/admin/strategy", label: "Strategy", icon: "✧" },
   { href: "/admin/agents", label: "Agent Factory", icon: "⚗" },
   { href: "/admin/orchestrations", label: "Orchestrations", icon: "⟳" },
   { href: "/admin/paper", label: "Paper Trading", icon: "◔" },
@@ -50,7 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="grid min-h-screen grid-cols-1 md:grid-cols-[230px_1fr]">
+    <div className="grid min-h-screen grid-cols-1 md:grid-cols-[230px_minmax(0,1fr)]">
       <aside className="hidden flex-col gap-sp1 border-r border-border bg-bg1/90 p-sp3 md:flex">
         <Link href="/" className="mb-sp6 flex items-center gap-sp3 px-sp3 py-sp2">
           <div className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-r2 bg-gradient-to-br from-teal to-blue text-[13px] font-extrabold text-bg shadow-teal">

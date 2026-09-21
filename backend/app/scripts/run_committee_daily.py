@@ -4,11 +4,12 @@
     python -m app.scripts.run_committee_daily --dry-run       # show today's picks, call no model
     python -m app.scripts.run_committee_daily --symbols AAPL,NVDA --force
 
-Cron (host crontab). 22:30 UTC on weekdays is the right slot: the US market closes at
-20:00 UTC (21:00 in winter), the data sync runs at 22:00 and the paper-trading cycle
-at 22:15, so by 22:30 today's prices, signals and paper portfolios are all final:
+Cron (host crontab). 22:15 UTC on weekdays: the US market closes at 20:00 UTC (21:00 in
+winter) and the data sync runs at 22:00, so by 22:15 today's prices and signals are final. It
+must run BEFORE the paper-trading cycle (22:45), whose "Committee on all symbols" account
+trades on these decisions:
 
-    30 22 * * 1-5 cd /home/shrey/glassbox && /usr/bin/docker compose exec -T backend python -m app.scripts.run_committee_daily >> /home/shrey/glassbox/logs/committee_daily.log 2>&1
+    15 22 * * 1-5 cd /home/shrey/glassbox && /usr/bin/docker compose exec -T backend python -m app.scripts.run_committee_daily >> /home/shrey/glassbox/logs/committee_daily.log 2>&1
 
 Idempotent (one decision per date+symbol), so a holiday or a second run is a no-op.
 Exit code: 0 = ran or nothing to do, 1 = could not run, or every model call failed.

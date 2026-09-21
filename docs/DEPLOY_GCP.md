@@ -177,10 +177,11 @@ Runs the simulated portfolios forward one day (see docs/PROJECT_STATUS.md,
 docker compose exec -T backend python -m app.scripts.run_paper_cycle --bootstrap
 ```
 
-Then daily, 15 minutes after the data sync (`crontab -e`):
+Then daily, AFTER the committee review (which starts at 22:15 -- see 6d; the committee's calls feed the
+"Committee on all symbols" account, and the script waits for a review still in progress) (`crontab -e`):
 
 ```
-15 22 * * 1-5 cd /home/shrey/glassbox && /usr/bin/docker compose exec -T backend python -m app.scripts.run_paper_cycle >> /home/shrey/glassbox/logs/paper_cycle.log 2>&1
+45 22 * * 1-5 cd /home/shrey/glassbox && /usr/bin/docker compose exec -T backend python -m app.scripts.run_paper_cycle >> /home/shrey/glassbox/logs/paper_cycle.log 2>&1
 ```
 
 - **Check it ran**: `tail -30 ~/glassbox/logs/paper_cycle.log`, or Admin -> Paper Trading.
@@ -193,12 +194,13 @@ Then daily, 15 minutes after the data sync (`crontab -e`):
 
 Runs the 10-agent Investment Committee on a few symbols each trading day and saves every
 decision (Admin -> Paper Trading -> "Investment Committee"; a daily report lands in Admin ->
-Reports). Schedule it AFTER the two jobs it depends on -- 22:00 data sync, 22:15 paper
-cycle -- so today's prices and signals are final. 22:30 UTC = 6:30 pm US Eastern (5:30 pm in
-winter), comfortably after the 4 pm close in both seasons:
+Reports). Schedule it AFTER the data sync (22:00) and BEFORE the paper cycle (22:45): the
+committee's calls feed the "Committee on all symbols" paper account, so they must exist when the
+cycle runs. 22:15 UTC = 6:15 pm US Eastern (5:15 pm in winter), after the 4 pm close in both
+seasons; a full review takes 2-6 minutes, well inside the 30-minute gap:
 
 ```
-30 22 * * 1-5 cd /home/shrey/glassbox && /usr/bin/docker compose exec -T backend python -m app.scripts.run_committee_daily >> /home/shrey/glassbox/logs/committee_daily.log 2>&1
+15 22 * * 1-5 cd /home/shrey/glassbox && /usr/bin/docker compose exec -T backend python -m app.scripts.run_committee_daily >> /home/shrey/glassbox/logs/committee_daily.log 2>&1
 ```
 
 - **Which symbols**: BUY/SELL signals and signals that just changed (up to `COMMITTEE_MAX_SYMBOLS`),

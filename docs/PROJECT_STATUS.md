@@ -703,3 +703,43 @@ sync and 22:15 paper cycle) -- `app/committee_daily.py`, `python -m app.scripts.
   appeared in a log or a terminal should be rotated.
 - `report_written: false` on a re-run is correct: the report id fingerprints the outcomes, so an identical
   re-run does not create a duplicate.
+
+## Phase 2 -- LangGraph committee, risk signal, tax lens, Strategy console (2026-09-20)
+
+Goal: a stable, long-horizon, tax-aware system (daily closes, weeks-to-years decisions; no intraday), with
+clear visibility for the admin and for users.
+
+**Engine**
+- `app/committee_graph.py`: the daily committee is a LangGraph `StateGraph` -- fan-out (one `Send` per agent) ->
+  `run_agent` x10 concurrently -> `aggregate` (deterministic confidence-weighted vote, never an LLM judge) ->
+  `risk_gate`. Analysts are LangChain chains (`prompt | RoutedChatModel | PydanticOutputParser`) returning a
+  validated `{decision, confidence, risk_level, rationale}`; a non-JSON reply still votes via the old text rule.
+  `app/llm_chat.py` wraps `llm_router.complete_routed` as a LangChain chat model, so failover, cooldowns and the
+  call ledger are unchanged. Self-reported confidence is clamped to 0.3-0.8 (uncalibrated). The admin's manual
+  Orchestrations page keeps its existing runner.
+- `app/risk.py`: rule-based, no-lookahead risk regime (vol percentile 45% + drawdown 35% + trend break 20%) with an
+  out-of-sample scorecard. Mostly a volatility detector; it lags a sudden onset (documented, and shown as such).
+  The committee's risk gate holds a BUY back to HOLD when the regime is HIGH (`COMMITTEE_RISK_GATE=0` disables);
+  the vote is kept, the gated result is stored as `action`.
+- `app/paper.py`: FIFO tax lots (short vs long term), estimated tax / after-tax return / avg holding period
+  (`PAPER_TAX_ST` 32%, `PAPER_TAX_LT` 15% assumed -- estimates, not advice); new `committee_tilt` strategy and a
+  `ctl_committee` control ("Committee on all symbols"), identical to the engine control except where the committee
+  reviewed a symbol in the last 5 trading days. It can only differ on live days.
+- `python -m app.scripts.run_paper_cycle --rebuild [--apply]`: replays every stored account from its own stored
+  definition and applies the result only where it reproduces the stored equity curve to the cent -- this is how
+  accounts created before tax tracking gain their lots without changing any history.
+- Schedule is now 22:00 data sync -> **22:15 committee** -> **22:45 paper cycle** (the cycle also waits for a review
+  still in progress).
+
+**Visibility**
+- Admin -> **Strategy** (`/admin/strategy`): CEO view (call, consensus, engine-trio vs analyst-panel, dissent, risk
+  check; inspector for all 10 agents incl. prompt and raw reply), **Ask the committee** (sandbox prompt console,
+  never a decision), **Is it working?** (engine / risk / committee accuracy with sample sizes; agent leaderboard,
+  unranked until 30 scored BUY/SELL calls), **Capital & tax** (curves + after-tax table).
+- Users: **Today's stance** on the dashboard (attention / elevated-risk watch / quiet -- elevated risk alone never
+  shouts) and **Track record** (`/track-record`; reference strategies only, backtest vs live labelled, tax lens).
+- Fixed on the way: the app-shell grid used `1fr` (automatic minimum), so a wide table could widen the whole page
+  on tablet widths; now `minmax(0,1fr)`.
+
+**Not done (deliberately)**: agent re-weighting / self-tuning (needs ~100 scored decisions per agent, roughly 2-3
+months at 2-3 reviews a day; the leaderboard is the input and will say when), intraday anything.

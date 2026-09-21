@@ -1,5 +1,6 @@
 import { SignalTicker, type Signal } from "@/components/SignalTicker";
 import { DashboardWelcomeNote } from "@/components/onboarding/DashboardWelcomeNote";
+import { StancePanel } from "@/components/dashboard/StancePanel";
 import { PortfolioOverviewPanel, type HoldingsData } from "@/components/dashboard/PortfolioOverviewPanel";
 import { AgentPerformancePanel, type AgentPerformance } from "@/components/dashboard/AgentPerformancePanel";
 import { TrackComparisonPanel, type TrackAgentsData } from "@/components/dashboard/TrackComparisonPanel";
@@ -107,6 +108,9 @@ export default async function DashboardPage() {
     <div className="grid grid-cols-1 gap-sp5 lg:grid-cols-3">
       <div className="lg:col-span-3">
         <DashboardWelcomeNote />
+      </div>
+      <div className="lg:col-span-3">
+        <StancePanel />
       </div>
       <StatsBoard summary={dailySummary} stats={portfolioStats} />
       <PortfolioGrowthPanel initialData={growth} />

@@ -139,7 +139,7 @@ async def _run_analyst(agent: AgentConfig, context: str, allow_failover: bool) -
     msg = await (PROMPT | model).ainvoke({"system": agent.system_prompt or "", "context": context, "format": FORMAT_INSTRUCTIONS})
     text = msg.content if isinstance(msg.content, str) else str(msg.content)
     meta = msg.response_metadata or {}
-    row: Dict[str, Any] = {"agent": agent.name, "type": "llm", "provider": meta.get("provider"), "model": meta.get("model"), "raw": text}
+    row: Dict[str, Any] = {"agent": agent.name, "type": "llm", "provider": meta.get("provider"), "model": meta.get("model"), "raw": text, "system_prompt": (agent.system_prompt or "")[:800]}
     if row["provider"] and row["provider"] != agent.provider:
         row["failed_over_from"] = agent.provider  # this answer came from a different provider
     try:
@@ -174,9 +174,9 @@ async def _run_agent(task: Dict[str, Any]) -> Dict[str, Any]:
         else:
             row = await asyncio.wait_for(_run_analyst(agent, task["context"], task["allow_failover"]), timeout=budget)
     except asyncio.TimeoutError:
-        row = {"agent": agent.name, "error": f"timed out after {min(task['agent_timeout_s'], max(0.0, remaining())):.0f}s", "degraded": True}
+        row = {"agent": agent.name, "type": agent.type, "error": f"timed out after {min(task['agent_timeout_s'], max(0.0, remaining())):.0f}s", "degraded": True}
     except Exception as exc:  # noqa: BLE001 -- one failing member must not stop the committee
-        row = {"agent": agent.name, "error": str(exc) or type(exc).__name__, "degraded": True}
+        row = {"agent": agent.name, "type": agent.type, "error": str(exc) or type(exc).__name__, "degraded": True}
     row["_idx"] = task["idx"]
     row["latency_s"] = round(time.monotonic() - started, 1)
     return {"agents": [row]}

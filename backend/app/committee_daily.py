@@ -186,7 +186,7 @@ def _agent_rows(result: Dict[str, Any]) -> List[Dict[str, Any]]:
     rows = []
     for a in result.get("agents", []):
         if a.get("degraded"):
-            rows.append({"agent": a.get("agent"), "ok": False, "error": _squash(str(a.get("error", "")), 120)})
+            rows.append({"agent": a.get("agent"), "type": a.get("type"), "ok": False, "error": _squash(str(a.get("error", "")), 120)})
         elif "signal" in a:
             s = a["signal"]
             rows.append({"agent": a["agent"], "type": "deterministic", "ok": True, "lean": s["signal"], "summary": f"engine {s['signal']} ({s.get('confidence', 0):.0f}%)"})
@@ -203,6 +203,8 @@ def _agent_rows(result: Dict[str, Any]) -> List[Dict[str, Any]]:
                 row["failed_over_from"] = a["failed_over_from"]
             if a.get("raw"):
                 row["raw"] = a["raw"][:1500]
+            if a.get("system_prompt"):
+                row["system_prompt"] = a["system_prompt"]
             if a.get("latency_s") is not None:
                 row["latency_s"] = a["latency_s"]
             rows.append(row)
@@ -231,13 +233,14 @@ def ceo_brief(decision: Optional[str], action: Optional[str], gate: Optional[str
 
     trio, panel = group_lean("deterministic"), group_lean("llm")
     dissent = [t["agent"] for t in tally if t["lean"] != decision]
-    headline = f"{action or decision} - {label} ({share:.0%} of the vote weight)"
+    if action and action != decision:  # the risk check overrode the vote: say so, and attribute the percentage to the VOTE
+        headline = f"vote {decision} - {label} ({share:.0%} of the weight), held to {action} by the risk check"
+    else:
+        headline = f"{decision} - {label} ({share:.0%} of the vote weight)"
     if trio and panel:
         headline += "; engine trio and analyst panel " + ("agree" if trio == panel else f"DISAGREE (trio {trio}, panel {panel})")
     if dissent:
         headline += f"; {len(dissent)} dissent"
-    if gate:
-        headline += f"; risk check: {gate}"
     return {"call": action or decision, "vote": decision, "consensus": round(share, 3), "label": label, "margin": round(margin, 2), "engine_trio": trio, "analyst_panel": panel,
             "trio_panel_agree": (trio == panel) if trio and panel else None, "dissenters": dissent, "gate": gate, "headline": headline}
 
@@ -407,6 +410,60 @@ async def run_daily(
         "low_quorum": [s["symbol"] for s in saved if not s["quorum_ok"]],
         "report_written": reported,
     }
+
+
+# --------------------------------------------------------- ask (sandbox) --
+
+ASK_MAX_QUESTION = 500
+ASK_STALE_S = 600  # an ask still "running" after this long is presumed dead
+
+
+def new_ask_doc(symbol: str, question: str) -> Dict[str, Any]:
+    return {"id": f"{db.COMMITTEE_ASK_PREFIX}{uuid.uuid4().hex[:12]}", "status": "running", "symbol": symbol, "question": question, "created_at": datetime.now(timezone.utc).isoformat()}
+
+
+def ask_in_flight() -> bool:
+    """One sandbox ask at a time: each is ~7 model calls against a free-tier quota."""
+    now = datetime.now(timezone.utc)
+    for a in db.list_committee_asks(5):
+        if a.get("status") == "running" and (now - datetime.fromisoformat(a["created_at"])).total_seconds() < ASK_STALE_S:
+            return True
+    return False
+
+
+async def run_ask(
+    doc: Dict[str, Any], *, book: Optional[paper.PriceBook] = None, live_rows: Optional[Dict[str, Dict[str, Any]]] = None, runner: Optional[Runner] = None
+) -> Dict[str, Any]:
+    """Put a question about one symbol to the full committee, right now, and store the whole
+    exchange (prompt, every agent's raw answer, the vote) for the admin's inspector. This is a
+    sandbox: the result is never a committee decision, never feeds the paper account, the
+    scorecards or the report -- it lives under a separate id prefix the decision queries skip."""
+    sym = doc["symbol"]
+    try:
+        book = book or await asyncio.to_thread(paper_cycle.load_book)
+        d = book.latest_date
+        if not d or sym not in book.close or d not in book.close[sym]:
+            raise CommitteeError(f"no current price data for {sym}")
+        orch_row = next((o for o in db.list_orchestrations() if o.get("name") == ORCHESTRATION_NAME), None)
+        if orch_row is None:
+            raise CommitteeError(f"orchestration {ORCHESTRATION_NAME!r} is not seeded")
+        live = live_rows if live_rows is not None else {r["symbol"]: r for r in (await asyncio.to_thread(ds.get_live_signals))["signals"]}
+        sig, conf = book.signal_at(sym, d)
+        risk_now = risk_mod.risk_at(book, sym, d)
+        ctx = build_context(sym, d, book, live.get(sym), risk=risk_now, ask=False)
+        question = " ".join((doc.get("question") or "").split())[:ASK_MAX_QUESTION]
+        if question:
+            ctx += f"\n\nA specific question from the committee chair -- answer it in your rationale: {question}"
+        t0 = time.monotonic()
+        result = await (runner or committee_graph.run_committee_graph)(OrchestrationConfig(**orch_row), ctx, job_id=None, allow_failover=True, risk=risk_now)
+        pick = {"symbol": sym, "why": "asked by the admin", "engine_signal": sig, "engine_confidence": conf}
+        out = _run_doc(d, pick, book, result, None, time.monotonic() - t0, _env_int("COMMITTEE_QUORUM", QUORUM_DEFAULT), ctx)
+        out.update({"id": doc["id"], "status": "done", "question": question, "created_at": doc["created_at"], "prompt": ctx + "\n\n" + committee_graph.FORMAT_INSTRUCTIONS})
+    except Exception as exc:  # noqa: BLE001 -- the caller polls this document, so record the failure instead of raising
+        log.error("committee ask for %s failed: %s", sym, exc)
+        out = {**doc, "status": "error", "error": f"{type(exc).__name__}: {_squash(str(exc), 200)}"}
+    db.save_committee_ask(out)
+    return out
 
 
 # ---------------------------------------------------------------- scorecard --
