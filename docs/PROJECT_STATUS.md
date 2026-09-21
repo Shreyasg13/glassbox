@@ -793,3 +793,21 @@ and keeps ~12 points more than the plain engine after tax; the plain engine LOSE
 most in a sheltered account. All in-sample: the engine's edge over the placebo (+9 pts pre-tax) and the tax-aware engine's
 margin over SPY (+6 pts) may not survive out-of-sample; live paper days (from 2026-09-19) are the real test. Equal-weight is
 not a fair market proxy: the 15 symbols were chosen with hindsight.
+
+## Trend filter and volatility-targeted sizing (2026-09-21)
+
+Two more reference strategies, specified in advance from their standard textbook forms and NOT tuned to the backtest
+(constants in `app/paper.py`: `TREND_WINDOW=200`, `VOL_TARGET=15%`, `VOL_WINDOW=60`, `VOL_STEP=10%`). Neither uses the
+engine's BUY/SELL signals. Each exists in a taxable account and a sheltered twin (same trades, different tax):
+`ctl_trend` / `ctl_trend_ira`, `ctl_voltarget` / `ctl_voltarget_ira` (35 accounts in total).
+
+- **`trend_filter`**: a symbol is held at its strategic weight only while its close at the END OF THE PREVIOUS MONTH was
+  above its 200-day average, otherwise that slice is cash. The state is constant within a month and flips only on a
+  month's first bar, so it uses only past data and trades rarely. With under 200 bars of history it stays invested.
+- **`vol_target`**: the strategic basket is fully invested while its trailing 60-day volatility is at or below 15%, and
+  scaled by 15%/volatility above that, in 10% steps (so it trades only on a real regime change). Never above 100%.
+- Tested for: no lookahead (identical past + garbage future gives identical targets), month-constant trend state, no
+  leverage, hand-checked basket volatility, sheltered twins trading identically, and verified rebuild.
+- UI: wash-sale column relabelled "Wash-sale deferrals" (a cumulative count of losses deferred into cost basis; the same
+  loss can be deferred repeatedly, so it can exceed the account size); chart palette widened to 10 hues; in the sheltered
+  view active strategies list before the passive yardsticks.

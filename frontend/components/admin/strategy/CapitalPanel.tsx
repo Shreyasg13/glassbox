@@ -6,14 +6,16 @@ import { MultiCurveChart } from "@/components/charts/MultiCurveChart";
 import { Section, Th, WrapperToggle, inWrapper, money, pct, plainPct, tone, type Wrapper } from "./shared";
 
 const days = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n >= 365 ? `${(n / 365).toFixed(1)} yr` : `${Math.round(n)} d`);
-const shortName = (n: string) => n.replace(" on all symbols", "").replace(" buy & hold", "").replace("Engine in a tax-sheltered account", "Engine (sheltered)").replace("Placebo in a tax-sheltered account", "Placebo (sheltered)");
+const shortName = (n: string) => n.replace(" on all symbols", "").replace(" buy & hold", "").replace("Engine in a tax-sheltered account", "Engine (sheltered)").replace("Placebo in a tax-sheltered account", "Placebo (sheltered)").replace("Trend filter in a tax-sheltered account", "Trend (sheltered)").replace("Volatility-targeted in a tax-sheltered account", "Vol-target (sheltered)");
 
 /** Capital results of the reference strategies, kept apart by account type. Taxable: judged AFTER an
  * estimated tax, wash-sale rule included. Tax-sheltered (IRA / 401k / Roth-style): trading is untaxed, so
  * the pre-tax result is the result. The same strategy can rank differently in each. */
 export function CapitalPanel({ rows, curves, tax }: { rows: CapitalRow[]; curves: StrategyCurves; tax: { short_term: number; long_term: number } }) {
   const [wrapper, setWrapper] = useState<Wrapper>("taxable");
-  const view = rows.filter((r) => inWrapper(r, wrapper));
+  const passive = (r: CapitalRow) => r.strategy === "static_hold" || r.strategy === "cash";
+  // in the sheltered view the active strategies come first and the passive yardsticks after them
+  const view = rows.filter((r) => inWrapper(r, wrapper)).sort((a, b) => (wrapper === "sheltered" ? Number(passive(a)) - Number(passive(b)) : 0));
   const series = view.filter((r) => curves[r.id]).map((r) => ({ id: r.id, label: shortName(r.name), curve: curves[r.id] }));
   const taxable = wrapper === "taxable";
   const by = (id: string) => rows.find((r) => r.id === id);
@@ -60,7 +62,7 @@ export function CapitalPanel({ rows, curves, tax }: { rows: CapitalRow[]; curves
                     <Th right>If sold today</Th>
                     <Th right>Tax drag</Th>
                     <Th right>Held back</Th>
-                    <Th right>Wash-sale loss</Th>
+                    <Th right>Wash-sale deferrals</Th>
                   </>
                 ) : (
                   <Th right>Costs</Th>
@@ -85,7 +87,7 @@ export function CapitalPanel({ rows, curves, tax }: { rows: CapitalRow[]; curves
                       <td className={`mono px-sp3 py-sp2 text-right font-semibold ${tone(r.after_tax_liquidated_return)}`} title="After tax if every open position were sold today: also taxes the unrealised gains">{r.tax_tracked ? pct(r.after_tax_liquidated_return) : "—"}</td>
                       <td className="mono px-sp3 py-sp2 text-right text-red">{r.tax_tracked && r.tax_drag !== null ? pct(-r.tax_drag) : "—"}</td>
                       <td className="mono px-sp3 py-sp2 text-right text-t3" title="Sells the tax-aware engine deferred to avoid realising a short-term gain">{r.deferred_sells ? `${r.deferred_sells}` : "—"}</td>
-                      <td className="mono px-sp3 py-sp2 text-right text-t3" title="Losses disallowed because the stock was rebought within 30 days">{r.wash_disallowed ? money(r.wash_disallowed) : "—"}</td>
+                      <td className="mono px-sp3 py-sp2 text-right text-t3" title="Cumulative losses deferred by the 30-day wash-sale rule (moved into the cost basis of the shares rebought). The same loss can be deferred repeatedly, so this can exceed the account size; it is churn, not a balance.">{r.wash_disallowed ? money(r.wash_disallowed) : "—"}</td>
                     </>
                   ) : (
                     <td className="mono px-sp3 py-sp2 text-right text-t3">{money(r.cost_paid)}</td>

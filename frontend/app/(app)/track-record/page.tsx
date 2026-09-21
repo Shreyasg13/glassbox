@@ -11,6 +11,10 @@ import { Section, Th, WrapperToggle, inWrapper, pct, plainPct, tone, type Wrappe
 const FRIENDLY: Record<string, { name: string; what: string }> = {
   ctl_engine: { name: "Signal engine", what: "Trades the engine's BUY / SELL / HOLD signals across the whole universe." },
   ctl_taxaware: { name: "Tax-aware engine", what: "Built for a taxable account: sells losses and long-term gains first, holds short-term gains unless risk turns high, acts only on signals that last, trades less." },
+  ctl_trend: { name: "Trend filter (200-day)", what: "Holds each stock only while its price at last month-end was above its 200-day average; otherwise cash. Checked monthly, so it rarely trades." },
+  ctl_trend_ira: { name: "Trend filter in an IRA / 401k", what: "The same trades as the trend filter, inside a tax-sheltered account." },
+  ctl_voltarget: { name: "Volatility-targeted", what: "Same stocks, but the whole position shrinks when markets turn turbulent and is restored when calm, aiming for steady risk. Never borrows." },
+  ctl_voltarget_ira: { name: "Volatility-targeted in an IRA / 401k", what: "The same trades as the volatility-targeted strategy, inside a tax-sheltered account." },
   ctl_engine_ira: { name: "Engine in an IRA / 401k", what: "The same trades as the signal engine, inside a tax-sheltered account: no tax on trading." },
   ctl_placebo_ira: { name: "Placebo in an IRA / 401k", what: "The scrambled-signal placebo inside a sheltered account: the bar the sheltered engine has to clear." },
   ctl_committee: { name: "Engine + committee", what: "Same, but where the AI committee reviewed a stock it follows the committee's risk-checked call. Only differs on live days." },

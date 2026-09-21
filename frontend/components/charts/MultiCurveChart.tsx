@@ -6,7 +6,8 @@ import type { CurvePoint } from "@/lib/types";
 const W = 720;
 const H = 260;
 const PAD = { l: 8, r: 8, t: 12, b: 20 };
-const COLORS = ["var(--c-teal)", "var(--c-blue)", "var(--c-gold)", "var(--c-red)", "var(--c-t2)", "var(--c-t3)"];
+// ten distinguishable hues: the strategy set is larger than the theme palette, and two lines sharing a colour cannot be told apart
+const COLORS = ["var(--c-teal)", "var(--c-blue)", "var(--c-gold)", "var(--c-red)", "var(--c-purple)", "var(--c-cyan)", "var(--c-green)", "#e879a8", "var(--c-t2)", "var(--c-t3)"];
 
 export type Series = { id: string; label: string; curve: CurvePoint[] };
 

@@ -101,6 +101,12 @@ def _control_accounts(book: paper.PriceBook) -> List[Dict[str, Any]]:
          "The same trades as 'Engine on all symbols', but inside an IRA / 401k / Roth-style account: no tax on realised gains, no wash-sale rule, costs only.", "sheltered"),
         ("ctl_placebo_ira", "Placebo in a tax-sheltered account", "random_tilt", equal, moderate, "moderate",
          "The placebo (same shifted signals as the taxable placebo) inside a sheltered account: the bar the sheltered engine has to clear.", "sheltered", "ctl_placebo"),
+        ("ctl_trend", "Trend filter (200-day)", "trend_filter", equal, 1.0, None,
+         "No engine signals. Holds each stock only while its close at the end of last month was above its 200-day average, otherwise cash. Checked monthly, so it trades rarely."),
+        ("ctl_trend_ira", "Trend filter in a tax-sheltered account", "trend_filter", equal, 1.0, None, "The same trades as the taxable trend filter, inside an IRA / 401k / Roth-style account.", "sheltered"),
+        ("ctl_voltarget", "Volatility-targeted", "vol_target", equal, 1.0, None,
+         "No engine signals. Holds the same stocks but shrinks the whole position when the basket's 60-day volatility exceeds a 15% target and restores it when calm. Never uses leverage."),
+        ("ctl_voltarget_ira", "Volatility-targeted in a tax-sheltered account", "vol_target", equal, 1.0, None, "The same trades as the taxable volatility-targeted account, inside an IRA / 401k / Roth-style account.", "sheltered"),
         ("ctl_cash", "Cash", "cash", {}, 0.0, None, "Sits in cash. The floor any strategy must beat."),
     ]
     out = []

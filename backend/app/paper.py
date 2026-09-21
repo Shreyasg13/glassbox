@@ -62,6 +62,14 @@ RULES (deliberately simple, all stated so results can be audited):
     - Wider rebalance bands (TA_DRIFT_THRESHOLD / TA_REBALANCE_DAYS / TA_MIN_TRADE_FRACTION).
     - A BUY into a HIGH-risk regime is held at HOLD.
   The pre-tax return can be lower than the plain engine's; what matters is the return AFTER tax.
+* trend_filter (Faber-style, no engine signals): a symbol is held at its strategic weight only while its
+  close at the END OF THE PREVIOUS MONTH was above its 200-day average; otherwise that slice sits in cash.
+  The state changes at most once a month and uses only past data, so it neither peeks nor churns.
+* vol_target (risk-managed sizing, no engine signals): the strategic basket is held in full when its trailing
+  VOL_WINDOW-day volatility is at or below VOL_TARGET, and scaled by VOL_TARGET / volatility above that,
+  rounded to VOL_STEP (10%) steps so it only trades on a real change in regime. Never above 100%: no leverage.
+  Both were specified in advance from their standard textbook forms (200 days, 15% / 60 days) and are NOT
+  tuned to this history; they are judged like every other strategy, by their result after tax.
 """
 from __future__ import annotations
 
@@ -91,7 +99,12 @@ RISK_POLICY = {
     "aggressive": {"invested": 0.95, "max_position": 0.60},
 }
 
-STRATEGIES = ("engine_tilt", "static_hold", "static_rebalanced", "random_tilt", "cash", "committee_tilt", "engine_taxaware")
+STRATEGIES = ("engine_tilt", "static_hold", "static_rebalanced", "random_tilt", "cash", "committee_tilt", "engine_taxaware", "trend_filter", "vol_target")
+
+TREND_WINDOW = 200  # trading days in the trend average
+VOL_TARGET = 0.15  # annualised volatility the sized basket aims for
+VOL_WINDOW = 60  # trading days used to measure it
+VOL_STEP = 0.10  # exposure moves in steps of this size
 TAX_STATUSES = ("taxable", "sheltered")
 
 # engine_taxaware knobs (see the module docstring)
@@ -463,6 +476,58 @@ def _persistent_signal(book: PriceBook, sym: str, d: str, n: int = TA_DEBOUNCE_D
     return "HOLD", 50.0
 
 
+def _trend_state(book: PriceBook, sym: str, d: str) -> Tuple[bool, str]:
+    """(invested?, why) for the trend filter on day d: was the LAST bar of the previous month above its
+    200-day average? Cached per (symbol, month) on the book -- the answer is fixed for the whole month."""
+    dates = book._sorted_dates.get(sym) or []
+    i = bisect.bisect_right(dates, d) - 1
+    if i < 0:
+        return True, "no data"
+    month = dates[i][:7]
+    j = i
+    while j > 0 and dates[j - 1][:7] == month:
+        j -= 1
+    k = j - 1  # last bar of the previous month
+    if k < TREND_WINDOW - 1:
+        return True, "not enough history for a 200-day average: stay invested"
+    cache = book.__dict__.setdefault("_trend_cache", {})
+    if (sym, k) not in cache:
+        closes = book.close[sym]
+        sma = sum(closes[dates[x]] for x in range(k - TREND_WINDOW + 1, k + 1)) / TREND_WINDOW
+        px = closes[dates[k]]
+        cache[(sym, k)] = (px > sma, px, sma)
+    on, px, sma = cache[(sym, k)]
+    return on, f"month-end {px:.2f} {'above' if on else 'below'} 200-day average {sma:.2f}"
+
+
+def _basket_vol(book: PriceBook, weights: Dict[str, float], d: str, window: int = VOL_WINDOW) -> Optional[float]:
+    """Annualised volatility of the strategic basket (fixed weights) over the last `window` trading days
+    up to and including d, or None when there is not yet enough history."""
+    key = (tuple(sorted(weights.items())), d, window)
+    cache = book.__dict__.setdefault("_basket_vol_cache", {})
+    if key in cache:
+        return cache[key]
+    end = bisect.bisect_right(book.dates, d)
+    days = book.dates[max(0, end - window - 1): end]
+    out: Optional[float] = None
+    if len(days) >= window // 2 + 1:
+        prev = {s: book.close_on(s, days[0]) for s in weights}
+        rets: List[float] = []
+        for day in days[1:]:
+            r = 0.0
+            for s, w in weights.items():
+                px, p0 = book.close_on(s, day), prev[s]
+                if px and p0:
+                    r += w * (px / p0 - 1)
+                    prev[s] = px
+            rets.append(r)
+        if len(rets) > 1:
+            m = sum(rets) / len(rets)
+            out = math.sqrt(sum((x - m) ** 2 for x in rets) / (len(rets) - 1)) * math.sqrt(TRADING_DAYS)
+    cache[key] = out
+    return out
+
+
 def _placebo_symbol(seed: str, sym: str, symbols: List[str]) -> str:
     """The symbol whose real signal history stands in for `sym`: a cyclic shift
     of the sorted universe by a seeded amount (never 0, so never itself)."""
@@ -482,6 +547,20 @@ def _target_weights(acct: Dict[str, Any], book: PriceBook, d: str) -> Tuple[Dict
     invested, base = acct["invested"], acct["weights"]
     if strategy == "static_hold":
         return {s: invested * w for s, w in base.items()}, {s: "strategic weight" for s in base}, {s: "HOLD" for s in base}
+
+    if strategy == "trend_filter":
+        t_raw, t_reasons, t_sigs = {}, {}, {}
+        for sym, w in base.items():
+            on, why = _trend_state(book, sym, d)
+            t_raw[sym] = invested * w if on else 0.0
+            t_reasons[sym], t_sigs[sym] = why, "BUY" if on else "SELL"  # BUY = invested, SELL = in cash (only feeds the change key)
+        return t_raw, t_reasons, t_sigs
+    if strategy == "vol_target":
+        vol = _basket_vol(book, base, d)
+        exposure = 1.0 if not vol else min(1.0, VOL_TARGET / vol)
+        exposure = round(exposure / VOL_STEP) * VOL_STEP
+        why = f"vol-target exposure {exposure:.0%}" + (f" (basket volatility {vol:.0%} vs {VOL_TARGET:.0%} target)" if vol else " (not enough history: fully invested)")
+        return {s: invested * w * exposure for s, w in base.items()}, {s: why for s in base}, {s: f"x{exposure:.1f}" for s in base}
 
     raw: Dict[str, float] = {}
     reasons: Dict[str, str] = {}
