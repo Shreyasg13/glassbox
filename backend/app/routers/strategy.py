@@ -46,6 +46,11 @@ async def research_view() -> Dict[str, Any]:
     return await run_in_threadpool(lambda: research.view(_book_or_503()))
 
 
+@admin_router.get("/data-sources")
+async def data_sources() -> Dict[str, Any]:
+    return await run_in_threadpool(lambda: strategy.data_sources(_book_or_503()))
+
+
 @me_router.get("/track-record")
 async def track_record(user: TokenPayload = Depends(get_current_user)) -> Dict[str, Any]:
     return await run_in_threadpool(strategy.track_record)

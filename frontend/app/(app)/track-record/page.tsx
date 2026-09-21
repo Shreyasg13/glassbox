@@ -124,6 +124,20 @@ export default function TrackRecordPage() {
         </div>
       </Section>
 
+      <Section title="What this analyses" note="Everything below uses public information anyone can check.">
+        <ul className="grid gap-sp3 text-[12px] leading-snug text-t2 md:grid-cols-3">
+          <li className="rounded-r2 border border-border bg-bg2/40 p-sp3">
+            <b className="text-t1">Prices and trends.</b> Daily closes for 15 stocks and funds, turned into signals, a risk rating and how the stocks move together.
+          </li>
+          <li className="rounded-r2 border border-border bg-bg2/40 p-sp3">
+            <b className="text-t1">Company filings.</b> Fundamentals and material events straight from the SEC&rsquo;s public filings, as of the date they were filed, never later.
+          </li>
+          <li className="rounded-r2 border border-border bg-bg2/40 p-sp3">
+            <b className="text-t1">The economy.</b> US Treasury yields, unemployment and inflation from government sources. All of it is simulated research, not advice.
+          </li>
+        </ul>
+      </Section>
+
       <Section title="How to read this">
         <ul className="grid gap-sp3 text-[12px] leading-snug text-t2 md:grid-cols-3">
           <li className="rounded-r2 border border-border bg-bg2/40 p-sp3">

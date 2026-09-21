@@ -70,6 +70,33 @@ def committee_views() -> Dict[str, Dict[str, str]]:
     return out
 
 
+def challenger_views() -> Dict[str, Dict[str, Dict[str, str]]]:
+    """source -> symbol -> decision date -> action, for every outside challenger with recorded calls."""
+    try:
+        rows = db.list_challenger_decisions()
+    except Exception as exc:  # noqa: BLE001 -- the arena must never stop the paper cycle
+        log.warning("challenger decisions unavailable (%s)", type(exc).__name__)
+        return {}
+    out: Dict[str, Dict[str, Dict[str, str]]] = {}
+    for r in rows:
+        if r.get("action") in ("BUY", "SELL", "HOLD") and r.get("source") and r.get("date") and r.get("symbol"):
+            out.setdefault(r["source"], {}).setdefault(r["symbol"], {})[r["date"]] = r["action"]
+    return out
+
+
+def _challenger_accounts(book: paper.PriceBook) -> List[Dict[str, Any]]:
+    equal = {s: 1.0 for s in book.symbols}
+    moderate = paper.RISK_POLICY["moderate"]["invested"]
+    return [
+        paper.new_account(
+            f"chal_{src}", f"Challenger: {src}", "control", "external_tilt", equal, invested=moderate, start_cash=DEFAULT_CASH, risk_level="moderate", source=src,
+            note=f"Trades exactly on {src}'s recorded daily BUY/SELL/HOLD calls, on the same stocks and rules as 'Engine on all symbols'. A stock it made no fresh call on is neutral, not backed by our engine.",
+        )
+        for src in sorted(book.external)
+        if equal
+    ]
+
+
 def load_book() -> paper.PriceBook:
     params = ds._load_trained_params()
     frames = {}
@@ -79,6 +106,8 @@ def load_book() -> paper.PriceBook:
             frames[sym] = df
     book = paper.PriceBook.from_frames(frames, params)
     book.set_committee(committee_views())
+    for src, decisions in challenger_views().items():
+        book.set_external(src, decisions)
     return book
 
 
@@ -166,7 +195,7 @@ def _profile_accounts(users: Iterable[Dict[str, Any]], book: paper.PriceBook) ->
 def ensure_accounts(existing: Dict[str, Dict[str, Any]], users: Iterable[Dict[str, Any]], book: paper.PriceBook) -> Dict[str, Dict[str, Any]]:
     """Existing accounts are kept exactly as stored; only missing ones are created."""
     accounts = dict(existing)
-    for acct in _control_accounts(book) + _profile_accounts(users, book):
+    for acct in _control_accounts(book) + _challenger_accounts(book) + _profile_accounts(users, book):
         accounts.setdefault(acct["id"], acct)
     return accounts
 
@@ -304,7 +333,7 @@ def rebuild_accounts(*, apply: bool = False, book: Optional[paper.PriceBook] = N
         fresh = paper.new_account(
             old["id"], old["name"], old["kind"], old["strategy"], old["weights"], invested=old["invested"], start_cash=old["start_cash"],
             risk_level=old.get("risk_level"), username=old.get("username"), benchmark_id=old.get("benchmark_id"), profile=old.get("profile"), note=old.get("note", ""),
-            tax_status=old.get("tax_status", "taxable"), seed=old.get("seed"),
+            tax_status=old.get("tax_status", "taxable"), seed=old.get("seed"), source=old.get("source"),
         )
         paper.advance(fresh, book, live_from=meta["live_from"], start=meta["start"], upto=old["last_date"])
         _refresh_holdings(fresh, book)

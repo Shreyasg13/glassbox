@@ -427,12 +427,13 @@ export type StanceRow = {
   engine: { signal: Lean; confidence: number };
   committee: { action: Lean | null; consensus: string | null; date: string; headline: string | null } | null;
   risk: { level: RiskLevel; score: number } | null;
+  fundamentals?: { revenue_growth?: number | null; net_margin?: number | null; pe?: number | null; roe?: number | null } | null;
   attention: boolean;
   watch: boolean;
   reasons: string[];
   summary: string;
 };
-export type StanceResponse = { as_of: string | null; rows: StanceRow[]; attention: number; watch: number; quiet: number };
+export type StanceResponse = { as_of: string | null; rows: StanceRow[]; attention: number; watch: number; quiet: number; macro_line?: string | null };
 
 export type TrackStrategy = Omit<CapitalRow, "realized_st" | "realized_lt" | "unrealized_st" | "unrealized_lt">;
 export type TrackRecord = {
@@ -444,7 +445,7 @@ export type TrackRecord = {
 };
 
 export type GateResult = { n_days: number; needed_days: number; mean_excess_bps: number | null; ci_low_bps: number | null; ci_high_bps: number | null; verdict: "insufficient" | "edge" | "no edge yet" | "worse" };
-export type EvidenceRow = { id: string; name: string; live_days: number; live_return: number | null; vs: Record<string, GateResult> };
+export type EvidenceRow = { id: string; name: string; challenger?: boolean; live_days: number; live_return: number | null; vs: Record<string, GateResult> };
 export type ResearchView = {
   as_of: string | null;
   associations: {
@@ -462,4 +463,27 @@ export type ResearchView = {
   baselines: Record<string, string>;
   proposals: string[];
   latest_digest: { title: string; date: string; narrative: string } | null;
+};
+
+export type FreeFundamentals = {
+  fiscal_year_end: string;
+  filed: string;
+  age_days: number;
+  revenue_growth?: number;
+  net_margin?: number;
+  operating_margin?: number;
+  roe?: number;
+  fcf_margin?: number;
+  debt_to_equity?: number;
+  liabilities_to_equity?: number;
+  eps?: number;
+  pe?: number;
+};
+export type FreeEvent = { filed: string; form: string; items: string[]; text: string; flag: boolean };
+export type DataSources = {
+  as_of: string | null;
+  sec_configured: boolean;
+  macro_line: string | null;
+  status: Record<string, { ok: boolean; detail: string; count: number; at: string }>;
+  rows: { symbol: string; fundamentals: FreeFundamentals | null; events: FreeEvent[] }[];
 };

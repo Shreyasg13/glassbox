@@ -86,9 +86,12 @@ def gate(candidate: Dict[str, Any], baseline: Dict[str, Any], n_comparisons: int
 
 def evidence_table(accounts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     by = {a["id"]: a for a in accounts}
-    n_tests = len(CANDIDATES) * len(BASELINES)  # every candidate vs every yardstick: correct for all of them
+    # our own strategies plus every outside challenger in the arena: all judged by the same gate on the same days
+    candidates = dict(CANDIDATES)
+    candidates.update({a["id"]: a["name"] for a in accounts if a.get("strategy") == "external_tilt"})
+    n_tests = len(candidates) * len(BASELINES)  # every candidate vs every yardstick: correct for all of them
     rows = []
-    for cid, name in CANDIDATES.items():
+    for cid, name in candidates.items():
         c = by.get(cid)
         if c is None:
             continue
@@ -97,6 +100,7 @@ def evidence_table(accounts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             {
                 "id": cid,
                 "name": name,
+                "challenger": c.get("strategy") == "external_tilt",
                 "live_days": live["live_days"],
                 "live_return": live["live_return"],
                 "vs": {bid: gate(c, by[bid], n_tests) for bid in BASELINES if bid in by and bid != cid},

@@ -17,7 +17,7 @@ import threading
 from bisect import bisect_left
 from typing import Any, Dict, List, Optional
 
-from . import committee_daily, data_source as ds, db, paper, paper_cycle, risk
+from . import committee_daily, data_source as ds, db, free_data, paper, paper_cycle, risk
 
 MIN_RANKED = 30  # scored directional calls before an agent may be ranked
 CONTROL_ORDER = ["ctl_engine", "ctl_taxaware", "ctl_trend", "ctl_voltarget", "ctl_committee", "ctl_placebo", "ctl_spy", "ctl_equal", "ctl_cash", "ctl_engine_ira", "ctl_trend_ira", "ctl_voltarget_ira", "ctl_placebo_ira"]
@@ -205,7 +205,7 @@ def accuracy(book: paper.PriceBook) -> Dict[str, Any]:
 def track_record() -> Dict[str, Any]:
     """The system's own simulated track record: only the fixed reference strategies, never
     another user's account. Live (out-of-sample) and backtest (in-sample) are kept apart."""
-    accounts = db.list_paper_accounts()
+    accounts = [a for a in db.list_paper_accounts() if a["id"] in CONTROL_ORDER]  # reference strategies only: never a challenger or a user's account
     meta = db.get_paper_meta() or {}
     rows = _control_rows(accounts)
     keep = ("id", "name", "strategy", "equity", "total_return", "live_return", "max_drawdown", "sharpe", "turnover", "cost_paid", "est_tax", "after_tax_return", "tax_drag", "avg_holding_days", "live_days", "days", "tax_tracked", "tax_status", "wash_disallowed", "deferred_sells", "liquidation_tax", "after_tax_liquidated_return")
@@ -216,6 +216,14 @@ def track_record() -> Dict[str, Any]:
         "curves": _curves(accounts),
         "tax_assumptions": {"short_term": paper.TAX_ST, "long_term": paper.TAX_LT},
     }
+
+
+def data_sources(book: paper.PriceBook) -> Dict[str, Any]:
+    """What free public data is live, per source and per symbol (admin)."""
+    d = book.latest_date
+    if not d:
+        return {"as_of": None, "rows": [], "macro": None, "macro_line": None, "status": free_data.read_status(), "sec_configured": free_data.sec_user_agent() is not None}
+    return free_data.snapshot(book.symbols, d, {s: book.close_on(s, d) for s in book.symbols})
 
 
 def _latest_view(runs: List[Dict[str, Any]], book: paper.PriceBook, d: str) -> Dict[str, Dict[str, Any]]:
@@ -240,6 +248,7 @@ def stance(book: paper.PriceBook, tickers: Optional[List[str]] = None) -> Dict[s
         return {"as_of": None, "rows": [], "attention": 0, "watch": 0, "quiet": 0}
     runs = db.list_all_committee_runs()
     views = _latest_view(runs, book, d)
+    macro_line = free_data.macro_line(free_data.macro_as_of(d))
     rows = []
     for sym in [t for t in (tickers or book.symbols) if t in book.close]:
         sig, conf = book.signal_at(sym, d)
@@ -253,6 +262,9 @@ def stance(book: paper.PriceBook, tickers: Optional[List[str]] = None) -> Dict[s
             reasons.append(f"committee says {action}")
         if action and action != sig:
             reasons.append("engine and committee disagree")
+        flagged = [e for e in free_data.events_as_of(sym, d, 14) if e["flag"]]  # e.g. a CEO change or an impairment, filed in the last 2 weeks
+        if flagged:
+            reasons.append(f"SEC filing worth a look ({flagged[0]['filed']}): {flagged[0]['text']}")
         elevated = bool(rk and rk["level"] == "HIGH")
         attention = bool(reasons)
         if attention and elevated:
@@ -265,6 +277,7 @@ def stance(book: paper.PriceBook, tickers: Optional[List[str]] = None) -> Dict[s
                 "engine": {"signal": sig, "confidence": conf},
                 "committee": {"action": action, "consensus": (view.get("ceo") or {}).get("label"), "date": view["date"], "headline": (view.get("ceo") or {}).get("headline")} if view else None,
                 "risk": {"level": rk["level"], "score": rk["score"]} if rk else None,
+                "fundamentals": {k: fnd.get(k) for k in ("revenue_growth", "net_margin", "pe", "roe")} if (fnd := free_data.fundamentals_as_of(sym, d, book.close_on(sym, d))) else None,
                 "attention": attention,
                 "watch": elevated and not attention,
                 "reasons": reasons,
@@ -273,4 +286,4 @@ def stance(book: paper.PriceBook, tickers: Optional[List[str]] = None) -> Dict[s
         )
     rows.sort(key=lambda r: (not r["attention"], not r["watch"], -((r["risk"] or {}).get("score") or 0.0), r["symbol"]))
     n_att, n_watch = sum(1 for r in rows if r["attention"]), sum(1 for r in rows if r["watch"])
-    return {"as_of": d, "rows": rows, "attention": n_att, "watch": n_watch, "quiet": len(rows) - n_att - n_watch}
+    return {"as_of": d, "rows": rows, "attention": n_att, "watch": n_watch, "quiet": len(rows) - n_att - n_watch, "macro_line": macro_line}

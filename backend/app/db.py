@@ -404,10 +404,27 @@ COMMITTEE_LOCK_ID = "__lock__"
 
 
 COMMITTEE_ASK_PREFIX = "ask:"  # admin sandbox questions live in this table too, but are not decisions
+CHALLENGER_PREFIX = "chal:"  # so do outside challengers' daily calls (the arena): never counted as OUR committee's decisions
 
 
 def _committee_rows() -> List[Dict[str, Any]]:
-    return [r for r in _list(committee_runs_table) if r.get("id") != COMMITTEE_LOCK_ID and not str(r.get("id", "")).startswith(COMMITTEE_ASK_PREFIX)]
+    return [
+        r for r in _list(committee_runs_table)
+        if r.get("id") != COMMITTEE_LOCK_ID and not str(r.get("id", "")).startswith((COMMITTEE_ASK_PREFIX, CHALLENGER_PREFIX))
+    ]
+
+
+def save_challenger_decision(source: str, d: str, symbol: str, action: str, meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """One row per (challenger, date, symbol); recording again for the same key replaces it."""
+    doc = {"id": f"{CHALLENGER_PREFIX}{source}:{d}:{symbol}", "source": source, "date": d, "symbol": symbol, "action": action, "meta": meta or {}, "created_at": datetime.now(timezone.utc).isoformat()}
+    if _update(committee_runs_table, doc["id"], doc) is None:
+        return _create(committee_runs_table, doc)
+    return doc
+
+
+def list_challenger_decisions(source: Optional[str] = None) -> List[Dict[str, Any]]:
+    rows = [r for r in _list(committee_runs_table) if str(r.get("id", "")).startswith(CHALLENGER_PREFIX)]
+    return [r for r in rows if source is None or r.get("source") == source]
 
 
 def save_committee_ask(doc: Dict[str, Any]) -> Dict[str, Any]:

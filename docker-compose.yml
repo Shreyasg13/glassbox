@@ -56,6 +56,8 @@ services:
       LLM_FAILOVER_USER_RUNS: ${LLM_FAILOVER_USER_RUNS:-1}
       LLM_ROUTE_BUDGET_S: ${LLM_ROUTE_BUDGET_S:-120}
       # Daily Investment Committee review (app/committee_daily.py). Empty = built-in default.
+      # Free public data. SEC filings need a declared contact: a string that includes an email (SEC fair-access policy)
+      SEC_USER_AGENT: ${SEC_USER_AGENT:-}
       COMMITTEE_MIN_SYMBOLS: ${COMMITTEE_MIN_SYMBOLS:-}
       COMMITTEE_MAX_SYMBOLS: ${COMMITTEE_MAX_SYMBOLS:-}
       COMMITTEE_DAILY_BUDGET_S: ${COMMITTEE_DAILY_BUDGET_S:-}

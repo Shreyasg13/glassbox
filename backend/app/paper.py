@@ -62,6 +62,10 @@ RULES (deliberately simple, all stated so results can be audited):
     - Wider rebalance bands (TA_DRIFT_THRESHOLD / TA_REBALANCE_DAYS / TA_MIN_TRADE_FRACTION).
     - A BUY into a HIGH-risk regime is held at HOLD.
   The pre-tax return can be lower than the plain engine's; what matters is the return AFTER tax.
+* external_tilt (the arena): trades the tilts (BUY 1.5x, HOLD 1.0x, SELL 0.5x) of an OUTSIDE challenger's recorded
+  daily calls, e.g. another multi-agent framework, on the same universe and rules as "engine on all symbols". A symbol
+  the challenger gave no fresh call on is NEUTRAL (HOLD), never quietly backed by our own engine, so the result is the
+  challenger's and nothing else.
 * trend_filter (Faber-style, no engine signals): a symbol is held at its strategic weight only while its
   close at the END OF THE PREVIOUS MONTH was above its 200-day average; otherwise that slice sits in cash.
   The state changes at most once a month and uses only past data, so it neither peeks nor churns.
@@ -100,7 +104,7 @@ RISK_POLICY = {
     "aggressive": {"invested": 0.95, "max_position": 0.60},
 }
 
-STRATEGIES = ("engine_tilt", "static_hold", "static_rebalanced", "random_tilt", "cash", "committee_tilt", "engine_taxaware", "trend_filter", "vol_target")
+STRATEGIES = ("engine_tilt", "static_hold", "static_rebalanced", "random_tilt", "cash", "committee_tilt", "engine_taxaware", "trend_filter", "vol_target", "external_tilt")
 
 TREND_WINDOW = 200  # trading days in the trend average
 VOL_TARGET = 0.15  # annualised volatility the sized basket aims for
@@ -135,21 +139,35 @@ class PriceBook:
         self.dates: List[str] = []
         self.committee: Dict[str, Dict[str, str]] = {}  # symbol -> decision date -> committee action
         self._committee_dates: Dict[str, List[str]] = {}
+        self.external: Dict[str, Dict[str, Dict[str, str]]] = {}  # challenger -> symbol -> decision date -> action
+        self._external_dates: Dict[str, Dict[str, List[str]]] = {}
 
     def set_committee(self, decisions: Dict[str, Dict[str, str]]) -> None:
         self.committee = {sym: dict(by_date) for sym, by_date in decisions.items() if by_date}
         self._committee_dates = {sym: sorted(by_date) for sym, by_date in self.committee.items()}
 
-    def committee_at(self, sym: str, d: str, max_age: int = COMMITTEE_MAX_AGE_DAYS) -> Optional[str]:
-        """The committee's action on `sym` as known after day d's close, if it is still fresh."""
-        dts = self._committee_dates.get(sym)
+    def _fresh_call(self, dts: Optional[List[str]], calls: Dict[str, str], d: str, max_age: int) -> Optional[str]:
         if not dts:
             return None
         i = bisect.bisect_right(dts, d)
         if not i:
             return None
         age = bisect.bisect_right(self.dates, d) - bisect.bisect_right(self.dates, dts[i - 1])
-        return self.committee[sym][dts[i - 1]] if age <= max_age else None
+        return calls[dts[i - 1]] if age <= max_age else None
+
+    def committee_at(self, sym: str, d: str, max_age: int = COMMITTEE_MAX_AGE_DAYS) -> Optional[str]:
+        """The committee's action on `sym` as known after day d's close, if it is still fresh."""
+        return self._fresh_call(self._committee_dates.get(sym), self.committee.get(sym, {}), d, max_age)
+
+    def set_external(self, source: str, decisions: Dict[str, Dict[str, str]]) -> None:
+        self.external[source] = {sym: dict(by_date) for sym, by_date in decisions.items() if by_date}
+        self._external_dates[source] = {sym: sorted(by_date) for sym, by_date in self.external[source].items()}
+
+    def external_at(self, source: Optional[str], sym: str, d: str, max_age: int = COMMITTEE_MAX_AGE_DAYS) -> Optional[str]:
+        """A challenger's call on `sym` as known after day d's close, if it is still fresh (same rule as the committee)."""
+        if not source:
+            return None
+        return self._fresh_call(self._external_dates.get(source, {}).get(sym), self.external.get(source, {}).get(sym, {}), d, max_age)
 
     @classmethod
     def from_frames(cls, frames: Dict[str, Any], params: Dict[str, Any]) -> "PriceBook":
@@ -261,6 +279,7 @@ def new_account(
     note: str = "",
     tax_status: str = "taxable",
     seed: Optional[str] = None,
+    source: Optional[str] = None,
 ) -> Dict[str, Any]:
     if strategy not in STRATEGIES:
         raise ValueError(f"unknown strategy {strategy!r}")
@@ -268,6 +287,7 @@ def new_account(
         raise ValueError(f"unknown tax_status {tax_status!r}")
     return {
         "tax_status": tax_status,
+        "source": source,  # external_tilt only: whose recorded calls this account trades
         "seed": seed,  # placebo only: which account's shift to reuse, so a sheltered twin draws the SAME placebo
         "id": account_id,
         "name": name,
@@ -588,6 +608,9 @@ def _target_weights(acct: Dict[str, Any], book: PriceBook, d: str) -> Tuple[Dict
             rk = _risk.risk_at(book, sym, d)
             if sig == "BUY" and rk and rk["level"] == "HIGH":  # never add into a HIGH-risk regime
                 sig = "HOLD"
+        elif strategy == "external_tilt":
+            view = book.external_at(acct.get("source"), sym, d)
+            sig, conf = (view, 50.0) if view else ("HOLD", 50.0)  # no fresh call from the challenger: neutral, never our engine
         elif strategy == "committee_tilt":
             view = book.committee_at(sym, d)
             sig, conf = (view, 50.0) if view else book.signal_at(sym, d)
@@ -595,7 +618,9 @@ def _target_weights(acct: Dict[str, Any], book: PriceBook, d: str) -> Tuple[Dict
             sig, conf = book.signal_at(sym, d)
         sigs[sym] = sig
         raw[sym] = invested * w * TILT[sig]
-        if strategy == "committee_tilt":
+        if strategy == "external_tilt":
+            reasons[sym] = f"{acct.get('source')} {sig}" if book.external_at(acct.get("source"), sym, d) else f"no fresh call from {acct.get('source')}: neutral"
+        elif strategy == "committee_tilt":
             reasons[sym] = f"committee {sig}" if book.committee_at(sym, d) else f"engine {sig} ({conf:.0f}%), no committee view"
         elif strategy == "engine_taxaware":
             reasons[sym] = f"{sig} (persisted {TA_DEBOUNCE_DAYS}d, {conf:.0f}%)"

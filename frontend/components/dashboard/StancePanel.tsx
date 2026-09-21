@@ -25,6 +25,13 @@ function Row({ r }: { r: StanceRow }) {
         </span>
       </div>
       <p className="mt-1 text-[12px] leading-snug text-t2">{r.summary}</p>
+      {r.fundamentals && (r.fundamentals.net_margin != null || r.fundamentals.revenue_growth != null) && (
+        <p className="mono mt-1 text-[10px] text-t3">
+          {r.fundamentals.revenue_growth != null && <>revenue {r.fundamentals.revenue_growth >= 0 ? "+" : ""}{(r.fundamentals.revenue_growth * 100).toFixed(0)}% YoY</>}
+          {r.fundamentals.net_margin != null && <> · net margin {(r.fundamentals.net_margin * 100).toFixed(0)}%</>}
+          {r.fundamentals.pe != null && <> · P/E {r.fundamentals.pe.toFixed(0)}</>}
+        </p>
+      )}
       {r.committee?.headline && <p className="mt-1 text-[10px] text-t3">Committee ({r.committee.date}): {r.committee.headline}</p>}
     </li>
   );
@@ -53,6 +60,7 @@ export function StancePanel() {
         <h2 className="text-[15px] font-bold text-t1">Today&rsquo;s stance</h2>
         <span className="mono text-[11px] text-t3">{s.as_of ? `as of ${s.as_of} close` : "no data yet"}</span>
       </div>
+      {s.macro_line && <p className="mt-1 text-[11px] leading-snug text-t3">{s.macro_line}</p>}
       <p className="mt-1 text-[12px] text-t2">
         {attention.length ? (
           <>

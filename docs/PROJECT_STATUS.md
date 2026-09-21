@@ -888,3 +888,19 @@ same-day link posed as a lag, so the null maximum hit 0.93 and the bar sat at ~0
 independent noise 0.21). The null now shuffles whole DAYS jointly across every stock (same-day structure kept, lags destroyed) on
 rank-transformed returns; regression tests cover both the jump case and the correlated-pair case, and plain noise is tested as a
 false-positive RATE, not a lucky seed.
+
+## Free public data + the arena (2026-09-21)
+
+**Free data, all commercially usable** (`app/free_data.py`, refreshed by `python -m app.scripts.refresh_free_data`, cron `5 22 * * 1-5`,
+i.e. after the price sync and BEFORE the committee): SEC EDGAR company fundamentals (XBRL, latest FULL fiscal year: revenue growth, margins,
+ROE, leverage, free-cash-flow margin, P/E) and the filing feed (8-K events in plain English, 10-K/10-Q dates); US Treasury yield curve and
+BLS unemployment / CPI. Read-only cache under `TRADING_STORAGE_PATH/free_data`; the committee and UI never touch the network. Everything is
+point-in-time (only what had been FILED by the date; a later restatement never leaks backward; BLS months only after a 45-day release lag).
+Committee prompts now carry fundamentals, recent filings and the macro backdrop; the user's stance raises a flagged filing (CEO change,
+impairment, restructuring, delisting notice, auditor change ...) as a reason to look, and shows the macro line and a fundamentals glance.
+SEC needs `SEC_USER_AGENT` = a project name plus a monitored email (the SEC's fair-access policy; at most 10 requests/second): without it
+the SEC part is OFF and says so, while Treasury/BLS still work. Funds have no company filings by design.
+
+**Arena** (`app/arena.py`, `docs/ARENA.md`): any outside decision-maker (TradingAgents, a human, a future variant) records daily BUY/SELL/HOLD
+calls; a paper account trades exactly on them and is judged by the same live evidence gate as our own strategies. Neutral where silent
+(never our engine), stored apart from our committee decisions, never shown to users.

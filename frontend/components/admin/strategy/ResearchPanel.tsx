@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { GateResult, ResearchView } from "@/lib/types";
+import { DataSourcesPanel } from "./DataSourcesPanel";
 import { Section, Th, tone } from "./shared";
 
 const verdictStyle = (v: GateResult["verdict"]) =>
@@ -59,7 +60,10 @@ export function ResearchPanel() {
             <tbody>
               {r.evidence.map((e) => (
                 <tr key={e.id} className="border-t border-border">
-                  <td className="px-sp3 py-sp2 font-semibold text-t1">{e.name}</td>
+                  <td className="px-sp3 py-sp2 font-semibold text-t1">
+                    {e.name}
+                    {e.challenger && <span className="ml-2 rounded-r1 bg-purple-dim px-2 py-[1px] text-[9px] font-bold uppercase tracking-wide text-purple">challenger</span>}
+                  </td>
                   <td className="mono px-sp3 py-sp2 text-right text-t2">{e.live_days}</td>
                   <td className="px-sp3 py-sp2"><Verdict g={e.vs.ctl_equal} label="vs equal-weight hold" /></td>
                   <td className="px-sp3 py-sp2"><Verdict g={e.vs.ctl_placebo} label="vs placebo" /></td>
@@ -116,6 +120,8 @@ export function ResearchPanel() {
           </p>
         </Section>
       )}
+
+      <DataSourcesPanel />
 
       <Section title="Latest weekly digest" note="Also saved in Admin → Reports. Written after each Friday's close.">
         {r.latest_digest ? (
