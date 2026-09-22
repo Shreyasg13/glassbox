@@ -220,7 +220,7 @@ def test_the_fetcher_spaces_requests_out_to_stay_under_the_sec_limit():
 # -------------------------------------------------------------------- refresh --
 
 
-def fake_sec(fail_for=()):
+def fake_sec(fail_for=(), no_facts_for=()):
     seen = {"ua": set(), "urls": []}
 
     def handler(request):
@@ -228,9 +228,18 @@ def fake_sec(fail_for=()):
         seen["ua"].add(request.headers.get("user-agent"))
         u = str(request.url)
         if u.endswith("company_tickers.json"):
-            return httpx.Response(200, json={"0": {"cik_str": 1, "ticker": "AAA", "title": "Acme"}, "1": {"cik_str": 2, "ticker": "BBB", "title": "Beta"}})
+            return httpx.Response(
+                200,
+                json={
+                    "0": {"cik_str": 1, "ticker": "AAA", "title": "Acme"},
+                    "1": {"cik_str": 2, "ticker": "BBB", "title": "Beta"},
+                    "2": {"cik_str": 3, "ticker": "TRUST", "title": "A Trust"},
+                },
+            )
         if "companyfacts" in u:
             cik = int(u.split("CIK")[1][:10])
+            if cik in no_facts_for:
+                return httpx.Response(404)  # a real CIK with no XBRL facts (fund/trust)
             if cik in fail_for:
                 return httpx.Response(500)
             return httpx.Response(200, json=ACME)
@@ -272,6 +281,16 @@ def test_one_company_failing_does_not_stop_the_others_and_is_reported(cache_dir)
     st = fd.refresh_sec(["AAA", "BBB"], sec=c)["sec"]
     assert st["ok"] is False and "FAILED BBB" in st["detail"] and st["count"] == 1
     assert fd.fundamentals_as_of("AAA", "2026-06-01") is not None and fd.fundamentals_as_of("BBB", "2026-06-01") is None
+
+
+def test_a_real_filer_with_no_xbrl_facts_still_gets_its_filings_not_marked_failed(cache_dir):
+    """A trust like SPY has a real CIK and files 8-Ks, but companyfacts 404s (no XBRL financials) --
+    that must not be treated the same as a real failure, and its filings must still be cached."""
+    c, _ = fake_sec(no_facts_for=(3,))
+    status = fd.refresh_sec(["AAA", "TRUST"], sec=c)["sec"]
+    assert status["ok"] and status["count"] == 2 and "no XBRL facts for TRUST" in status["detail"] and "FAILED" not in status["detail"]
+    assert fd.fundamentals_as_of("TRUST", "2026-06-01") is None  # no financial concepts
+    assert fd.events_as_of("TRUST", "2026-09-15")[0]["text"] == "reported quarterly results"  # but filings are cached
 
 
 def test_the_sec_part_stays_off_without_a_declared_contact_and_says_why(cache_dir, monkeypatch):

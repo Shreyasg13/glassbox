@@ -529,22 +529,40 @@ def refresh_sec(symbols: List[str], sec: Optional[Fetcher] = None, force: bool =
         _write("status.json", status)
         return status
     ciks = tmap["map"]
-    ok, funds, skipped, failed = 0, 0, [], []
+    ok, skipped, no_facts, failed = 0, [], [], []
     for s in symbols:
         cik = ciks.get(s.upper().replace(".", "-")) or ciks.get(s.upper())
         if not cik:
-            skipped.append(s)  # funds and other non-filers
+            skipped.append(s)  # not in the ticker map at all: a fund or other non-filer
             continue
+        # Company facts (XBRL) and submissions are two independent endpoints: a trust/fund can have a real
+        # CIK and file 8-Ks (submissions) while having no XBRL financial concepts (companyfacts 404s). One
+        # missing does not mean the other should be thrown away.
         try:
             cached = _read(f"fundamentals/{s}.json")
             if force or not _fresh(cached, FUNDAMENTALS_TTL_DAYS):
                 concepts = extract_concepts(sec.json(SEC_FACTS_URL.format(cik=cik)))
                 _write(f"fundamentals/{s}.json", {"cik": cik, "fetched_at": _now().isoformat(), "concepts": concepts})
-            _write(f"filings/{s}.json", {"cik": cik, "fetched_at": _now().isoformat(), "filings": extract_filings(sec.json(SEC_SUBMISSIONS_URL.format(cik=cik)))})
-            ok += 1
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                no_facts.append(s)  # a real filer with no XBRL facts (e.g. a fund/trust) -- not an error
+            else:
+                failed.append(f"{s}: {type(exc).__name__}")
+                continue
         except Exception as exc:  # noqa: BLE001 -- one company failing must not stop the rest
             failed.append(f"{s}: {type(exc).__name__}")
-    detail = f"{ok} companies refreshed" + (f"; no filings for {', '.join(skipped)} (funds)" if skipped else "") + (f"; FAILED {', '.join(failed)}" if failed else "")
+            continue
+        try:
+            _write(f"filings/{s}.json", {"cik": cik, "fetched_at": _now().isoformat(), "filings": extract_filings(sec.json(SEC_SUBMISSIONS_URL.format(cik=cik)))})
+            ok += 1
+        except Exception as exc:  # noqa: BLE001
+            failed.append(f"{s}: {type(exc).__name__}")
+    detail = (
+        f"{ok} companies refreshed"
+        + (f"; no filings for {', '.join(skipped)} (funds)" if skipped else "")
+        + (f"; no XBRL facts for {', '.join(no_facts)} (fund/trust)" if no_facts else "")
+        + (f"; FAILED {', '.join(failed)}" if failed else "")
+    )
     _set_status(status, "sec", not failed and ok > 0, detail, ok)
     _write("status.json", status)
     return status
