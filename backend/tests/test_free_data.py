@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import httpx
 import pytest
@@ -302,6 +303,114 @@ def test_the_sec_part_stays_off_without_a_declared_contact_and_says_why(cache_di
     assert fd.sec_user_agent() == "GlassBox research ops@example.com"
 
 
+# ------------------------------------------------------------ Form 4 insider transactions --
+
+
+def fake_form4(filings_by_cik):
+    """filings_by_cik: {cik: [{"accession", "filed", "owner", "transactions": [{"date","code","shares","price"}]}]}."""
+    seen = {"index_json": 0, "xml": 0}
+
+    def handler(request):
+        u = str(request.url)
+        if u.endswith("company_tickers.json"):
+            return httpx.Response(200, json={"0": {"cik_str": 1, "ticker": "AAA", "title": "Acme"}, "1": {"cik_str": 2, "ticker": "BBB", "title": "Beta"}})
+        if "type=4" in u and "output=atom" in u:
+            cik = int(re.search(r"CIK=(\d+)", u).group(1))
+            entries = "".join(
+                f"""<entry><content type="text/xml">
+                    <accession-number>{f['accession']}</accession-number>
+                    <filing-date>{f['filed']}</filing-date>
+                    <filing-href>https://www.sec.gov/Archives/edgar/data/{cik}/{f['accession'].replace('-', '')}/{f['accession']}-index.htm</filing-href>
+                </content></entry>"""
+                for f in filings_by_cik.get(cik, [])
+            )
+            return httpx.Response(200, text=f'<feed xmlns="http://www.w3.org/2005/Atom">{entries}</feed>')
+        if u.endswith("/index.json"):
+            seen["index_json"] += 1
+            return httpx.Response(200, json={"directory": {"item": [{"name": "wk-form4_1.xml", "size": "7281"}]}})
+        if u.endswith("wk-form4_1.xml"):
+            seen["xml"] += 1
+            acc_nodash = u.split("/")[-2]
+            filing = next(f for fs in filings_by_cik.values() for f in fs if f["accession"].replace("-", "") == acc_nodash)
+            txs = "".join(
+                f"""<nonDerivativeTransaction>
+                    <transactionDate><value>{t['date']}</value></transactionDate>
+                    <transactionCoding><transactionCode>{t['code']}</transactionCode></transactionCoding>
+                    <transactionAmounts>
+                        <transactionShares><value>{t['shares']}</value></transactionShares>
+                        <transactionPricePerShare>{f"<value>{t['price']}</value>" if t.get('price') else '<footnoteId id="F1"/>'}</transactionPricePerShare>
+                        <transactionAcquiredDisposedCode><value>{'A' if t['code'] == 'P' else 'D'}</value></transactionAcquiredDisposedCode>
+                    </transactionAmounts>
+                </nonDerivativeTransaction>"""
+                for t in filing["transactions"]
+            )
+            xml = f"""<ownershipDocument>
+                <reportingOwner><reportingOwnerId><rptOwnerName>{filing.get('owner', 'Some Insider')}</rptOwnerName></reportingOwnerId></reportingOwner>
+                <nonDerivativeTable>{txs}</nonDerivativeTable>
+            </ownershipDocument>"""
+            return httpx.Response(200, text=xml)
+        return httpx.Response(404)
+
+    c = fd.Fetcher({"User-Agent": "GlassBox test ops@example.com"}, transport=httpx.MockTransport(handler), sleep=lambda s: None)
+    return c, seen
+
+
+def test_insider_refresh_keeps_only_open_market_buys_and_sells(cache_dir):
+    c, _ = fake_form4({1: [
+        {"accession": "0001-26-000001", "filed": "2026-09-15", "owner": "Jane Exec", "transactions": [{"date": "2026-09-15", "code": "P", "shares": 1000, "price": 50.0}]},
+        {"accession": "0001-26-000002", "filed": "2026-09-10", "owner": "Jane Exec", "transactions": [{"date": "2026-09-10", "code": "M", "shares": 500}]},  # option exercise: excluded
+    ]})
+    status = fd.refresh_insiders(["AAA"], sec=c)
+    assert status["insiders"]["ok"] and status["insiders"]["count"] == 1
+    events = fd.insider_events_as_of("AAA", "2026-09-20")
+    assert len(events) == 1 and events[0]["side"] == "purchase" and events[0]["value"] == pytest.approx(50_000.0)
+
+
+def test_a_second_refresh_only_fetches_newly_seen_filings(cache_dir):
+    filings = {1: [{"accession": "0001-26-000001", "filed": "2026-09-15", "owner": "Jane Exec", "transactions": [{"date": "2026-09-15", "code": "S", "shares": 200, "price": 10.0}]}]}
+    c, seen = fake_form4(filings)
+    fd.refresh_insiders(["AAA"], sec=c)
+    assert seen["xml"] == 1
+    c2, seen2 = fake_form4(filings)  # same filing again: nothing new to fetch
+    fd.refresh_insiders(["AAA"], sec=c2)
+    assert seen2["xml"] == 0
+    filings[1].append({"accession": "0001-26-000002", "filed": "2026-09-18", "owner": "Bob Director", "transactions": [{"date": "2026-09-18", "code": "P", "shares": 300, "price": 20.0}]})
+    c3, seen3 = fake_form4(filings)
+    fd.refresh_insiders(["AAA"], sec=c3)
+    assert seen3["xml"] == 1 and len(fd.insider_events_as_of("AAA", "2026-09-20")) == 2
+
+
+def test_insider_events_respect_the_lookback_window_and_as_of_date(cache_dir):
+    c, _ = fake_form4({1: [
+        {"accession": "0001-26-000001", "filed": "2026-08-01", "owner": "Jane Exec", "transactions": [{"date": "2026-08-01", "code": "P", "shares": 100, "price": 10.0}]},  # too old
+        {"accession": "0001-26-000002", "filed": "2026-09-19", "owner": "Jane Exec", "transactions": [{"date": "2026-09-19", "code": "S", "shares": 100, "price": 10.0}]},  # after as_of
+        {"accession": "0001-26-000003", "filed": "2026-09-05", "owner": "Jane Exec", "transactions": [{"date": "2026-09-05", "code": "P", "shares": 100, "price": 10.0}]},  # in window
+    ]})
+    fd.refresh_insiders(["AAA"], sec=c)
+    events = fd.insider_events_as_of("AAA", "2026-09-15", lookback_days=30)
+    assert [e["date"] for e in events] == ["2026-09-05"]
+
+
+def test_insider_line_reads_naturally_with_and_without_a_dollar_value():
+    buy = {"side": "purchase", "owner": "Jane Exec", "value": 50_000.0}
+    sale = {"side": "sale", "owner": "Bob Director", "value": None}
+    assert fd.insider_line([]) is None
+    line = fd.insider_line([buy, sale])
+    assert line == "Insider activity (Form 4 open-market, last 30 days): 1 purchase (~$50,000) by 1 insider; 1 sale by 1 insider."
+
+
+def test_insiders_stay_off_without_a_declared_contact(cache_dir):
+    st = fd.refresh_insiders(["AAA"])["insiders"]
+    assert st["ok"] is False and "SEC_USER_AGENT" in st["detail"]
+
+
+def test_context_lines_include_insider_activity(cache_dir):
+    c, _ = fake_form4({1: [{"accession": "0001-26-000001", "filed": "2026-09-10", "owner": "Jane Exec", "transactions": [{"date": "2026-09-10", "code": "P", "shares": 1000, "price": 50.0}]}]})
+    fd.refresh_insiders(["AAA"], sec=c)
+    lines = fd.context_lines("AAA", "2026-09-15", 55.0)
+    assert any(ln.startswith("Insider activity") for ln in lines)
+
+
 def test_macro_refresh_isolates_each_source_and_records_status(cache_dir):
     def handler(request):
         u = str(request.url)
@@ -320,4 +429,4 @@ def test_macro_refresh_isolates_each_source_and_records_status(cache_dir):
 def test_everything_degrades_to_nothing_when_no_cache_exists(cache_dir):
     assert fd.context_lines("AAA", "2026-09-15", 40.0) == [] and fd.fundamentals_as_of("AAA", "2026-09-15") is None
     snap = fd.snapshot(["AAA"], "2026-09-15", {"AAA": 40.0})
-    assert snap["rows"] == [{"symbol": "AAA", "fundamentals": None, "events": []}] and snap["macro"] is None and snap["sec_configured"] is False
+    assert snap["rows"] == [{"symbol": "AAA", "fundamentals": None, "events": [], "insiders": []}] and snap["macro"] is None and snap["sec_configured"] is False

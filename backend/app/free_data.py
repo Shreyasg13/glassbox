@@ -2,10 +2,17 @@
 
 Only sources that are public and free to use in a product:
 
-  * SEC EDGAR (data.sec.gov) -- company fundamentals from XBRL filings, and the filing feed (8-K events,
-    10-K / 10-Q dates). No key; the SEC's fair-access policy requires a User-Agent that names a contact
-    (set SEC_USER_AGENT, e.g. "GlassBox research you@yourdomain.com") and at most 10 requests a second.
+  * SEC EDGAR (data.sec.gov / www.sec.gov) -- company fundamentals from XBRL filings, the filing feed
+    (8-K events, 10-K / 10-Q dates), and Form 4 insider open-market transactions. No key; the SEC's
+    fair-access policy requires a User-Agent that names a contact (set SEC_USER_AGENT, e.g. "GlassBox
+    research you@yourdomain.com") and at most 10 requests a second.
   * US Treasury daily par yield curve, and the BLS public API (unemployment rate, CPI) -- US government data.
+
+There is no free, commercially-safe media/news or social-sentiment feed (scraped news sites and most
+"free tier" news APIs are not licensed for use in a product), so this deliberately does not try to
+approximate one. Form 4 insider buying/selling is the closest genuinely free, genuinely legal substitute:
+it is a well-established sentiment-adjacent signal (an executive's own money, not commentary about the
+stock) from the same EDGAR source already used for fundamentals and 8-Ks.
 
 Design rules:
   * REFRESH is separate from USE. A daily job (app/scripts/refresh_free_data.py) fetches and writes a small
@@ -26,6 +33,7 @@ import logging
 import os
 import re
 import time
+import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -50,6 +58,16 @@ SEC_MIN_INTERVAL_S = 0.12  # ~8 requests a second, under the SEC's 10/s ceiling
 TICKER_MAP_TTL_DAYS = 30
 FUNDAMENTALS_TTL_DAYS = 3
 BLS_LAG_DAYS = {"unemployment": 12, "cpi": 20}  # days after a month ends before its figure is public (jobs report ~1 week, CPI ~2 weeks, plus margin)
+
+FORM4_INDEX_URL = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik:010d}&type=4&dateb=&owner=include&count=20&output=atom"
+INSIDER_LOOKBACK_DAYS = 30  # how far back "recent insider activity" looks in a prompt/UI line
+INSIDER_KEEP_DAYS = 180  # how long a transaction stays in the cache before being pruned
+INSIDER_NEW_PER_RUN = 8  # cap on newly-discovered filings fetched (2 requests each) in one refresh, per company
+_ATOM_NS = {"a": "http://www.w3.org/2005/Atom"}
+# Only these transaction codes are a discretionary open-market decision. Grants (A), option exercises (M),
+# tax-withholding sales (F) and gifts (G) are routine compensation mechanics, not a buy/sell view -- every
+# insider-sentiment tracker excludes them for the same reason.
+OPEN_MARKET_CODES = {"P": "purchase", "S": "sale"}
 
 # XBRL "us-gaap" tags, most specific first. Flow concepts are annual (10-K) values; instant ones are year-end balances.
 CONCEPTS: Dict[str, List[str]] = {
@@ -456,6 +474,7 @@ def context_lines(sym: str, as_of: str, price: Optional[float] = None) -> List[s
     try:
         lines.append(fundamentals_line(fundamentals_as_of(sym, as_of, price)))
         lines.append(events_line(events_as_of(sym, as_of)))
+        lines.append(insider_line(insider_events_as_of(sym, as_of)))
         lines.append(macro_line(macro_as_of(as_of)))
     except Exception:  # noqa: BLE001 -- extra context must never break a review
         log.warning("free-data context unavailable for %s", sym)
@@ -468,7 +487,7 @@ def snapshot(symbols: List[str], as_of: str, prices: Dict[str, Optional[float]])
     for s in symbols:
         f = fundamentals_as_of(s, as_of, prices.get(s))
         ev = events_as_of(s, as_of)
-        rows.append({"symbol": s, "fundamentals": f, "events": ev[:5]})
+        rows.append({"symbol": s, "fundamentals": f, "events": ev[:5], "insiders": insider_events_as_of(s, as_of)[:5]})
     return {"as_of": as_of, "rows": rows, "macro": macro_as_of(as_of), "macro_line": macro_line(macro_as_of(as_of)), "status": read_status(), "sec_configured": sec_user_agent() is not None}
 
 
@@ -568,6 +587,143 @@ def refresh_sec(symbols: List[str], sec: Optional[Fetcher] = None, force: bool =
     return status
 
 
+# ------------------------------------------------------ SEC: Form 4 insider transactions --
+
+
+def _num(x: Any) -> Optional[float]:
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def _form4_filings(sec: Fetcher, cik: int) -> List[Dict[str, str]]:
+    """Recent Form 4 filings for this issuer's CIK: accession number, filed date, and the filing's own
+    directory (where its primary XML document lives)."""
+    root = ET.fromstring(sec.get(FORM4_INDEX_URL.format(cik=cik)).text)
+    out = []
+    for entry in root.findall("a:entry", _ATOM_NS):
+        content = entry.find("a:content", _ATOM_NS)
+        if content is None:
+            continue
+        acc = content.findtext("a:accession-number", namespaces=_ATOM_NS)
+        filed = content.findtext("a:filing-date", namespaces=_ATOM_NS)
+        href = content.findtext("a:filing-href", namespaces=_ATOM_NS)
+        if acc and filed and href:
+            out.append({"accession": acc, "filed": filed, "dir": href.rsplit("/", 1)[0]})
+    return out
+
+
+def _form4_transactions(sec: Fetcher, dir_url: str) -> List[Dict[str, Any]]:
+    """Open-market (non-derivative) BUY/SELL lines out of one Form 4's primary XML document. The
+    document's filename varies by filer agent (`form4.xml`, `wk-form4_....xml`, ...), so it is found
+    from the filing's own directory listing rather than guessed."""
+    items = (sec.json(f"{dir_url}/index.json").get("directory") or {}).get("item") or []
+    doc = next((i["name"] for i in items if i["name"].endswith(".xml") and i.get("size")), None)
+    if not doc:
+        return []
+    root = ET.fromstring(sec.get(f"{dir_url}/{doc}").text)
+    owner = (root.findtext("reportingOwner/reportingOwnerId/rptOwnerName") or "").strip()
+    out = []
+    for t in root.findall("nonDerivativeTable/nonDerivativeTransaction"):
+        code = t.findtext("transactionCoding/transactionCode")
+        if code not in OPEN_MARKET_CODES:
+            continue
+        d = t.findtext("transactionDate/value")
+        shares = _num(t.findtext("transactionAmounts/transactionShares/value"))
+        if not d or shares is None:
+            continue
+        price = _num(t.findtext("transactionAmounts/transactionPricePerShare/value"))
+        out.append({"date": d, "owner": owner, "code": code, "side": OPEN_MARKET_CODES[code], "shares": shares, "value": (shares * price) if price else None})
+    return out
+
+
+def refresh_insiders(symbols: List[str], sec: Optional[Fetcher] = None, force: bool = False) -> Dict[str, Any]:
+    """Form 4 open-market insider buys/sells, cached incrementally: each run only fetches filings not
+    already seen (`cache["seen"]`), so a quiet company costs one ATOM request, not a re-parse of its
+    whole history. See the module docstring for why this exists in place of a news/sentiment feed."""
+    status = read_status()
+    ua = sec_user_agent()
+    if sec is None:
+        if not ua:
+            _set_status(status, "insiders", False, "not configured: set SEC_USER_AGENT (SEC fair-access policy)")
+            _write("status.json", status)
+            return status
+        sec = Fetcher({"User-Agent": ua, "Accept-Encoding": "gzip, deflate"}, SEC_MIN_INTERVAL_S)
+    tmap = _read("sec_tickers.json")
+    try:
+        if not _fresh(tmap, TICKER_MAP_TTL_DAYS) or force:
+            raw = sec.json(SEC_TICKERS_URL)
+            tmap = {"fetched_at": _now().isoformat(), "map": {v["ticker"].upper(): int(v["cik_str"]) for v in raw.values()}}
+            _write("sec_tickers.json", tmap)
+    except Exception as exc:  # noqa: BLE001
+        _set_status(status, "insiders", False, f"ticker map: {type(exc).__name__}: {exc}"[:200])
+        _write("status.json", status)
+        return status
+    ciks = tmap["map"]
+    ok, no_cik, failed = 0, [], []
+    for s in symbols:
+        cik = ciks.get(s.upper().replace(".", "-")) or ciks.get(s.upper())
+        if not cik:
+            no_cik.append(s)  # funds and other non-filers: same set refresh_sec skips, for the same reason
+            continue
+        cache = _read(f"insiders/{s}.json") or {"seen": [], "transactions": []}
+        try:
+            filings = _form4_filings(sec, cik)
+        except Exception as exc:  # noqa: BLE001 -- one company failing must not stop the rest
+            failed.append(f"{s}: {type(exc).__name__}")
+            continue
+        new = [f for f in filings if f["accession"] not in cache["seen"]][:INSIDER_NEW_PER_RUN]
+        for f in new:
+            try:
+                cache["transactions"] += _form4_transactions(sec, f["dir"])
+            except Exception as exc:  # noqa: BLE001 -- one filing failing must not lose what is already cached
+                log.warning("Form 4 %s (%s) failed: %s", f["accession"], s, exc)
+            cache["seen"].append(f["accession"])  # mark seen even on failure/no BUY-SELL: never re-parsed
+        cutoff = (_now().date() - timedelta(days=INSIDER_KEEP_DAYS)).isoformat()
+        cache["transactions"] = [t for t in cache["transactions"] if t["date"] >= cutoff]
+        cache["seen"] = cache["seen"][-500:]
+        cache["fetched_at"] = _now().isoformat()
+        _write(f"insiders/{s}.json", cache)
+        ok += 1
+    detail = f"{ok} companies checked" + (f"; no CIK for {', '.join(no_cik)}" if no_cik else "") + (f"; FAILED {', '.join(failed)}" if failed else "")
+    _set_status(status, "insiders", not failed and ok > 0, detail, ok)
+    _write("status.json", status)
+    return status
+
+
+def insider_events_as_of(sym: str, as_of: str, lookback_days: int = INSIDER_LOOKBACK_DAYS) -> List[Dict[str, Any]]:
+    """Open-market Form 4 transactions filed on or before `as_of`, within the lookback window -- point
+    in time, like every other free_data read."""
+    cache = _read(f"insiders/{sym}.json")
+    if not cache:
+        return []
+    cutoff = (date.fromisoformat(as_of) - timedelta(days=lookback_days)).isoformat()
+    return sorted((t for t in cache.get("transactions", []) if cutoff <= t["date"] <= as_of), key=lambda t: t["date"], reverse=True)
+
+
+def _insider_side(rows: List[Dict[str, Any]], singular: str, plural: str) -> str:
+    n = len(rows)
+    val = sum(r["value"] for r in rows if r.get("value"))
+    owners = len({r["owner"] for r in rows if r.get("owner")})
+    bit = f"{n} {singular if n == 1 else plural}"
+    if val:
+        bit += f" (~${val:,.0f})"
+    if owners:
+        bit += f" by {owners} insider{'s' if owners != 1 else ''}"
+    return bit
+
+
+def insider_line(events: List[Dict[str, Any]]) -> Optional[str]:
+    if not events:
+        return None
+    buys = [e for e in events if e["side"] == "purchase"]
+    sells = [e for e in events if e["side"] == "sale"]
+    parts = [p for p in (_insider_side(buys, "purchase", "purchases") if buys else None, _insider_side(sells, "sale", "sales") if sells else None) if p]
+    return f"Insider activity (Form 4 open-market, last {INSIDER_LOOKBACK_DAYS} days): " + "; ".join(parts) + "."
+
+
 def refresh_all(symbols: List[str], force: bool = False) -> Dict[str, Any]:
     refresh_macro()
-    return refresh_sec(symbols, force=force)
+    refresh_sec(symbols, force=force)
+    return refresh_insiders(symbols, force=force)
