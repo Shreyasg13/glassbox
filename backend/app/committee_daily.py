@@ -312,6 +312,7 @@ def _run_doc(
         "votes": cd.get("votes"),
         "ceo": ceo_brief(decision, action, cd.get("gate"), cd.get("votes"), agents, cd.get("tally") or []),
         "context": context,
+        "debate": (result or {}).get("debate"),
         "engine": (result or {}).get("engine", "legacy"),
         "agrees_with_engine": (decision == pick["engine_signal"]) if decision else None,
         "agents": agents,

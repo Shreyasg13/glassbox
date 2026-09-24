@@ -82,7 +82,6 @@ FORMAT_INSTRUCTIONS = (
     "earnings, prices or events). If the data does not justify a change, choose HOLD."
 )
 
-
 class CommitteeState(TypedDict, total=False):
     context: str
     agents_cfg: List[AgentConfig]
@@ -91,9 +90,69 @@ class CommitteeState(TypedDict, total=False):
     allow_failover: bool
     risk: Optional[Dict[str, Any]]
     reflections: Dict[str, str]  # agent name -> its own recent-record line, appended to its own context only
+    debate: Optional[str]  # bull/bear case text, appended to every LLM agent's context (see _debate)
     agents: Annotated[List[Dict[str, Any]], operator.add]  # each run_agent branch appends its row
     results: List[Dict[str, Any]]
     committee_decision: Dict[str, Any]
+
+
+# ------------------------------------------------------------- bull/bear debate --
+# A native, lightweight stand-in for TradingAgents' bull/bear researchers (see docs/ARENA.md): TWO
+# extra model calls per symbol on the SAME free-tier failover every analyst already uses, not the
+# external framework (whose own numbers -- ~11 calls/20+ tool calls per symbol -- need a paid key).
+# OFF by default (COMMITTEE_DEBATE_ENABLED=1 to turn on): it adds real LLM-call volume to a nightly
+# run that only just got a rebuilt price store and pipeline, so it earns its place on the crontab
+# only after running clean on its own for a while.
+DEBATE_PROMPT = ChatPromptTemplate.from_messages([("system", "{system}"), ("human", "{context}\n\n{ask}")])
+DEBATE_ASK = "State your case in 2-3 sentences, grounded ONLY in the numbers above -- do not invent news, earnings, prices or events."
+BULL_SYSTEM = "You are the Bull researcher on an investment committee: build the strongest HONEST case FOR buying."
+BEAR_SYSTEM = "You are the Bear researcher on an investment committee: build the strongest HONEST case FOR selling or staying cautious."
+DEBATE_MAX_CHARS = 600
+DEBATE_TIMEOUT_S = 30.0
+
+
+def _debate_enabled() -> bool:
+    return os.environ.get("COMMITTEE_DEBATE_ENABLED", "0") == "1"
+
+
+def _debate_model() -> RoutedChatModel:
+    return RoutedChatModel(
+        provider=os.environ.get("COMMITTEE_DEBATE_PROVIDER", "gemini"),
+        model_id=os.environ.get("COMMITTEE_DEBATE_MODEL", "gemini-flash-latest"),
+        temperature=0.4,
+        max_tokens=220,
+    )
+
+
+async def _debate_side(context: str, system: str, label: str, timeout_s: float, allow_failover: bool) -> Optional[str]:
+    model = _debate_model()
+    model.agent_id = f"debate-{label.lower()}"
+    model.allow_failover = allow_failover
+    try:
+        msg = await asyncio.wait_for((DEBATE_PROMPT | model).ainvoke({"system": system, "context": context, "ask": DEBATE_ASK}), timeout=timeout_s)
+        text = msg.content if isinstance(msg.content, str) else str(msg.content)
+        return " ".join(text.split())[:DEBATE_MAX_CHARS] or None
+    except Exception as exc:  # noqa: BLE001 -- one side failing must not lose the other or block the committee
+        log.warning("debate %s side failed: %s", label, exc)
+        return None
+
+
+async def _debate(state: CommitteeState) -> Dict[str, Any]:
+    """Runs before the analysts so its output can be folded into their shared context (see
+    _fan_out). A miss on one or both sides never blocks the committee -- see _debate_side."""
+    if not _debate_enabled() or not any(a.type == "llm" for a in state.get("agents_cfg", [])):
+        return {"debate": None}
+    remaining = max(5.0, state["deadline"] - time.monotonic())
+    timeout_s = min(DEBATE_TIMEOUT_S, remaining)
+    allow_failover = state.get("allow_failover", True)
+    bull, bear = await asyncio.gather(
+        _debate_side(state["context"], BULL_SYSTEM, "Bull", timeout_s, allow_failover),
+        _debate_side(state["context"], BEAR_SYSTEM, "Bear", timeout_s, allow_failover),
+    )
+    if not bull and not bear:
+        return {"debate": None}
+    text = "Research debate (for your own reasoning, not a vote):\nBull case: " + (bull or "unavailable.") + "\nBear case: " + (bear or "unavailable.")
+    return {"debate": text}
 
 
 # ------------------------------------------------------------------- nodes --
@@ -103,12 +162,15 @@ def _fan_out(state: CommitteeState) -> List[Any]:
     sends: List[Any] = []
     llm_index = 0
     reflections = state.get("reflections") or {}
+    debate = state.get("debate")
     for idx, agent in enumerate(state.get("agents_cfg", [])):
         delay = 0.0
         context = state["context"]
         if agent.type == "llm":  # staggered: a same-instant burst trips free-tier rate limits
             delay = llm_index * orchestration._LLM_LAUNCH_STAGGER_S
             llm_index += 1
+            if debate:  # shared with every analyst, unlike a reflection line
+                context = f"{context}\n\n{debate}"
             refl = reflections.get(agent.name)  # this agent's own recent track record, not shared with the others
             if refl:
                 context = f"{context}\n\n{refl}"
@@ -213,10 +275,12 @@ def _risk_gate(state: CommitteeState) -> Dict[str, Any]:
 
 def build_graph():
     g = StateGraph(CommitteeState)
+    g.add_node("debate", _debate)
     g.add_node("run_agent", _run_agent)
     g.add_node("aggregate", _aggregate)
     g.add_node("risk_gate", _risk_gate)
-    g.add_conditional_edges(START, _fan_out, ["run_agent", "aggregate"])
+    g.add_edge(START, "debate")
+    g.add_conditional_edges("debate", _fan_out, ["run_agent", "aggregate"])
     g.add_edge("run_agent", "aggregate")
     g.add_edge("aggregate", "risk_gate")
     g.add_edge("risk_gate", END)
@@ -249,4 +313,4 @@ async def run_committee_graph(
             "agents": [],
         }
     )
-    return {"mode": "committee_vote", "engine": "langgraph", "agents": state["results"], "committee_decision": state["committee_decision"]}
+    return {"mode": "committee_vote", "engine": "langgraph", "agents": state["results"], "committee_decision": state["committee_decision"], "debate": state.get("debate")}

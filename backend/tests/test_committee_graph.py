@@ -5,12 +5,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 
 import pytest
 
 from app import committee_daily, committee_graph, llm_router, orchestration
 from app.committee_graph import AnalystView
-from app.models import OrchestrationConfig
+from app.models import AgentConfig, OrchestrationConfig
 
 ENGINE_NAMES = ["QuantEngine", "RiskEngine", "ValueEngine"]
 LLM_NAMES = [f"Analyst{i}" for i in range(7)]
@@ -73,6 +74,54 @@ async def test_the_analyst_prompt_carries_the_facts_the_json_ask_and_the_analyst
     c = world.calls[0]
     assert "Data through the close of 2026-09-18" in c["prompt"] and "ONLY one JSON object" in c["prompt"]
     assert c["system"] == "You are Analyst0."
+
+
+async def test_the_debate_is_off_by_default_and_adds_no_calls(world, monkeypatch):
+    monkeypatch.delenv("COMMITTEE_DEBATE_ENABLED", raising=False)
+    out = await run(world)
+    assert out.get("debate") is None and len(world.calls) == 7  # unchanged: no Bull/Bear calls made
+
+
+async def test_the_debate_runs_when_enabled_and_reaches_every_analyst(world, monkeypatch):
+    monkeypatch.setenv("COMMITTEE_DEBATE_ENABLED", "1")
+
+    async def fake_side(context, system, label, timeout_s, allow_failover):
+        return f"{label} argues from the numbers above."
+
+    monkeypatch.setattr(committee_graph, "_debate_side", fake_side)
+    out = await run(world)
+    assert out["debate"] == "Research debate (for your own reasoning, not a vote):\nBull case: Bull argues from the numbers above.\nBear case: Bear argues from the numbers above."
+    assert len(world.calls) == 7  # the debate itself is faked here; every analyst still only answers once
+    assert all("Research debate" in c["prompt"] and "Bull case" in c["prompt"] for c in world.calls)
+
+
+async def test_the_debate_survives_one_side_failing(world, monkeypatch):
+    monkeypatch.setenv("COMMITTEE_DEBATE_ENABLED", "1")
+
+    async def flaky_side(context, system, label, timeout_s, allow_failover):
+        return None if label == "Bull" else "Bear argues from the numbers above."
+
+    monkeypatch.setattr(committee_graph, "_debate_side", flaky_side)
+    out = await run(world)
+    assert "Bull case: unavailable." in out["debate"] and "Bear case: Bear argues" in out["debate"]
+
+
+async def test_the_debate_never_calls_a_model_for_an_engine_only_or_empty_committee(monkeypatch):
+    monkeypatch.setenv("COMMITTEE_DEBATE_ENABLED", "1")
+    called = []
+    monkeypatch.setattr(committee_graph, "_debate_side", lambda *a, **kw: called.append(1))
+    engines_only = [AgentConfig(**agent_row(n, "deterministic")) for n in ENGINE_NAMES]
+    for agents_cfg in ([], engines_only):
+        out = await committee_graph._debate({"agents_cfg": agents_cfg, "deadline": time.monotonic() + 60, "context": "x", "allow_failover": True})
+        assert out == {"debate": None}
+    assert called == []
+
+
+def test_the_debate_flag_defaults_to_off(monkeypatch):
+    monkeypatch.delenv("COMMITTEE_DEBATE_ENABLED", raising=False)
+    assert committee_graph._debate_enabled() is False
+    monkeypatch.setenv("COMMITTEE_DEBATE_ENABLED", "1")
+    assert committee_graph._debate_enabled() is True
 
 
 async def test_a_reflection_line_reaches_only_the_agent_it_is_about(world):
