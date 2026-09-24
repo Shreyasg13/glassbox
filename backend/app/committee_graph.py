@@ -90,6 +90,7 @@ class CommitteeState(TypedDict, total=False):
     deadline: float  # time.monotonic() value after which no new agent work starts
     allow_failover: bool
     risk: Optional[Dict[str, Any]]
+    reflections: Dict[str, str]  # agent name -> its own recent-record line, appended to its own context only
     agents: Annotated[List[Dict[str, Any]], operator.add]  # each run_agent branch appends its row
     results: List[Dict[str, Any]]
     committee_decision: Dict[str, Any]
@@ -101,18 +102,23 @@ class CommitteeState(TypedDict, total=False):
 def _fan_out(state: CommitteeState) -> List[Any]:
     sends: List[Any] = []
     llm_index = 0
+    reflections = state.get("reflections") or {}
     for idx, agent in enumerate(state.get("agents_cfg", [])):
         delay = 0.0
+        context = state["context"]
         if agent.type == "llm":  # staggered: a same-instant burst trips free-tier rate limits
             delay = llm_index * orchestration._LLM_LAUNCH_STAGGER_S
             llm_index += 1
+            refl = reflections.get(agent.name)  # this agent's own recent track record, not shared with the others
+            if refl:
+                context = f"{context}\n\n{refl}"
         sends.append(
             Send(
                 "run_agent",
                 {
                     "idx": idx,
                     "agent": agent,
-                    "context": state["context"],
+                    "context": context,
                     "delay": delay,
                     "deadline": state["deadline"],
                     "agent_timeout_s": state["agent_timeout_s"],
@@ -227,6 +233,7 @@ async def run_committee_graph(
     job_id: Optional[str] = None,  # accepted for runner-interface compatibility; the daily run has no live job
     allow_failover: bool = True,
     risk: Optional[Dict[str, Any]] = None,
+    reflections: Optional[Dict[str, str]] = None,  # agent name -> its own recent-record line (see committee_daily.agent_reflection)
 ) -> Dict[str, Any]:
     rows = [db.get_agent(aid) for aid in orch.agent_ids]
     agents = [AgentConfig(**row) for row in rows if row is not None]
@@ -238,6 +245,7 @@ async def run_committee_graph(
             "deadline": time.monotonic() + orch.run_budget_s,
             "allow_failover": allow_failover,
             "risk": risk,
+            "reflections": reflections or {},
             "agents": [],
         }
     )

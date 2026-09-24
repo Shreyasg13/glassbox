@@ -75,6 +75,15 @@ async def test_the_analyst_prompt_carries_the_facts_the_json_ask_and_the_analyst
     assert c["system"] == "You are Analyst0."
 
 
+async def test_a_reflection_line_reaches_only_the_agent_it_is_about(world):
+    """Reflection memory is per agent, not shared context: only Analyst0's prompt should carry its
+    own line, and it must never reach a deterministic engine (which has no prompt at all)."""
+    await run(world, reflections={"Analyst0": "Your own recent record (5 scored calls): 80% were right."})
+    by_name = {c["name"]: c["prompt"] for c in world.calls}
+    assert "Your own recent record" in by_name["Analyst0"]
+    assert "Your own recent record" not in by_name["Analyst1"]
+
+
 async def test_structured_answers_carry_their_own_confidence_into_the_vote(world):
     for n in LLM_NAMES[:5]:
         world.replies[n] = {"decision": "BUY", "confidence": 80, "risk_level": "LOW", "rationale": "Trend and momentum line up."}

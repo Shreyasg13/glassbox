@@ -414,6 +414,33 @@ def test_the_scorecard_with_no_runs_is_empty_not_an_error():
     assert sc["runs"] == 0 and sc["agrees_with_engine"] is None and sc["by_decision"]["BUY"]["5"]["n"] == 0
 
 
+# ------------------------------------------------------------- reflection memory --
+
+
+def _scored_run(d, lean, agent="Analyst0", ok=True, quorum_ok=True):
+    return {"date": d, "symbol": "AAPL", "quorum_ok": quorum_ok, "agents": [{"agent": agent, "ok": ok, "lean": lean}]}
+
+
+def test_agent_reflection_needs_a_minimum_of_scored_calls_and_ignores_everything_else():
+    closes = [100.0] * 60 + [100.0 + 2 * k for k in range(N - 60)]  # steady rally from bar 60
+    book = paper.PriceBook.from_frames({"AAPL": frame(closes)}, {"AAPL": PARAMS})
+    runs = [_scored_run(day(62), "BUY"), _scored_run(day(63), "BUY")]
+    assert committee_daily.agent_reflection("Analyst0", book, runs) is None  # only 2 scored calls, min is 3
+
+    runs.append(_scored_run(day(64), "SELL"))  # a rally: the SELL call is wrong
+    line = committee_daily.agent_reflection("Analyst0", book, runs)
+    assert line is not None and "3 scored BUY/SELL calls" in line and "not an instruction" in line
+
+    # unreliable, degraded, HOLD and another agent's rows must never count
+    runs += [
+        _scored_run(day(65), "BUY", quorum_ok=False),
+        _scored_run(day(66), "BUY", ok=False),
+        _scored_run(day(67), "HOLD"),
+        _scored_run(day(68), "BUY", agent="Analyst1"),
+    ]
+    assert committee_daily.agent_reflection("Analyst0", book, runs) == line
+
+
 # ---------------------------------------------------------------- the script --
 
 

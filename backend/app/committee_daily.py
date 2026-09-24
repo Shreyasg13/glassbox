@@ -185,6 +185,45 @@ def _squash(text: str, n: int) -> str:
     return " ".join((text or "").split())[:n]
 
 
+def _agent_fwd_return(book: paper.PriceBook, sym: str, d: str, h: int) -> Optional[float]:
+    """Same math as strategy._fwd_return, kept local: strategy.py already imports this module, so
+    importing strategy here would be circular."""
+    dates = book._sorted_dates.get(sym) or []
+    i = bisect_left(dates, d)
+    if i >= len(dates) or dates[i] != d or i + 1 + h >= len(dates):
+        return None
+    return book.close[sym][dates[i + 1 + h]] / book.close[sym][dates[i + 1]] - 1
+
+
+def agent_reflection(agent_name: str, book: paper.PriceBook, runs: List[Dict[str, Any]], horizon: int = 5, min_scored: int = 3, lookback: int = 8) -> Optional[str]:
+    """A short, factual line on this agent's OWN recent scored directional calls, fed back into its
+    next prompt -- this is the safe form of 'reflection': it tells the agent a fact about itself, it
+    does not touch a prompt, weight or strategy automatically (see research.py for why re-weighting
+    stays a human decision). None until `min_scored` of its own calls have aged past the horizon --
+    a track record of one or two calls is noise, not feedback."""
+    scored: List[float] = []
+    for r in sorted(runs, key=lambda r: r["date"], reverse=True):
+        if len(scored) >= lookback:
+            break
+        if not r.get("quorum_ok"):
+            continue
+        row = next((a for a in r.get("agents", []) if a.get("agent") == agent_name and a.get("ok")), None)
+        if not row or row.get("lean") not in ("BUY", "SELL"):
+            continue
+        fwd = _agent_fwd_return(book, r["symbol"], r["date"], horizon)
+        if fwd is None:
+            continue
+        scored.append(fwd if row["lean"] == "BUY" else -fwd)
+    if len(scored) < min_scored:
+        return None
+    hit = sum(1 for e in scored if e > 0) / len(scored)
+    mean_edge = sum(scored) / len(scored)
+    return (
+        f"Your own recent record ({len(scored)} scored BUY/SELL calls, {horizon}-trading-day forward return): "
+        f"{hit:.0%} were right, average edge {mean_edge:+.2%}. A fact for you to weigh, not an instruction to change your view."
+    )
+
+
 def _agent_rows(result: Dict[str, Any]) -> List[Dict[str, Any]]:
     rows = []
     for a in result.get("agents", []):
@@ -374,6 +413,13 @@ async def run_daily(
     quorum = _env_int("COMMITTEE_QUORUM", QUORUM_DEFAULT)
     budget = _env_int("COMMITTEE_DAILY_BUDGET_S", 1500)
     live = live_rows if live_rows is not None else {r["symbol"]: r for r in (await asyncio.to_thread(ds.get_live_signals))["signals"]}
+    try:
+        agent_names = [row["name"] for row in (db.get_agent(aid) for aid in orch.agent_ids) if row and row.get("type") == "llm"]
+        history_runs = await asyncio.to_thread(db.list_all_committee_runs)
+        reflections = {name: r for name in agent_names if (r := agent_reflection(name, book, history_runs)) is not None}
+    except Exception as exc:  # noqa: BLE001 -- reflection memory is a nicety; never let it block a review
+        log.warning("could not compute agent reflections: %s", exc)
+        reflections = {}
 
     owner = uuid.uuid4().hex
     if not await asyncio.to_thread(db.acquire_committee_lock, owner, _lock_ttl_s()):
@@ -392,7 +438,7 @@ async def run_daily(
             result: Optional[Dict[str, Any]] = None
             error: Optional[str] = None
             try:
-                result = await run(orch, ctx, job_id=None, allow_failover=True, risk=risk_now)
+                result = await run(orch, ctx, job_id=None, allow_failover=True, risk=risk_now, reflections=reflections)
             except Exception as exc:  # noqa: BLE001 -- one symbol failing must not stop the rest
                 error = f"{type(exc).__name__}: {_squash(str(exc), 160)}"
                 log.error("committee run for %s failed: %s", pick["symbol"], error)
