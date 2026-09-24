@@ -50,7 +50,7 @@ LOCK_BLOB = "state/pipeline.lock"
 HISTORY_KEEP = 30
 
 FATAL_STAGES = {"paper_cycle"}
-STAGE_ORDER = ["free_data", "committee", "paper_cycle", "weekly_research", "snapshot", "mirror"]
+STAGE_ORDER = ["free_data", "committee", "paper_cycle", "weekly_research", "snapshot", "mirror", "digest_email"]
 
 
 # ------------------------------------------------------------------- time --
@@ -237,7 +237,15 @@ def default_stages(target: str) -> Dict[str, Callable[[], Any]]:
 
         return artifacts.mirror()
 
-    return {"free_data": free_data, "committee": committee, "paper_cycle": paper_cycle, "weekly_research": weekly_research, "snapshot": snapshot, "mirror": mirror}
+    def digest_email() -> Any:
+        from . import digest
+
+        return digest.run()
+
+    return {
+        "free_data": free_data, "committee": committee, "paper_cycle": paper_cycle,
+        "weekly_research": weekly_research, "snapshot": snapshot, "mirror": mirror, "digest_email": digest_email,
+    }
 
 
 # ------------------------------------------------------------------- run --

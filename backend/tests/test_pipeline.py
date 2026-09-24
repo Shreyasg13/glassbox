@@ -95,7 +95,7 @@ def test_a_normal_day_runs_every_stage_in_order_and_records_it(real_db):
     clock, calls = Clock(utc(2026, 9, 21, 20, 35)), Calls()
     out = PL.run(clock.now, clock.sleep, lambda: synced("2026-09-21"), stages(calls))
     assert out["status"] == "ok" and out["exit_code"] == 0 and out["target"] == "2026-09-21"
-    assert calls.order == ["free_data", "committee", "paper_cycle", "weekly_research", "snapshot", "mirror"]
+    assert calls.order == ["free_data", "committee", "paper_cycle", "weekly_research", "snapshot", "mirror", "digest_email"]
     assert clock.slept == []  # the close was already final: no waiting, no polling
     rec = PL.last_status()
     assert rec["target"] == "2026-09-21" and all(v["ok"] for v in rec["stages"].values()) and rec["sync"]["coverage"] == 1.0
@@ -175,7 +175,7 @@ def test_force_reruns_everything(real_db):
     PL.run(clock.now, clock.sleep, lambda: synced("2026-09-21"), stages(calls))
     calls.order.clear()
     PL.run(Clock(utc(2026, 9, 21, 23, 45)).now, lambda s: None, lambda: synced("2026-09-21"), stages(calls), force=True)
-    assert len(calls.order) == 6
+    assert len(calls.order) == len(PL.STAGE_ORDER)
 
 
 def test_a_price_source_that_always_fails_is_a_fatal_error_not_a_silent_skip(real_db):
@@ -231,6 +231,15 @@ def test_the_weekly_digest_stage_runs_on_fridays_only(monkeypatch):
     PL.default_stages("2026-09-18")["weekly_research"]()  # a Friday
     PL.default_stages("2026-09-17")["weekly_research"]()  # a Thursday
     assert ran == [1]
+
+
+def test_the_digest_email_stage_calls_digest_run(monkeypatch):
+    from app import digest
+
+    seen = []
+    monkeypatch.setattr(digest, "run", lambda: seen.append(1) or {"ok": True, "sent": False, "detail": "not configured"})
+    result = PL.default_stages("2026-09-18")["digest_email"]()
+    assert seen == [1] and result == {"ok": True, "sent": False, "detail": "not configured"}
 
 
 def test_status_history_keeps_one_record_per_day_and_caps_its_length(real_db):
