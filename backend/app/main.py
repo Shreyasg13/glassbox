@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .logging_config import request_id_var, setup_logging
 from .routers import admin, auth, committee, data, insights, jobs_ws, me, monte_carlo, oauth, paper, reports, strategy, tts, ws
+from .routers import user_digest as user_digest_routes
 
 app = FastAPI(
     title="GlassBox API",
@@ -105,6 +106,8 @@ app.include_router(committee.router)
 app.include_router(strategy.admin_router)
 app.include_router(strategy.me_router)
 app.include_router(me.router)
+app.include_router(user_digest_routes.me_router)
+app.include_router(user_digest_routes.public_router)
 app.include_router(reports.router)
 app.include_router(insights.router)
 app.include_router(tts.router)

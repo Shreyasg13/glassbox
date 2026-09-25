@@ -189,9 +189,11 @@ def render_html(d: Dict[str, Any]) -> str:
 # ------------------------------------------------------------------------- send --
 
 
-def send_email(subject: str, html: str, cfg: Dict[str, Any]) -> None:
+def send_email(subject: str, html: str, cfg: Dict[str, Any], headers: Optional[Dict[str, str]] = None) -> None:
     msg = MIMEMultipart("alternative")
     msg["Subject"], msg["From"], msg["To"] = subject, cfg["user"], cfg["to"]
+    for k, v in (headers or {}).items():
+        msg[k] = v
     msg.attach(MIMEText("This report needs an HTML-capable mail client.", "plain"))
     msg.attach(MIMEText(html, "html"))
     with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as s:
