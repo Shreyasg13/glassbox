@@ -13,7 +13,7 @@ or scope changes — this is the single place to check "where are we" and
 | App | https://glassbox-portfolio-review.duckdns.org |
 | API | same domain, path-routed (`/api/*`, `/auth/*`, `/health`, `/ws/*` -- see `deploy/Caddyfile`) |
 | Database | Neon Postgres (`console.neon.tech`, org `spring-hill-60129601`, `neondb` / `production` branch) |
-| Source | `github.com/Shreyasg13/glassbox` (private, `main` branch) |
+| Source | `github.com/Shreyasg13/glassbox-trading-agents` (public, `main` branch, protected) |
 | Host | GCP VM `instance-20260902-033025`, project `project-f015cf71-9e01-4a2a-8f5`, zone `us-central1-a` |
 | Admin login | username `admin` + the password from `GLASSBOX_ADMIN_PASSWORD_HASH` / `GLASSBOX_ADMIN_PASSWORD` in the VM's `.env`. **No built-in default any more** (see "Security & cost hardening" below) |
 | Dev viewer login | none in production. `admin`/`admin` and `user`/`user` exist only locally when `GLASSBOX_ENABLE_DEV_USERS=1` (refused if `GLASSBOX_ENV=production`) |

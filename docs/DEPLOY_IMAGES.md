@@ -38,7 +38,7 @@ Only when they change (rare): `docker-compose.yml`, `deploy/Caddyfile`, `deploy/
 |---|---|
 | Docker repository | `us-central1-docker.pkg.dev/project-f015cf71-9e01-4a2a-8f5/glassbox` (cleanup policy: keep the 6 newest versions, delete anything older than 7 days) |
 | Identity for CI | `github-deployer@…` — may only **push** to that repository |
-| Keyless trust | Workload Identity pool `github`, provider `glassbox`: accepts tokens only from repo `Shreyasg13/glassbox` on branch `main` |
+| Keyless trust | Workload Identity pool `github`, provider `glassbox`: accepts tokens only from repo `Shreyasg13/glassbox-trading-agents` on branch `main` |
 | VM access | the VM's default service account has **reader** on the repository (its built-in credentials already work) |
 
 There is no long-lived Google key in GitHub or on the server.
