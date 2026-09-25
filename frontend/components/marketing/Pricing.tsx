@@ -33,8 +33,8 @@ export function Pricing() {
         <div className="mb-sp2 text-[12px] font-bold uppercase tracking-wide text-t3">Free &amp; supported by you</div>
         <h2 className="mb-sp2 text-[32px] font-extrabold leading-tight tracking-tight text-t1">Free to use. Coffee if it helps.</h2>
         <p className="mb-sp8 max-w-[70ch] text-[15px] text-t2">
-          Every feature is free for everyone: no card, no paywall, no trial that turns into a charge. Running it isn&rsquo;t free though: servers, market data and AI model usage all cost money.
-          Donations are what sustain that, and they&rsquo;re how GlassBox stays freely available to all. Giving is optional and doesn&rsquo;t unlock anything.
+          Every feature is free for everyone: no card, no paywall, no trial that turns into a charge. Running it isn&rsquo;t free though: the domain, hosting, security, infrastructure, market data and AI model usage all cost money.
+          Donations are what pay for that, and they&rsquo;re how GlassBox stays freely available to all. Giving is optional and doesn&rsquo;t unlock anything.
         </p>
       </Reveal>
 
@@ -69,7 +69,7 @@ export function Pricing() {
             <div className="mb-sp4 text-[11.5px] text-t3">one-off, any amount · paid on Buy Me a Coffee</div>
             <hr className="mb-sp4 border-border" />
             <div className="mb-sp6 flex flex-1 flex-col gap-sp2 text-[12.5px] text-t1">
-              <p>Donated money goes to sustaining the infrastructure (servers, storage, market data) and the AI model costs behind the committee and agents.</p>
+              <p>Donated money is used for the domain, hosting, security and new infrastructure (servers, storage, market data), and for the AI model costs behind the committee and agents.</p>
               <p>That&rsquo;s how every functionality stays freely available to everyone, not just those who can pay.</p>
               <p className="text-t2">You pay on buymeacoffee.com. GlassBox never sees or stores a card number.</p>
               <p className="text-t2">A donation doesn&rsquo;t change your account or limits.</p>
