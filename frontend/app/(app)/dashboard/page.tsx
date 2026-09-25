@@ -9,7 +9,7 @@ import { StressTestPanel } from "@/components/dashboard/StressTestPanel";
 import { VerifySignalPanel } from "@/components/dashboard/VerifySignalPanel";
 import { SectorAllocationChart } from "@/components/dashboard/SectorAllocationChart";
 import { InsightsAlertsPanel } from "@/components/dashboard/InsightsAlertsPanel";
-import { PortfolioGrowthPanel, type GrowthPoint } from "@/components/dashboard/PortfolioGrowthPanel";
+import { MyPortfolioPanel } from "@/components/dashboard/MyPortfolioPanel";
 import { StatsBoard, type DailySummaryData, type PortfolioStatsData } from "@/components/dashboard/StatsBoard";
 import { MissedOpportunitiesPanel, type RecentTrade } from "@/components/dashboard/MissedOpportunitiesPanel";
 import { apiUrl } from "@/lib/api";
@@ -61,16 +61,6 @@ async function getTrackAgents(track: "track1" | "track2"): Promise<TrackAgentsDa
   }
 }
 
-async function getPortfolioGrowth(): Promise<GrowthPoint[]> {
-  try {
-    const res = await fetch(apiUrl("/api/data"), { cache: "no-store" });
-    if (!res.ok) return [];
-    return (await res.json()) as GrowthPoint[];
-  } catch {
-    return [];
-  }
-}
-
 async function getDailySummary(): Promise<DailySummaryData | null> {
   try {
     const res = await fetch(apiUrl("/api/daily-summary"), { cache: "no-store" });
@@ -93,14 +83,13 @@ async function getPortfolioStats(): Promise<PortfolioStatsData & { recent_trades
 }
 
 export default async function DashboardPage() {
-  const [initialSignals, holdings, agentPerformance, track1, track2, growth, dailySummary, portfolioStats] =
+  const [initialSignals, holdings, agentPerformance, track1, track2, dailySummary, portfolioStats] =
     await Promise.all([
       getInitialSignals(),
       getHoldings(),
       getAgentPerformance(),
       getTrackAgents("track1"),
       getTrackAgents("track2"),
-      getPortfolioGrowth(),
       getDailySummary(),
       getPortfolioStats(),
     ]);
@@ -117,7 +106,7 @@ export default async function DashboardPage() {
         <DigestPanel />
       </div>
       <StatsBoard summary={dailySummary} stats={portfolioStats} />
-      <PortfolioGrowthPanel initialData={growth} />
+      <MyPortfolioPanel />
       <SignalTicker initialSignals={initialSignals} />
       <PortfolioOverviewPanel initialData={holdings} />
       <StressTestPanel />

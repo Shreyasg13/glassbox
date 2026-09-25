@@ -12,8 +12,9 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import Response
 
-from .. import db, pipeline, research, snapshots, strategy
+from .. import db, pipeline, portfolio_analytics, portfolio_view, research, snapshots, strategy
 from ..auth import TokenPayload, get_current_user, require_admin
 from ..rate_limit import rate_limit_admin_mutations
 
@@ -101,3 +102,56 @@ async def stance(user: TokenPayload = Depends(get_current_user)) -> Dict[str, An
         return strategy.stance(_book_or_503(), tickers)
 
     return await run_in_threadpool(_compute)
+
+
+# ------------------------------------------------- committee-run user portfolios --
+
+
+def _accounts() -> Dict[str, Dict[str, Any]]:
+    return {a["id"]: a for a in db.list_paper_accounts()}
+
+
+@me_router.get("/portfolio")
+async def my_portfolio(user: TokenPayload = Depends(get_current_user)) -> Dict[str, Any]:
+    """The caller's OWN committee-run paper portfolio (growth, Monte Carlo estimate, agent record, reasons).
+    No account yet -> the shared model portfolio, labelled as such. Never another user's numbers."""
+
+    def _compute() -> Dict[str, Any]:
+        out = portfolio_view.user_portfolio(user.sub, _book_or_503(), db.list_all_committee_runs(), _accounts())
+        if out is None:
+            raise HTTPException(status_code=404, detail="No paper portfolio yet: the daily paper cycle creates it")
+        return out
+
+    return await run_in_threadpool(_compute)
+
+
+@admin_router.get("/users")
+async def portfolio_users() -> Dict[str, Any]:
+    """Every user an admin can inspect (anyone with a committee-run paper account)."""
+    return {"users": await run_in_threadpool(lambda: portfolio_view.selectable_users(db.list_users(), _accounts()))}
+
+
+@admin_router.get("/user-portfolio/{username}")
+async def user_portfolio(username: str) -> Dict[str, Any]:
+    def _compute() -> Dict[str, Any]:
+        out = portfolio_view.user_portfolio(username, _book_or_503(), db.list_all_committee_runs(), _accounts(), allow_fallback=False)
+        if out is None:
+            raise HTTPException(status_code=404, detail="That user has no committee-run paper account")
+        return out
+
+    return await run_in_threadpool(_compute)
+
+
+@admin_router.get("/aggregate")
+async def aggregate() -> Dict[str, Any]:
+    """Cohort roll-up: every user's committee vs engine vs benchmark, plus pooled scored reviews."""
+    return await run_in_threadpool(lambda: portfolio_analytics.aggregate(db.list_users(), _book_or_503(), db.list_all_committee_runs(), _accounts()))
+
+
+@admin_router.get("/validation-dataset")
+async def validation_dataset(format: str = Query("json", pattern="^(json|csv)$")):
+    """One row per (user, symbol, committee review): engine vs committee, whether the account acted, forward returns."""
+    rows = await run_in_threadpool(lambda: portfolio_analytics.validation_rows(db.list_users(), _book_or_503(), db.list_all_committee_runs(), _accounts()))
+    if format == "csv":
+        return Response(portfolio_analytics.to_csv(rows), media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="glassbox-validation-dataset.csv"'})
+    return {"rows": rows, "count": len(rows)}

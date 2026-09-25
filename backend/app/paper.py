@@ -291,7 +291,7 @@ def new_account(
         "seed": seed,  # placebo only: which account's shift to reuse, so a sheltered twin draws the SAME placebo
         "id": account_id,
         "name": name,
-        "kind": kind,  # profile | benchmark | control
+        "kind": kind,  # profile | benchmark | control | twin (a profile run by the committee)
         "strategy": strategy,
         "weights": _normalise(weights),
         "invested": invested,

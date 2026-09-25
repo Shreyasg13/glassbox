@@ -185,6 +185,13 @@ def _profile_accounts(users: Iterable[Dict[str, Any]], book: paper.PriceBook) ->
         out.append(paper.new_account(f"profile:{base}", u["username"], "profile", "engine_tilt", weights, benchmark_id=f"bench:{base}", **common))
         out.append(
             paper.new_account(
+                f"committee:{base}", f"{u['username']} (committee-run)", "twin", "committee_tilt", weights, benchmark_id=f"profile:{base}",
+                note="Same stocks, weights and cash as the profile, but follows the Investment Committee's risk-checked call where it has one. "
+                "Its alpha is measured against the engine-only profile, so the gap is what the committee added for this user.", **common,
+            )
+        )
+        out.append(
+            paper.new_account(
                 f"bench:{base}", f"{u['username']} policy benchmark", "benchmark", "static_rebalanced", weights,
                 note="Same weights and rebalancing as the profile, signals ignored -- the profile's alpha is measured against this.", **common,
             )

@@ -99,8 +99,8 @@ def test_bootstrap_creates_controls_profiles_and_benchmarks(fake):
     r = paper_cycle.run_cycle(bootstrap=True, start=day(0), book=make_book(N_SHORT))
     ids = set(fake.accounts)
     assert {"ctl_spy", "ctl_equal", "ctl_engine", "ctl_placebo", "ctl_committee", "ctl_cash", "ctl_taxaware", "ctl_engine_ira", "ctl_placebo_ira"} <= ids
-    assert {"profile:demo_a", "bench:demo_a", "profile:demo_b", "bench:demo_b"} <= ids
-    assert r["accounts"] == len(ids) == 17  # 13 controls + 2 profiles + 2 benchmarks
+    assert {"profile:demo_a", "bench:demo_a", "committee:demo_a", "profile:demo_b", "bench:demo_b", "committee:demo_b"} <= ids
+    assert r["accounts"] == len(ids) == 19  # 13 controls + (profile + committee twin + benchmark) x 2
     assert not any(k for k in ids if "no_profile" in k or "an_admin" in k or "no_tickers" in k)  # skipped users
 
 
@@ -125,7 +125,7 @@ def test_profile_accounts_honour_strategic_weights_starting_cash_and_drop_unpric
 
 def test_dry_run_saves_nothing(fake):
     r = paper_cycle.run_cycle(bootstrap=True, start=day(0), dry_run=True, book=make_book(N_SHORT))
-    assert r["dry_run"] and r["accounts"] == 17
+    assert r["dry_run"] and r["accounts"] == 19
     assert fake.accounts == {} and fake.meta is None and fake.narratives == []
 
 
@@ -198,7 +198,7 @@ def test_accounts_are_frozen_after_creation_but_new_users_are_backfilled(fake):
     r = paper_cycle.run_cycle(book=make_book(N_FULL))
     assert fake.accounts["profile:demo_a"]["weights"] == before["weights"]  # history not rewritten
     assert fake.accounts["profile:demo_a"]["curve"][: len(before["curve"])] == before["curve"]
-    assert r["accounts_created"] == ["bench:late", "profile:late"]
+    assert r["accounts_created"] == ["bench:late", "committee:late", "profile:late"]
     assert fake.accounts["profile:late"]["inception"] == day(0)  # backfilled from the same start as everyone
 
 
@@ -250,7 +250,7 @@ def test_overview_lists_profiles_first_with_alpha_against_their_benchmark(fake):
     _bootstrap_then_advance(fake)
     ov = paper_cycle.overview()
     kinds = [r["kind"] for r in ov["accounts"]]
-    assert ov["initialised"] and kinds[:2] == ["profile", "profile"] and set(kinds) == {"profile", "benchmark", "control"}
+    assert ov["initialised"] and kinds[:2] == ["profile", "profile"] and set(kinds) == {"profile", "benchmark", "control", "twin"}
     prof = next(r for r in ov["accounts"] if r["id"] == "profile:demo_a")
     assert prof["alpha"] is not None and prof["benchmark_id"] == "bench:demo_a" and prof["live_days"] == N_FULL - N_SHORT
 
@@ -310,7 +310,7 @@ def test_api_run_needs_bootstrap_then_bootstraps_once_then_runs_daily(client, fa
     r = client.post("/api/admin/paper/run", json={}, headers=ADMIN)
     assert r.status_code == 409 and "bootstrap" in r.json()["detail"]
     r = client.post("/api/admin/paper/run", json={"bootstrap": True, "start": day(0)}, headers=ADMIN)
-    assert r.status_code == 200 and r.json()["accounts"] == 17
+    assert r.status_code == 200 and r.json()["accounts"] == 19
     assert client.post("/api/admin/paper/run", json={"bootstrap": True}, headers=ADMIN).status_code == 409
     monkeypatch.setattr(paper_cycle, "load_book", lambda: make_book(N_FULL))
     r = client.post("/api/admin/paper/run", json={}, headers=ADMIN)
@@ -328,7 +328,7 @@ def test_api_overview_account_and_signals_after_a_run(client, fake, monkeypatch)
     monkeypatch.setattr(paper_cycle, "load_book", lambda: make_book(N_FULL))
     client.post("/api/admin/paper/run", json={}, headers=ADMIN)
     ov = client.get("/api/admin/paper/overview", headers=ADMIN).json()
-    assert ov["initialised"] and len(ov["accounts"]) == 17
+    assert ov["initialised"] and len(ov["accounts"]) == 19
     acc = client.get("/api/admin/paper/accounts/profile:demo_a", headers=ADMIN)  # ids contain ':'
     assert acc.status_code == 200 and acc.json()["summary"]["id"] == "profile:demo_a"
     assert client.get("/api/admin/paper/accounts/nope", headers=ADMIN).status_code == 404
@@ -385,7 +385,7 @@ def test_registry_wins_a_username_clash_and_real_users_with_profiles_are_still_a
     assert sum(1 for k in fake.accounts if k == "profile:demo_a") == 1  # no duplicate
 
 
-def test_the_real_registry_builds_all_35_accounts_on_a_full_universe_with_no_users(fake, monkeypatch):
+def test_the_real_registry_builds_all_46_accounts_on_a_full_universe_with_no_users(fake, monkeypatch):
     monkeypatch.undo()  # drop the fixture's empty-registry patch, keep everything else below explicit
     f = FakeDB([])
     with pytest.MonkeyPatch.context() as mp:
@@ -395,7 +395,7 @@ def test_the_real_registry_builds_all_35_accounts_on_a_full_universe_with_no_use
         book = paper.PriceBook.from_frames(frames, {sym: PARAMS for sym in frames})
         r = paper_cycle.run_cycle(bootstrap=True, start=day(0), book=book)
     assert len(paper_profiles.DEMO_PROFILES) == 11
-    assert r["accounts"] == len(f.accounts) == 13 + 11 * 2  # controls + (profile + benchmark) per registry entry
+    assert r["accounts"] == len(f.accounts) == 13 + 11 * 3  # controls + (profile + committee twin + benchmark) per registry entry
     assert sum(1 for a in f.accounts.values() if a["kind"] == "profile") == 11
 
 

@@ -1,110 +1,101 @@
 import { Reveal } from "@/components/Reveal";
+import { CoffeeButton } from "@/components/support/CoffeeButton";
+import { supportUrl } from "@/lib/support";
 
-const tiers = [
-  {
-    name: "Free",
-    color: "text-t1",
-    price: "0",
-    priceColor: "text-t1",
-    period: "forever · no credit card needed",
-    features: [
-      { on: true, label: "5 stock verifications per day" },
-      { on: true, label: "Full Evidence Path · raw data visible" },
-      { on: true, label: "A6 Auditor confirmation badge" },
-      { on: true, label: "Discrepancy Rate dashboard" },
-      { on: false, label: "Portfolio Glass Box Score" },
-      { on: false, label: "Crisis Alerts" },
-    ],
-    cta: "Start Free",
-    ctaClass: "btn-ghost",
-    popular: false,
-  },
+const free = [
+  { on: true, label: "5 stock verifications per day" },
+  { on: true, label: "Full Evidence Path · raw data visible" },
+  { on: true, label: "A6 Auditor confirmation badge" },
+  { on: true, label: "Discrepancy Rate dashboard" },
+  { on: true, label: "Your portfolio, run by the committee, with growth and Monte Carlo estimate" },
+  { on: true, label: "Daily email digest of your stocks (opt-in)" },
+];
+
+// Not built yet: shown greyed out with no buy button, so nobody pays for or expects them today.
+const soon = [
   {
     name: "Standard",
-    color: "text-teal",
     price: "20",
-    priceColor: "text-teal",
-    period: "per month · cancel anytime",
-    features: [
-      { on: true, label: "200 verifications per month" },
-      { on: true, label: "Portfolio Glass Box Score" },
-      { on: true, label: "Crisis Alerts · real-time" },
-      { on: true, label: "Stress Test · historical crisis simulator" },
-      { on: true, label: "Weekly Discrepancy Report email" },
-      { on: true, label: "Broker import via SnapTrade" },
-    ],
-    cta: "Start Standard →",
-    ctaClass: "btn-primary",
-    popular: true,
+    features: ["More verifications per month", "Real-time crisis alerts", "Broker import via SnapTrade"],
   },
   {
     name: "Advisor",
-    color: "text-gold",
     price: "150",
-    priceColor: "text-gold",
-    period: "per month · for independent advisors",
-    features: [
-      { on: true, label: "Unlimited verifications" },
-      { on: true, label: "White-label Client Reports PDF" },
-      { on: true, label: "API access for custom integrations" },
-      { on: true, label: "Multi-client portfolio management" },
-      { on: true, label: "Compliance audit log export" },
-      { on: true, label: "30-day free trial · no risk" },
-    ],
-    cta: "Start 30-day Trial",
-    ctaClass: "btn-ghost",
-    popular: false,
+    features: ["Unlimited verifications", "White-label client reports PDF", "API access and multi-client portfolios"],
   },
 ];
 
 export function Pricing() {
+  const hasCoffee = supportUrl() !== null;
   return (
     <section id="pricing" className="scroll-mt-20 border-t border-border bg-bg1 px-sp6 py-sp10 md:px-sp10">
       <Reveal>
-        <div className="mb-sp2 text-[12px] font-bold uppercase tracking-wide text-t3">Pricing</div>
-        <h2 className="mb-sp2 text-[32px] font-extrabold leading-tight tracking-tight text-t1">
-          Start free. Upgrade when you trust us.
-        </h2>
-        <p className="mb-sp8 text-[15px] text-t2">No dark patterns. All prices visible. Cancel anytime.</p>
+        <div className="mb-sp2 text-[12px] font-bold uppercase tracking-wide text-t3">Free &amp; supported by you</div>
+        <h2 className="mb-sp2 text-[32px] font-extrabold leading-tight tracking-tight text-t1">Free to use. Coffee if it helps.</h2>
+        <p className="mb-sp8 max-w-[70ch] text-[15px] text-t2">
+          Every feature is free for everyone: no card, no paywall, no trial that turns into a charge. Running it isn&rsquo;t free though: servers, market data and AI model usage all cost money.
+          Donations are what sustain that, and they&rsquo;re how GlassBox stays freely available to all. Giving is optional and doesn&rsquo;t unlock anything.
+        </p>
       </Reveal>
 
-      <div className="grid grid-cols-1 gap-sp5 md:grid-cols-3">
-        {tiers.map((t, i) => (
-          <Reveal key={t.name} delayMs={i * 100}>
-            <div
-              className={`relative flex h-full flex-col p-sp5 transition-all duration-200 ease-glass hover:-translate-y-1 ${
-                t.popular
-                  ? "glass-panel-accent border-teal/30 hover:shadow-lg2"
-                  : "glass-panel hover:border-border2 hover:shadow-lg2"
-              }`}
-            >
-              {t.popular && (
-                <div className="absolute -top-3 left-sp5 rounded-r4 bg-teal px-sp3 py-1 text-[10px] font-bold uppercase text-bg">
-                  Most Popular
-                </div>
-              )}
-              <div className={`mb-sp2 text-[13px] font-bold ${t.color}`}>{t.name}</div>
-              <div className="mb-sp1 flex items-baseline gap-sp1">
-                <span className={`text-[18px] font-bold ${t.priceColor}`}>$</span>
-                <span className={`text-[38px] font-extrabold leading-none ${t.priceColor}`}>{t.price}</span>
-              </div>
-              <div className="mb-sp4 text-[11.5px] text-t3">{t.period}</div>
-              <hr className="mb-sp4 border-border" />
-              <div className="mb-sp6 flex flex-1 flex-col gap-sp2">
-                {t.features.map((f) => (
-                  <div key={f.label} className="flex items-start gap-sp2 text-[12.5px]">
-                    <span className={f.on ? "text-teal" : "text-t4"}>{f.on ? "✓" : "—"}</span>
-                    <span className={f.on ? "text-t1" : "text-t4"}>{f.label}</span>
-                  </div>
-                ))}
-              </div>
-              <a href="/login" className={`btn ${t.ctaClass} justify-center`}>
-                {t.cta}
-              </a>
+      <div className="grid grid-cols-1 gap-sp5 md:grid-cols-2">
+        <Reveal>
+          <div className="glass-panel flex h-full flex-col p-sp5">
+            <div className="mb-sp2 text-[13px] font-bold text-t1">Free</div>
+            <div className="mb-sp1 flex items-baseline gap-sp1">
+              <span className="text-[18px] font-bold text-t1">$</span>
+              <span className="text-[38px] font-extrabold leading-none text-t1">0</span>
             </div>
-          </Reveal>
-        ))}
+            <div className="mb-sp4 text-[11.5px] text-t3">forever · no credit card needed</div>
+            <hr className="mb-sp4 border-border" />
+            <div className="mb-sp6 flex flex-1 flex-col gap-sp2">
+              {free.map((f) => (
+                <div key={f.label} className="flex items-start gap-sp2 text-[12.5px]">
+                  <span className="text-teal">✓</span>
+                  <span className="text-t1">{f.label}</span>
+                </div>
+              ))}
+            </div>
+            <a href="/login" className="btn btn-primary justify-center">
+              Start Free
+            </a>
+          </div>
+        </Reveal>
+
+        <Reveal delayMs={100}>
+          <div className="glass-panel-accent flex h-full flex-col border-teal/30 p-sp5">
+            <div className="mb-sp2 text-[13px] font-bold text-teal">Support GlassBox</div>
+            <div className="mb-sp1 text-[38px] font-extrabold leading-none text-teal">☕</div>
+            <div className="mb-sp4 text-[11.5px] text-t3">one-off, any amount · paid on Buy Me a Coffee</div>
+            <hr className="mb-sp4 border-border" />
+            <div className="mb-sp6 flex flex-1 flex-col gap-sp2 text-[12.5px] text-t1">
+              <p>Donated money goes to sustaining the infrastructure (servers, storage, market data) and the AI model costs behind the committee and agents.</p>
+              <p>That&rsquo;s how every functionality stays freely available to everyone, not just those who can pay.</p>
+              <p className="text-t2">You pay on buymeacoffee.com. GlassBox never sees or stores a card number.</p>
+              <p className="text-t2">A donation doesn&rsquo;t change your account or limits.</p>
+            </div>
+            {hasCoffee ? <CoffeeButton /> : <span className="btn btn-ghost cursor-default justify-center opacity-60">Coffee link coming soon</span>}
+          </div>
+        </Reveal>
       </div>
+
+      <Reveal>
+        <div className="mb-sp3 mt-sp8 text-[12px] font-bold uppercase tracking-wide text-t3">Planned, not available yet</div>
+        <div className="grid grid-cols-1 gap-sp5 md:grid-cols-2">
+          {soon.map((t) => (
+            <div key={t.name} className="glass-panel relative p-sp5 opacity-60" aria-label={`${t.name}, coming soon`}>
+              <span className="absolute right-sp4 top-sp4 rounded-r4 border border-border px-sp2 py-0.5 text-[10px] font-bold uppercase text-t3">Coming soon</span>
+              <div className="text-[13px] font-bold text-t2">{t.name}</div>
+              <div className="mb-sp3 text-[12px] text-t3">Planned at ${t.price}/month · nothing to buy today</div>
+              <ul className="flex flex-col gap-1 text-[12px] text-t3">
+                {t.features.map((f) => (
+                  <li key={f}>— {f}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </Reveal>
     </section>
   );
 }
