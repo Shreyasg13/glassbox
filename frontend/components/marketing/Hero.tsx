@@ -69,7 +69,7 @@ export function Hero() {
         <div className="flex flex-wrap gap-sp5 text-[12.5px] text-t2">
           {[
             "No credit card required",
-            "5 free verifications daily",
+            "5 free verifications per account",
             "Research tool, not advice",
             "E&O insured",
           ].map((p) => (

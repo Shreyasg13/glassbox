@@ -3,7 +3,7 @@ import { CoffeeButton } from "@/components/support/CoffeeButton";
 import { supportUrl } from "@/lib/support";
 
 const free = [
-  { on: true, label: "5 stock verifications per day" },
+  { on: true, label: "5 free stock verifications per account" },
   { on: true, label: "Full Evidence Path · raw data visible" },
   { on: true, label: "A6 Auditor confirmation badge" },
   { on: true, label: "Discrepancy Rate dashboard" },
