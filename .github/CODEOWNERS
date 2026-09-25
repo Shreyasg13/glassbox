@@ -1,0 +1,7 @@
+# Every change needs the owner's approval (branch protection: "require review from code owners").
+# The most sensitive paths are listed explicitly so they stay owned even if the catch-all is ever narrowed.
+*                       @Shreyasg13
+/.github/               @Shreyasg13
+/deploy/                @Shreyasg13
+/docker-compose.yml     @Shreyasg13
+/backend/app/auth.py    @Shreyasg13
