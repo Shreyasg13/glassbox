@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CoffeeButton } from "@/components/support/CoffeeButton";
 import { GlassPanel } from "@/components/GlassPanel";
 import { useAuth } from "@/lib/auth";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -79,7 +78,7 @@ export function VerifySignalPanel() {
         setError(
           err instanceof ApiError
             ? err.status === 402
-              ? "You've used all 5 free verified signals. The limit keeps the free service running. Donations pay for hosting, security, infrastructure and AI costs so it stays free for everyone."
+              ? "You've used all 5 free verified signals. Upgrade to keep verifying holdings."
               : err.message
             : "Verification failed"
         );
@@ -109,12 +108,8 @@ export function VerifySignalPanel() {
 
       {atLimit ? (
         <div className="rounded-r2 border border-gold/20 bg-gold-dim p-sp4 text-[12.5px] text-t2">
-          You&apos;ve used all {entitlements!.limit} free verified signals. The limit keeps the free service
-          running. Donations pay for the domain, hosting, security, infrastructure and AI model costs that keep GlassBox free for everyone; if it has been useful you can
-          buy a coffee (optional, it doesn&apos;t change your limit).
-          <div className="mt-sp3">
-            <CoffeeButton className="btn btn-ghost" />
-          </div>
+          You&apos;ve used all {entitlements!.limit} free verified signals. Upgrade for unlimited
+          verification.
         </div>
       ) : (
         <>
