@@ -323,15 +323,15 @@ ADMIN   GET  /admin/flags      POST /admin/flags/{key}
 - [x] T0 Repo discovery
 - [x] T1 Feature flags and kill switches
 - [x] T2 Baseline discrepancy script
-- [ ] T3 Structured claim output
-- [ ] T4 A6 verification gate
+- [x] T3 Structured claim output
+- [x] T4 A6 verification gate
 - [ ] T5 Route all outputs through `publish()`
 - [ ] T6 Quarantine and admin review
 - [ ] T7 User evidence view
 - [ ] T8 A7 compliance filter
-- [ ] T9 Disclaimer config and compliance log UI
-- [ ] T10 Point-in-time snapshot store
-- [ ] T11 Hash-chained ledger
+- [x] T9 Disclaimer config (the compliance log tab moved to T8: it needs `compliance_events`)
+- [x] T10 Point-in-time snapshot store
+- [x] T11 Hash-chained ledger
 - [ ] T12 Forward-only scoring
 - [ ] T13 Weekly discrepancy report
 - [ ] T14 Gate health dashboard
@@ -376,3 +376,8 @@ ADMIN   GET  /admin/flags      POST /admin/flags/{key}
 | 2026-09-26 | T0 | Repo map filled, current flow traced, output channels listed, surprises recorded, real committee output saved, execution plan written | PR `s3/T0-discovery` |
 | 2026-09-26 | T1 | `feature_flags` table (Alembic 0001), `flags.flag()`, kill switches on email, reports, speech (default off), assistant, user reports and the daily job; admin Flags tab and API; `require_role`; every-route-declares-a-role test with a shrinking allowlist of 26 legacy public routes; Alembic adopted for S3 tables only | PR `s3/T1-flags` |
 | 2026-09-26 | T2 | `app/scripts/baseline_discrepancy.py` audits the 77 stored committee runs with no new model calls: context fidelity 1.1% differ (0.2% beyond rounding), headline 4.0% (all 1 point), AI-prose unsupported numbers 2.3% overall but 0.2% since the first day. Report `docs/s3/baseline.md`, per-number data `docs/s3/baseline.csv`. 22 tests incl. a check against the real context builder | PR `s3/T2-baseline` |
+| 2026-09-26 | T9 | `backend/config/disclaimer.md` (PENDING LEGAL REVIEW) is the one source for the disclaimer in 6 output sites; `GET /api/public/disclaimer`; compliance log tab moved to T8. Built by the twin worker, 2 review rounds | PR #23 `s3/T9-disclaimer` |
+| 2026-09-26 | T10 | `source_snapshots` (Alembic 0002): every free-data and price fetch recorded with as_of, fetched_at, sha256; committee context reads snapshots fetched <= run time (cache fallback per source/series); admin Snapshots tab. 3 review rounds | PR #24 `s3/T10-snapshots` |
+| 2026-09-26 | T11 | `ledger_calls` (Alembic 0003): append-only (triggers on SQLite and Postgres), sha256 hash chain, `BEGIN IMMEDIATE`/table lock for concurrent appends; admin Ledger tab + verify. Accepted first time; reviewer verified 180 concurrent appends and tamper detection at the exact row | PR #25 `s3/T11-ledger` |
+| 2026-09-26 | T3 | `claims` + `committee_narratives` (Alembic 0004): deterministic claims with exact JSON pointers, derived values from a fixed FORMULAS table checked by an `ast` allow-list (no eval); placeholder-only narrative behind `pipeline.claims` (default off); decisions proven identical. 3 rounds incl. a security fix | PR #26 `s3/T3-claims` |
+| 2026-09-26 | T4 | `verification_results` (Alembic 0005): pure A6 checks (traceability, point-in-time, staleness, price, risk, narrative) + runner wired after the claims step; badge counts fully verified claims; 40 gate tests. Finished by the reviewer after the worker hit the free-model daily limit | PR #27 `s3/T4-a6-gate` |
