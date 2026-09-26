@@ -10,8 +10,8 @@ const tiers = [
     features: [
       { on: true, label: "5 stock verifications per account" },
       { on: true, label: "Full Evidence Path · raw data visible" },
-      { on: true, label: "A6 Auditor confirmation badge" },
-      { on: true, label: "Discrepancy Rate dashboard" },
+      { on: false, label: "A6 Auditor confirmation badge (coming soon)" },
+      { on: false, label: "Discrepancy Rate dashboard (coming soon)" },
       { on: false, label: "Portfolio Glass Box Score" },
       { on: false, label: "Crisis Alerts" },
     ],

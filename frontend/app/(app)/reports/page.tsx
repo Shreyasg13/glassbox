@@ -23,7 +23,7 @@ export default function ReportsPage() {
       <h1 className="text-[18px] font-bold text-t1">Daily Reports</h1>
       <GuideBubble
         compact
-        message="Each report is LLM-narrated, then independently checked by the A6 auditor before you see it. The charts below each one show the same underlying data the narrative describes."
+        message="Reports are built from GlassBox's own stored data. The independent A6 verification step is still being built and is not live yet, so check any number against the charts below each report."
       />
 
       {!isAdmin && (
