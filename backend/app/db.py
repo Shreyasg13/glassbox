@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import Column, Float, String, Boolean, create_engine, MetaData, Table, select, delete, update, insert, func
+from sqlalchemy import Column, Float, Index, Integer, String, Boolean, create_engine, MetaData, Table, select, delete, update, insert, func
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -112,6 +112,25 @@ users_table = Table(
     metadata,
     Column("id", String, primary_key=True),
     Column("config", String, nullable=False),  # JSON-encoded: username, username_lower, password_hash, role, created_at
+)
+
+# ---- First-party, cookie-free visit analytics (app/analytics.py) ----
+# One row per page view. Real columns (not a JSON blob) so the admin summary can GROUP BY in SQL.
+# NO IP address and NO user id is stored: `visitor` is a hash that rotates every day, so it can count
+# unique visitors within a day but can never follow a person from one day to the next.
+page_views_table = Table(
+    "page_views",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("day", String, nullable=False),  # YYYY-MM-DD (UTC)
+    Column("ts", String, nullable=False),  # ISO timestamp (UTC)
+    Column("path", String, nullable=False),
+    Column("visitor", String, nullable=False),
+    Column("source", String, nullable=False, default=""),  # normalised referrer or utm_source: linkedin, github, google, direct...
+    Column("medium", String, nullable=False, default=""),
+    Column("campaign", String, nullable=False, default=""),
+    Column("device", String, nullable=False, default=""),  # mobile | desktop | tablet
+    Index("ix_page_views_day", "day"),
 )
 
 # ---- Paper trading (app/paper.py, app/paper_cycle.py) ----

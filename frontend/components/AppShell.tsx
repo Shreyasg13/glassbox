@@ -18,6 +18,7 @@ const userLinks: NavItem[] = [
 
 const adminLinks: NavItem[] = [
   { href: "/admin/strategy", label: "Strategy", icon: "✧" },
+  { href: "/admin/traction", label: "Traction", icon: "↗" },
   { href: "/admin/agents", label: "Agent Factory", icon: "⚗" },
   { href: "/admin/orchestrations", label: "Orchestrations", icon: "⟳" },
   { href: "/admin/paper", label: "Paper Trading", icon: "◔" },

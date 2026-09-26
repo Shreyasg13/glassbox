@@ -84,6 +84,14 @@ Running the full app needs price history synced into a `trading-storage/` folder
 secrets with `python -m app.scripts.gen_secrets --admin`, then use Docker Compose. There is not yet a one-command demo; contributions
 that add one are welcome.
 
+## Privacy
+
+The hosted demo counts visits with its own small, cookie-free analytics (`backend/app/analytics.py`): no cookies, no third-party
+scripts, and **IP addresses are never stored**. A visitor is a hash that resets every day, so no one can be followed across days.
+Do-Not-Track and Global-Privacy-Control are respected, bots are ignored, and rows are deleted after 180 days. Only page paths, the
+referring site or campaign tag, and a device class (mobile/desktop) are kept. If you self-host, the same code runs on your server
+and the data stays with you.
+
 ## Contributing
 
 Issues and pull requests are welcome. `main` is protected: every change goes through a pull request that must pass CI
