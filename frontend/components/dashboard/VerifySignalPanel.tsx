@@ -78,7 +78,7 @@ export function VerifySignalPanel() {
         setError(
           err instanceof ApiError
             ? err.status === 402
-              ? "You've used all 5 free verified signals. Upgrade to keep verifying holdings."
+              ? "You've used all 5 verified signals in this free research preview. There are no paid plans."
               : err.message
             : "Verification failed"
         );
