@@ -42,7 +42,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from . import data_source as ds
-from . import associations, committee_graph, db, free_data, orchestration, paper, paper_cycle
+from . import associations, claims, committee_graph, db, flags, free_data, narrative, orchestration, paper, paper_cycle
 from . import risk as risk_mod
 from .models import OrchestrationConfig
 from .scripts.seed_agents import ORCHESTRATION_NAME
@@ -378,6 +378,63 @@ def _write_report(d: str, docs: List[Dict[str, Any]]) -> bool:
 Runner = Callable[..., Awaitable[Dict[str, Any]]]
 
 
+async def attach_claims(doc: Dict[str, Any], book: Any, run_time: str) -> None:
+    """Attach structured claims and (if flag on) narrative to a saved committee decision.
+
+    Claims (no LLM) are always stored. Narrative (LLM) only runs if pipeline.claims flag is on.
+    Any exception is logged and never breaks the committee run.
+    """
+    run_id = doc["id"]
+    sym = doc["symbol"]
+    d = doc["date"]
+    try:
+        # Build and store claims (deterministic, no LLM)
+        claim_list = claims.build_claims(run_id, sym, d, book, run_time)
+        log.info("attached %d claims to %s", len(claim_list), run_id)
+
+        # Narrative (LLM) only if flag is on
+        if flags.flag("pipeline.claims"):
+            nar_result = await narrative.write_narrative(run_id, doc, claim_list)
+            # Store narrative row
+            from .migrated_tables import committee_narratives_table
+            with db.engine.begin() as conn:
+                conn.execute(
+                    committee_narratives_table.insert().values(
+                        run_id=run_id,
+                        narrative=nar_result["narrative"],
+                        status=nar_result["status"],
+                        attempts=nar_result["attempts"],
+                        provider_requested=nar_result["provider_requested"],
+                        model_requested=nar_result["model_requested"],
+                        provider_answered=nar_result["provider_answered"],
+                        model_answered=nar_result["model_answered"],
+                        error=nar_result["error"],
+                        created_at=nar_result.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+            log.info("narrative for %s: status=%s, attempts=%d", run_id, nar_result["status"], nar_result["attempts"])
+        else:
+            # Store a skipped narrative row so the admin UI knows it wasn't attempted
+            from .migrated_tables import committee_narratives_table
+            with db.engine.begin() as conn:
+                conn.execute(
+                    committee_narratives_table.insert().values(
+                        run_id=run_id,
+                        narrative=None,
+                        status="skipped",
+                        attempts=0,
+                        provider_requested=None,
+                        model_requested=None,
+                        provider_answered=None,
+                        model_answered=None,
+                        error=None,
+                        created_at=datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+    except Exception as exc:  # noqa: BLE001 -- never break the committee run
+        log.warning("attach_claims failed for %s: %s", run_id, exc)
+
+
 async def run_daily(
     *,
     symbols: Optional[List[str]] = None,
@@ -450,6 +507,11 @@ async def run_daily(
             log.info("committee %s %s -> %s (%d/%d answered, engine %s)", d, pick["symbol"], doc["decision"], doc["answered"], doc["total"], pick["engine_signal"])
     finally:
         await asyncio.to_thread(db.release_committee_lock, owner)
+
+    # Attach claims (and narrative if flag is on) AFTER the committee lock is released.
+    # This ensures the narrative LLM call doesn't consume the committee's time budget or hold its lock.
+    for doc in saved:
+        await attach_claims(doc, book, run_time)
 
     all_today = db.list_committee_runs_for_date(d)
     reported = _write_report(d, all_today) if saved else False

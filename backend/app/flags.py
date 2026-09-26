@@ -32,6 +32,7 @@ CACHE_TTL_S = 5.0
 # key -> (default enabled, description shown to the admin)
 FLAGS: Dict[str, Tuple[bool, str]] = {
     "pipeline.daily": (True, "The daily job (price sync, committee, paper cycle, inbox, emails). Off: the scheduled run exits without doing anything."),
+    "pipeline.claims": (False, "Attach structured claims and an LLM narrative to each committee decision. Off: claims (no LLM) are still stored; narrative step is skipped. Requires a paid key for the narrative model."),
     "output.reports": (True, "Report pages for the public and users. Off: report links return 404 (admins can still open them)."),
     "output.email": (True, "Every email GlassBox sends: the admin digest, user digests, previews and address confirmations. Off: nothing is emailed."),
     "output.speech": (False, "Voice narration (text-to-speech). Off by default; the site falls back to the browser's own voice."),

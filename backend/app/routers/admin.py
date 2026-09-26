@@ -19,7 +19,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import db, jobs, orchestration, snapshot_store
+from .. import claims, db, jobs, narrative, orchestration, snapshot_store
 from ..auth import TokenPayload, require_admin
 from ..models import (
     AgentConfig,
@@ -282,3 +282,87 @@ async def get_snapshot(snap_id: str):
     if item is None:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     return item
+
+
+# ---- Claims (S3 T3) ----
+
+from sqlalchemy import select
+from ..migrated_tables import claims_table, committee_narratives_table
+
+
+class ClaimItem(BaseModel):
+    id: str
+    run_id: str
+    ticker: str
+    metric: str
+    value: float
+    unit: str
+    period: str
+    source: str
+    source_snapshot_id: Optional[str] = None
+    source_path: Optional[str] = None
+    text_span: Optional[str] = None
+    created_at: str
+
+
+@router.get("/claims")
+async def list_claims(run_id: str, limit: int = 200) -> List[ClaimItem]:
+    """All claims for a committee run_id."""
+    limit = max(1, min(limit, 1000))
+    with db.engine.connect() as conn:
+        rows = conn.execute(
+            select(claims_table).where(claims_table.c.run_id == run_id).order_by(claims_table.c.created_at).limit(limit)
+        ).fetchall()
+    return [
+        ClaimItem(
+            id=r.id,
+            run_id=r.run_id,
+            ticker=r.ticker,
+            metric=r.metric,
+            value=r.value,
+            unit=r.unit,
+            period=r.period,
+            source=r.source,
+            source_snapshot_id=r.source_snapshot_id,
+            source_path=r.source_path,
+            text_span=r.text_span,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+
+class NarrativeItem(BaseModel):
+    run_id: str
+    narrative: Optional[str] = None
+    status: str
+    attempts: int
+    provider_requested: Optional[str] = None
+    model_requested: Optional[str] = None
+    provider_answered: Optional[str] = None
+    model_answered: Optional[str] = None
+    error: Optional[str] = None
+    created_at: str
+
+
+@router.get("/narratives/{run_id}")
+async def get_narrative(run_id: str) -> NarrativeItem:
+    """Narrative for a committee run_id."""
+    with db.engine.connect() as conn:
+        row = conn.execute(
+            select(committee_narratives_table).where(committee_narratives_table.c.run_id == run_id)
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Narrative not found")
+    return NarrativeItem(
+        run_id=row.run_id,
+        narrative=row.narrative,
+        status=row.status,
+        attempts=row.attempts,
+        provider_requested=row.provider_requested,
+        model_requested=row.model_requested,
+        provider_answered=row.provider_answered,
+        model_answered=row.model_answered,
+        error=row.error,
+        created_at=row.created_at,
+    )

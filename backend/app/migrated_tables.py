@@ -11,7 +11,7 @@ Rules for adding a table here:
 """
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Column, Index, Integer, MetaData, String, Table, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, Float, Index, Integer, MetaData, String, Table, Text, UniqueConstraint
 
 migrated_metadata = MetaData()
 
@@ -51,6 +51,39 @@ ledger_calls_table = Table(
     Column("recorded_at", String, nullable=False),
     Column("prev_hash", String(64), nullable=False),
     Column("hash", String(64), nullable=False),
+)
+
+claims_table = Table(
+    "claims",
+    migrated_metadata,
+    Column("id", String, primary_key=True),
+    Column("run_id", String, nullable=False),
+    Column("ticker", String, nullable=False),
+    Column("metric", String, nullable=False),
+    Column("value", Float, nullable=False),
+    Column("unit", String, nullable=False),
+    Column("period", String, nullable=False),
+    Column("source", String, nullable=False),
+    Column("source_snapshot_id", String, nullable=True),
+    Column("source_path", String, nullable=True),
+    Column("text_span", String, nullable=True),
+    Column("created_at", String, nullable=False),
+    Index("ix_claims_run_id", "run_id"),
+)
+
+committee_narratives_table = Table(
+    "committee_narratives",
+    migrated_metadata,
+    Column("run_id", String, primary_key=True),
+    Column("narrative", Text, nullable=True),
+    Column("status", String, nullable=False),  # ok | pending_review | skipped
+    Column("attempts", Integer, nullable=False, default=0),
+    Column("provider_requested", String, nullable=True),
+    Column("model_requested", String, nullable=True),
+    Column("provider_answered", String, nullable=True),
+    Column("model_answered", String, nullable=True),
+    Column("error", Text, nullable=True),
+    Column("created_at", String, nullable=False),
 )
 
 
