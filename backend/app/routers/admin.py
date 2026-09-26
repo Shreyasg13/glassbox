@@ -14,12 +14,13 @@ data.py/monte_carlo.py/tts.py sidesteps that.
 from __future__ import annotations
 
 import asyncio
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import claims, db, jobs, narrative, orchestration, snapshot_store
+from .. import claims, db, jobs, narrative, orchestration, snapshot_store, verification
+from ..verification import gate
 from ..auth import TokenPayload, require_admin
 from ..models import (
     AgentConfig,
@@ -366,3 +367,66 @@ async def get_narrative(run_id: str) -> NarrativeItem:
         error=row.error,
         created_at=row.created_at,
     )
+
+
+# ---- Verification (S3 T4) ----
+
+from sqlalchemy import select
+from ..migrated_tables import verification_results_table
+
+
+class VerificationResultItem(BaseModel):
+    id: str
+    run_id: str
+    claim_id: Optional[str] = None
+    check_type: str
+    status: str  # pass | fail | warn
+    expected: Optional[str] = None
+    observed: Optional[str] = None
+    reason: str
+    created_at: str
+
+
+class VerificationSummary(BaseModel):
+    total: int
+    passed: int
+    failed: int
+    warned: int
+    ok: bool
+    badge: str
+
+
+def _verification_rows(run_id: str) -> List[Any]:
+    with db.engine.connect() as conn:
+        return conn.execute(
+            select(verification_results_table)
+            .where(verification_results_table.c.run_id == run_id)
+            .order_by(verification_results_table.c.created_at)
+        ).fetchall()
+
+
+def _summary(rows: List[Any]) -> Dict[str, Any]:
+    """The gate's own summarize(), so the admin API can never count differently from the gate (badge = fully verified claims)."""
+    return gate.summarize([gate.Result(check_type=r.check_type, status=r.status, claim_id=r.claim_id,
+                                       expected=r.expected, observed=r.observed, reason=r.reason) for r in rows])
+
+
+@router.get("/verification")
+async def get_verification(run_id: str) -> Dict[str, Any]:
+    """All verification results for a committee run_id, plus summary."""
+    rows = _verification_rows(run_id)
+    results = [
+        VerificationResultItem(
+            id=r.id, run_id=r.run_id, claim_id=r.claim_id, check_type=r.check_type, status=r.status,
+            expected=r.expected, observed=r.observed, reason=r.reason, created_at=r.created_at,
+        )
+        for r in rows
+    ]
+    return {"run_id": run_id, "results": results, "summary": _summary(rows)}
+
+
+@router.get("/verification/summary")
+async def get_verification_summary(date: str) -> Dict[str, Any]:
+    """One summary per committee run of that date (Ask and challenger runs excluded)."""
+    run_ids = [r["id"] for r in db.list_committee_runs_for_date(date) if not str(r["id"]).startswith(("ask:", "chal:"))]
+    return {"date": date, "summaries": [{"run_id": rid, "summary": _summary(_verification_rows(rid))} for rid in run_ids]}

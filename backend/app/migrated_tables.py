@@ -86,6 +86,21 @@ committee_narratives_table = Table(
     Column("created_at", String, nullable=False),
 )
 
+verification_results_table = Table(
+    "verification_results",
+    migrated_metadata,
+    Column("id", String, primary_key=True),
+    Column("run_id", String, nullable=False),
+    Column("claim_id", String, nullable=True),
+    Column("check_type", String, nullable=False),
+    Column("status", String, nullable=False),  # pass | fail | warn
+    Column("expected", String, nullable=True),
+    Column("observed", String, nullable=True),
+    Column("reason", String, nullable=False),
+    Column("created_at", String, nullable=False),
+    Index("ix_verification_results_run_id", "run_id"),
+)
+
 
 def include_object(obj, name, type_, reflected, compare_to):
     """Autogenerate fence (used by migrations/env.py): it may only see the migration-managed tables above, so it can never

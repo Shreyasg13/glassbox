@@ -32,9 +32,10 @@ def test_upgrade_creates_the_table_and_records_the_revision(engine):
     assert "ledger_calls" not in tables(engine)
     assert "claims" not in tables(engine)
     assert "committee_narratives" not in tables(engine)
+    assert "verification_results" not in tables(engine)
     with engine.begin() as conn:
         migrate.upgrade(conn)
-    assert "feature_flags" in tables(engine) and "source_snapshots" in tables(engine) and "ledger_calls" in tables(engine) and "claims" in tables(engine) and "committee_narratives" in tables(engine) and revision(engine) == "0004"
+    assert "feature_flags" in tables(engine) and "source_snapshots" in tables(engine) and "ledger_calls" in tables(engine) and "claims" in tables(engine) and "committee_narratives" in tables(engine) and "verification_results" in tables(engine) and revision(engine) == "0005"
     cols = {c["name"] for c in inspect(engine).get_columns("feature_flags")}
     assert cols == {"key", "enabled", "updated_by", "updated_at"}
     snap_cols = {c["name"] for c in inspect(engine).get_columns("source_snapshots")}
@@ -47,13 +48,19 @@ def test_upgrade_creates_the_table_and_records_the_revision(engine):
     narr_cols = {c["name"] for c in inspect(engine).get_columns("committee_narratives")}
     expected_narr = {"run_id", "narrative", "status", "attempts", "provider_requested", "model_requested", "provider_answered", "model_answered", "error", "created_at"}
     assert narr_cols == expected_narr
+    vr_cols = {c["name"] for c in inspect(engine).get_columns("verification_results")}
+    expected_vr = {"id", "run_id", "claim_id", "check_type", "status", "expected", "observed", "reason", "created_at"}
+    assert vr_cols == expected_vr
+    # Check index
+    vr_indexes = {idx["name"] for idx in inspect(engine).get_indexes("verification_results")}
+    assert "ix_verification_results_run_id" in vr_indexes
 
 
 def test_upgrading_twice_is_a_no_op(engine):
     for _ in range(2):
         with engine.begin() as conn:
             migrate.upgrade(conn)
-    assert revision(engine) == "0004"
+    assert revision(engine) == "0005"
 
 
 def test_downgrade_removes_only_the_migrated_table_and_leaves_every_older_table_alone(engine):
@@ -63,7 +70,7 @@ def test_downgrade_removes_only_the_migrated_table_and_leaves_every_older_table_
     with engine.begin() as conn:
         migrate.downgrade("base", conn)
     after = tables(engine)
-    assert "feature_flags" not in after and "source_snapshots" not in after and "ledger_calls" not in after and "claims" not in after and "committee_narratives" not in after and revision(engine) is None
+    assert "feature_flags" not in after and "source_snapshots" not in after and "ledger_calls" not in after and "claims" not in after and "committee_narratives" not in after and "verification_results" not in after and revision(engine) is None
     assert before <= after and {"users", "committee_runs", "paper_accounts"} <= after  # nothing else was dropped
 
 
@@ -96,6 +103,7 @@ def test_autogenerate_never_proposes_dropping_an_older_table(engine):
     assert "ledger_calls" in migrated_metadata.tables
     assert "claims" in migrated_metadata.tables
     assert "committee_narratives" in migrated_metadata.tables
+    assert "verification_results" in migrated_metadata.tables
 
 
 def test_the_migrated_tables_are_not_created_by_create_all():

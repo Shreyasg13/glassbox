@@ -637,3 +637,49 @@ def test_saved_decision_identical_with_claims_step_on_and_off(tmp_path, monkeypa
 
     # The decisions must be identical - claims step is purely additive
     assert decisions_off == decisions_on, f"Decisions differ! OFF={decisions_off}, ON={decisions_on}"
+
+
+# --- T4 (reviewer-added): the A6 gate is wired into run_daily but can never change or break a decision ---
+def _run_daily_with(monkeypatch, db_path, gate_impl):
+    from app import db, migrate, verification
+    from sqlalchemy import create_engine
+    import asyncio
+
+    monkeypatch.setattr(db, "list_orchestrations", lambda: [{
+        "id": "o1", "name": "Investment Committee", "mode": "committee_vote",
+        "agent_ids": ["a"], "coordinator": "vn_engine", "schedule": None,
+        "agent_timeout_s": 60.0, "run_budget_s": 240.0
+    }])
+    monkeypatch.setattr(paper_cycle, "load_book", make_book)
+    monkeypatch.setattr(committee_daily.orchestration, "run_orchestration", make_runner(calls={"AAPL": 2}))
+    monkeypatch.setattr(committee_daily.ds, "get_live_signals", lambda: {"signals": []})
+    monkeypatch.setattr(committee_daily, "datetime", type("D", (), {"now": staticmethod(lambda tz=None: NOW)}))
+    eng = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    db.metadata.create_all(eng)
+    with eng.begin() as conn:
+        migrate.upgrade(conn)
+    monkeypatch.setattr(db, "engine", eng)
+    if gate_impl is not None:
+        monkeypatch.setattr(verification.runner, "run_gate", gate_impl)
+    return asyncio.run(committee_daily.run_daily(symbols=["AAPL"], force=True, dry_run=False)), db
+
+
+def test_saved_decision_identical_with_gate_wired_in_and_patched_out(tmp_path, monkeypatch):
+    async def no_gate(*a, **k):
+        return None
+    with_gate, _ = _run_daily_with(monkeypatch, tmp_path / "gate_on.db", None)
+    without_gate, _ = _run_daily_with(monkeypatch, tmp_path / "gate_off.db", no_gate)
+    assert with_gate.get("decisions") == without_gate.get("decisions")
+    assert with_gate.get("decisions")  # the comparison is not vacuous
+
+
+def test_an_exception_inside_run_gate_does_not_break_run_daily(tmp_path, monkeypatch):
+    calls = []
+
+    async def exploding_gate(run_id, *a, **k):
+        calls.append(run_id)
+        raise RuntimeError("gate blew up")
+
+    result, _ = _run_daily_with(monkeypatch, tmp_path / "gate_boom.db", exploding_gate)
+    assert calls, "run_gate was not called at all"
+    assert result.get("decisions")  # the committee result still came back
