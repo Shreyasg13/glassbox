@@ -435,7 +435,7 @@ def test_summarize_mixed_results():
     assert summary["failed"] == 2
     assert summary["warned"] == 1
     assert summary["ok"] is False
-    assert summary["badge"] == "1/2 numbers verified against source"
+    assert summary["badge"] == "1/3 numbers verified against source"  # c3 failed its price check, so it is not verified
 
 
 def test_summarize_only_traceability():
@@ -508,24 +508,84 @@ async def test_runner_re_run_replaces_results(tmp_path, monkeypatch):
     assert callable(run_gate)
 
 
-def test_runner_exception_does_not_break(tmp_path, monkeypatch):
-    """Exception inside run_gate should be logged and not break."""
-    # This test ensures the runner handles exceptions gracefully
-    # The actual implementation should have try/except with logging
-    pass
+# --- Reviewer-added tests (T4 review): fail sides through the public entry points ---
+
+NM_PAYLOAD = {"concepts": {"net_income": {"series": [{"val": 10.0}]}, "revenue": {"series": [{"val": 100.0}]}}}
+NM_SPAN = "derived: net_income / revenue | net_income=/concepts/net_income/series/0/val | revenue=/concepts/revenue/series/0/val"
 
 
-# --- Integration test with committee_daily ---
+def nm_claim(**kw):
+    c = {"id": "nm1", "metric": "net_margin", "source": "sec_facts", "value": 0.1, "unit": "ratio",
+         "source_snapshot_id": "s1", "source_path": "/concepts/net_income/series/0/val", "text_span": NM_SPAN}
+    c.update(kw)
+    return c
 
-@pytest.mark.asyncio
-async def test_committee_daily_with_gate(tmp_path, monkeypatch):
-    """Committee daily should run verification gate after attach_claims."""
-    from app.committee_daily import run_daily
 
-    # This test verifies the wiring is correct
-    # We can't easily test the full committee daily flow, but we can verify
-    # that the imports work and the runner is called correctly
-    assert hasattr(verification.runner, 'run_gate')
+@pytest.mark.parametrize("claim,want", [
+    (nm_claim(), "pass"),
+    (nm_claim(value=0.2), "fail"),
+    (nm_claim(value=110.0, text_span=NM_SPAN.replace("net_income / revenue", "net_income + revenue")), "fail"),
+    (nm_claim(value=0.5, text_span="derived: net_income / revenue | net_income=50 | revenue=100"), "fail"),
+    (nm_claim(text_span="derived: __import__('os').system('echo PWNED') | net_income=/concepts/net_income/series/0/val | revenue=/concepts/revenue/series/0/val"), "fail"),
+], ids=["passes", "wrong-value", "swapped-formula", "literal-self-proving-input", "import-injection"])
+def test_traceability_through_the_gate(claim, want, capfd):
+    r = gate.check_traceability(claim, NM_PAYLOAD, prices={})
+    assert r.status == want
+    assert "PWNED" not in capfd.readouterr().out  # the injected text must never execute
+
+
+def test_verify_run_counts_a_wrong_value_as_not_verified():
+    inputs = {"claims": [nm_claim(), nm_claim(id="nm2", value=0.3)],
+              "snapshots_by_claim_id": {cid: ({"fetched_at": "2026-09-18T10:00:00+00:00", "as_of": "2026-09-01"}, NM_PAYLOAD) for cid in ("nm1", "nm2")},
+              "run_time": "2026-09-18T12:00:00+00:00", "run_date": "2026-09-18", "prices": {}, "recomputed_risk": {}, "narrative_row": None}
+    summary = gate.summarize(gate.verify_run(inputs))
+    assert summary["verified_claims"] == 1 and summary["total_claims"] == 2 and summary["ok"] is False
+
+
+def test_badge_excludes_a_pricebook_claim_whose_price_check_fails():
+    c = make_simple_claim("pricebook", 101.0, period="2026-09-18")
+    c["id"] = "p1"
+    results = [gate.check_traceability(c, None, {}), gate.check_price(c, {"2026-09-18": 100.0})]
+    s = gate.summarize(results)
+    assert results[0].status == "pass" and results[1].status == "fail"
+    assert s["verified_claims"] == 0 and s["badge"].startswith("0/1")
+
+
+def test_badge_excludes_a_risk_claim_whose_recomputation_differs():
+    c = {"id": "r1", "metric": "risk_vol_pct", "source": "risk", "value": 20.0}
+    results = [gate.check_traceability(c, None, {})] + gate.check_risk([c], {"vol_pct": 25.0})
+    s = gate.summarize(results)
+    assert any(r.status == "fail" for r in results)
+    assert s["verified_claims"] == 0 and s["badge"].startswith("0/1")
+
+
+@pytest.mark.parametrize("run_time,fetched_at,want", [
+    ("2026-09-18T12:00:00+00:00", "2026-09-18T12:00:00.000001+00:00", "fail"),  # 1 microsecond after the run
+    ("2026-09-18T12:00:00+00:00", "2026-09-18T12:00:00.000000+00:00", "pass"),  # same instant, two formats
+    ("2026-09-18T12:00:00Z", "2026-09-18T11:59:59.999999+00:00", "pass"),
+])
+def test_point_in_time_compares_instants_not_strings(run_time, fetched_at, want):
+    r = gate.check_point_in_time({"id": "c"}, {"fetched_at": fetched_at}, run_time)
+    assert r.status == want
+
+
+def test_admin_verification_routes_require_admin():
+    from fastapi.testclient import TestClient
+    from app.auth import TokenPayload, get_current_user
+    from app.main import app
+
+    viewer = TokenPayload(sub="v", role="viewer")
+    admin = TokenPayload(sub="a", role="admin")
+    try:
+        app.dependency_overrides[get_current_user] = lambda: viewer
+        c = TestClient(app)
+        assert c.get("/api/admin/verification", params={"run_id": "x"}).status_code == 403
+        assert c.get("/api/admin/verification/summary", params={"date": "2026-09-18"}).status_code == 403
+        app.dependency_overrides[get_current_user] = lambda: admin
+        assert c.get("/api/admin/verification", params={"run_id": "x"}).status_code == 200
+        assert c.get("/api/admin/verification/summary", params={"date": "2026-09-18"}).status_code == 200
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
 
 
 if __name__ == "__main__":

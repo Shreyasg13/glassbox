@@ -20,7 +20,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from . import config
-from .. import claims, narrative, snapshot_store
+from .. import claims, narrative
 
 
 @dataclass(frozen=True)
@@ -35,13 +35,25 @@ class Result:
 
 
 def _iso_to_dt(s: str) -> datetime:
-    """Parse ISO string to UTC datetime."""
+    """Parse ISO string to UTC datetime with microsecond precision."""
     dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     else:
         dt = dt.astimezone(timezone.utc)
     return dt
+
+
+def _normalize_ts(s: str) -> datetime:
+    """Normalize an ISO timestamp string to the same format snapshot_store uses.
+
+    snapshot_store stores timestamps using _iso() which produces:
+    YYYY-MM-DDTHH:MM:SS.ffffff+00:00 (always 6 microsecond digits)
+
+    This function parses any valid ISO format and returns a datetime,
+    ensuring both timestamps being compared are normalized identically.
+    """
+    return _iso_to_dt(s)
 
 
 def _iso_to_date(s: str) -> date:
@@ -114,6 +126,8 @@ def check_point_in_time(claim: Dict[str, Any], snapshot_meta: Dict[str, Any], ru
     """Verify the snapshot's fetched_at is <= run_time.
 
     snapshot_meta must contain 'fetched_at' (ISO string).
+    Both timestamps are normalized to the same format (microsecond precision)
+    before comparison, since datetime.isoformat() drops trailing zeros.
     """
     claim_id = claim.get("id")
     fetched_at = snapshot_meta.get("fetched_at")
@@ -127,8 +141,14 @@ def check_point_in_time(claim: Dict[str, Any], snapshot_meta: Dict[str, Any], ru
             reason="snapshot metadata missing fetched_at",
         )
 
-    # Compare as ISO strings (they're normalized to the same format)
-    if fetched_at <= run_time:
+    # Normalize both timestamps to the same format for correct comparison
+    # datetime.isoformat() drops microseconds when they are 0, so raw string
+    # comparison is wrong at the boundary (e.g., "12:00:00+00:00" vs
+    # "12:00:00.000001+00:00").
+    run_dt = _normalize_ts(run_time)
+    fetched_dt = _normalize_ts(fetched_at)
+
+    if fetched_dt <= run_dt:
         return Result(
             check_type="point_in_time",
             status="pass",
@@ -459,17 +479,45 @@ def summarize(results: List[Result]) -> Dict[str, Any]:
     """Summarize verification results.
 
     Returns: {"total", "passed", "failed", "warned", "ok": failed == 0,
+              "verified_claims", "total_claims",
               "badge": "N/N numbers verified against source"}
-    where N counts traceability passes over claims.
+
+    A claim counts as "verified" only if EVERY check for that claim_id is 'pass'.
+    Staleness 'warn' does NOT disqualify a claim.
+    The badge uses verified_claims / total_claims.
     """
     total = len(results)
     passed = sum(1 for r in results if r.status == "pass")
     failed = sum(1 for r in results if r.status == "fail")
     warned = sum(1 for r in results if r.status == "warn")
 
-    # Count traceability passes over claims (each claim has one traceability check)
-    traceability_passes = sum(1 for r in results if r.check_type == "traceability" and r.status == "pass")
-    traceability_total = sum(1 for r in results if r.check_type == "traceability")
+    # Group results by claim_id to determine if each claim is fully verified
+    # Claims with no claim_id (narrative check) are not counted in the badge
+    results_by_claim: Dict[Optional[str], List[Result]] = {}
+    for r in results:
+        cid = r.claim_id
+        if cid not in results_by_claim:
+            results_by_claim[cid] = []
+        results_by_claim[cid].append(r)
+
+    # A claim is verified if ALL its results are 'pass'
+    # (staleness 'warn' is not a 'pass', so it disqualifies unless we skip it)
+    # But per spec: staleness warn does NOT disqualify. So we ignore staleness warn
+    # when checking if a claim is fully verified.
+    def claim_is_verified(claim_results: List[Result]) -> bool:
+        for r in claim_results:
+            if r.status == "fail":
+                return False
+            if r.status == "warn" and r.check_type != "staleness":
+                return False
+        return True
+
+    # Count verified claims (excluding narrative check which has claim_id=None)
+    verified_claims = sum(
+        1 for cid, crs in results_by_claim.items()
+        if cid is not None and claim_is_verified(crs)
+    )
+    total_claims = sum(1 for cid in results_by_claim if cid is not None)
 
     return {
         "total": total,
@@ -477,5 +525,7 @@ def summarize(results: List[Result]) -> Dict[str, Any]:
         "failed": failed,
         "warned": warned,
         "ok": failed == 0,
-        "badge": f"{traceability_passes}/{traceability_total} numbers verified against source",
+        "verified_claims": verified_claims,
+        "total_claims": total_claims,
+        "badge": f"{verified_claims}/{total_claims} numbers verified against source",
     }
