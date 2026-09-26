@@ -203,6 +203,5 @@ def test_admin_digest_html_escapes_disclaimer(monkeypatch):
         html = digest.render_html(d)
         # The disclaimer text should appear escaped in the HTML
         assert 'Bold &lt;b&gt; and &amp; ampersand.' in html
-        # And the raw HTML should NOT appear
         # And the raw HTML should NOT appear (unescaped version should not be present)
         assert "Bold <b> and & ampersand." not in html
