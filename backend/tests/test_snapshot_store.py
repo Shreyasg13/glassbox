@@ -341,21 +341,26 @@ def test_admin_routes_require_admin_role(tmp_path, monkeypatch):
     def override_admin():
         return admin
 
-    # Viewer gets 403
-    app.dependency_overrides[get_current_user] = override_viewer
-    c_viewer = TestClient(app)
-    assert c_viewer.get("/api/admin/snapshots").status_code == 403
+    # the override is on the shared app: always remove it, or every later test would run as admin
+    try:
+        # Viewer gets 403
+        app.dependency_overrides[get_current_user] = override_viewer
+        c_viewer = TestClient(app)
+        assert c_viewer.get("/api/admin/snapshots").status_code == 403
+        assert c_viewer.get("/api/admin/snapshots/00000000-0000-0000-0000-000000000000").status_code == 403
 
-    # Admin gets 200
-    app.dependency_overrides[get_current_user] = override_admin
-    c_admin = TestClient(app)
-    r = c_admin.get("/api/admin/snapshots")
-    assert r.status_code == 200
-    assert isinstance(r.json(), list)
+        # Admin gets 200
+        app.dependency_overrides[get_current_user] = override_admin
+        c_admin = TestClient(app)
+        r = c_admin.get("/api/admin/snapshots")
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
 
-    # Admin gets 404 for unknown id
-    r = c_admin.get("/api/admin/snapshots/00000000-0000-0000-0000-000000000000")
-    assert r.status_code == 404
+        # Admin gets 404 for unknown id
+        r = c_admin.get("/api/admin/snapshots/00000000-0000-0000-0000-000000000000")
+        assert r.status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
 
 
 def test_snapshot_put_invalid_source_raises():
