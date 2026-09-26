@@ -32,3 +32,13 @@ def real_db(tmp_path, monkeypatch):
     real.metadata.create_all(eng)
     monkeypatch.setattr(real, "engine", eng)
     return real
+
+
+@pytest.fixture(autouse=True)
+def _reset_feature_flag_cache():
+    """Flags are cached for a few seconds per process; without this, one test's switch position would leak into the next."""
+    from app import flags
+
+    flags.clear_cache()
+    yield
+    flags.clear_cache()

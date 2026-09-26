@@ -9,7 +9,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from .. import assistant, db, feedback, notifications, portfolio_view
+from .. import assistant, db, feedback, flags, notifications, portfolio_view
 from ..auth import TokenPayload, get_current_user, require_admin
 from ..portfolio_analytics import to_csv
 from ..rate_limit import check_user_heavy
@@ -84,6 +84,8 @@ class AskBody(BaseModel):
 
 @me_router.post("/ask")
 async def ask(body: AskBody, user: TokenPayload = Depends(get_current_user)) -> Dict[str, Any]:
+    if not flags.flag("output.assistant"):
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="The assistant is switched off for now. Signals for any date are still available above.")
     check_user_heavy(user.sub)
     if await run_in_threadpool(assistant.remaining_today, user.sub) <= 0:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"You've used today's {assistant.DAILY_QUESTIONS} questions. They reset at 00:00 UTC.")

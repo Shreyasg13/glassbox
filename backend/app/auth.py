@@ -314,3 +314,26 @@ async def require_admin(user: TokenPayload = Depends(get_current_user)) -> Token
     if user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
     return user
+
+
+async def _explicitly_public() -> None:
+    """Marker dependency: this route is public ON PURPOSE (as opposed to nobody having decided)."""
+    return None
+
+
+# Every route must declare who may call it. The three declarable roles, and the ONE way to check them:
+#   "public" -> anyone (explicit), "user" -> any signed-in account, "admin" -> the admin role.
+# tests/test_route_roles.py fails if a route declares none and is not in its shrinking allowlist of legacy routes.
+get_current_user.declared_role = "user"  # type: ignore[attr-defined]
+get_current_user_optional.declared_role = "public"  # type: ignore[attr-defined]
+require_admin.declared_role = "admin"  # type: ignore[attr-defined]
+_explicitly_public.declared_role = "public"  # type: ignore[attr-defined]
+
+ROLES = ("public", "user", "admin")
+
+
+def require_role(role: str):
+    """The single permitted way to declare a route's role:  dependencies=[Depends(require_role("admin"))]."""
+    if role not in ROLES:
+        raise ValueError(f"unknown role {role!r}; choose from {ROLES}")
+    return {"public": _explicitly_public, "user": get_current_user, "admin": require_admin}[role]

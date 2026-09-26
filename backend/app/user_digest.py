@@ -271,6 +271,10 @@ def _headers(unsub_url: str) -> Dict[str, str]:
 
 
 def send_confirmation(row: Dict[str, Any], sender: Optional[Sender] = None) -> Dict[str, Any]:
+    from . import flags
+
+    if not flags.flag("output.email"):
+        return {"ok": False, "detail": "email is switched off right now"}
     cfg = digest.smtp_config()
     p = _prefs(row)
     addr = p["email"]
@@ -306,6 +310,10 @@ def send_to_user(row: Dict[str, Any], book, cfg: Dict[str, Any], cache: Dict[Any
 
 def send_preview(row: Dict[str, Any], book=None, sender: Optional[Sender] = None, now: Optional[datetime] = None) -> Dict[str, Any]:
     """The user asked for one right now (needs a verified address; rate-limited)."""
+    from . import flags
+
+    if not flags.flag("output.email"):
+        return {"ok": False, "detail": "email is switched off right now"}
     now = now or datetime.now(timezone.utc)
     cfg = digest.smtp_config()
     if not cfg:
@@ -332,6 +340,10 @@ def send_preview(row: Dict[str, Any], book=None, sender: Optional[Sender] = None
 
 def run(book=None, sender: Optional[Sender] = None, users: Optional[List[Dict[str, Any]]] = None, now: Optional[datetime] = None) -> Dict[str, Any]:
     """The pipeline stage: one digest per opted-in, verified user. Never raises."""
+    from . import flags
+
+    if not flags.flag("output.email"):
+        return {"ok": True, "sent": 0, "detail": "disabled: the output.email flag is off"}
     cfg = digest.smtp_config()
     if not cfg:
         return {"ok": True, "sent": 0, "detail": "not configured: set DIGEST_SMTP_USER, DIGEST_SMTP_APP_PASSWORD, DIGEST_TO_EMAIL"}

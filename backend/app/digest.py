@@ -205,6 +205,10 @@ def send_email(subject: str, html: str, cfg: Dict[str, Any], headers: Optional[D
 def run(now=None, book=None, runner=None) -> Dict[str, Any]:
     """The pipeline stage entry point. Never raises: a bad SMTP config or a rendering surprise is
     reported, not fatal (see the module docstring)."""
+    from . import flags
+
+    if not flags.flag("output.email"):
+        return {"ok": True, "sent": False, "detail": "disabled: the output.email flag is off"}
     try:
         d = gather(book=book)
     except Exception as exc:  # noqa: BLE001 -- a report failing to build must not fail the pipeline

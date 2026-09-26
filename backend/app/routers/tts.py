@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
-from .. import tts
+from .. import flags, tts
 from ..rate_limit import check_tts_limits
 
 router = APIRouter(prefix="/api", tags=["tts"])
@@ -36,6 +36,8 @@ def _unavailable() -> Response:
 
 @router.post("/tts")
 async def api_tts(body: TTSRequest, request: Request):
+    if not flags.flag("output.speech"):  # kill switch (default OFF); the site falls back to the browser's own voice
+        return _unavailable()
     # Cache first: a hit spends no provider quota, so it must not consume the
     # caller's rate-limit budget (every visitor replays the same fixed lines).
     hit = tts.lookup(body.text, body.elevenlabs_voice_id, body.kokoro_voice_id)

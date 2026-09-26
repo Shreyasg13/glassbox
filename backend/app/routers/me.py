@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from .. import data_source as ds
+from .. import flags
 from .. import db
 from .. import jobs
 from .. import orchestration
@@ -101,6 +102,8 @@ async def run_my_report(body: OrchestrationRunRequest, user: TokenPayload = Depe
     set (every dev account, and any real account that hasn't visited
     the subscriptions page yet), so "no subscription" means "everyone",
     not "nobody"."""
+    if not flags.flag("output.user_reports"):
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Report generation is switched off for now.")
     check_user_report(user.sub)  # LLM fan-out: tight hourly per-user budget
     orchestrations_by_name = {o["name"]: o for o in db.list_orchestrations()}
     orch_data = orchestrations_by_name.get(ORCHESTRATION_NAME)
