@@ -11,7 +11,7 @@ Rules for adding a table here:
 """
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Column, Index, MetaData, String, Table, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, Index, Integer, MetaData, String, Table, Text, UniqueConstraint
 
 migrated_metadata = MetaData()
 
@@ -36,6 +36,21 @@ source_snapshots_table = Table(
     Column("payload_hash", String(64), nullable=False),
     Index("ix_source_snapshots_source_ticker_fetched", "source", "ticker", "fetched_at"),
     UniqueConstraint("source", "ticker", "payload_hash", name="uq_source_snapshots_source_ticker_hash"),
+)
+
+ledger_calls_table = Table(
+    "ledger_calls",
+    migrated_metadata,
+    Column("seq", Integer, primary_key=True, autoincrement=False),
+    Column("call_id", String, nullable=False, unique=True),
+    Column("ticker", String, nullable=False),
+    Column("call_type", String, nullable=False),
+    Column("payload_json", Text, nullable=False),
+    Column("input_snapshot_ids", Text, nullable=False, default="[]"),
+    Column("committee_config_id", String, nullable=True),
+    Column("recorded_at", String, nullable=False),
+    Column("prev_hash", String(64), nullable=False),
+    Column("hash", String(64), nullable=False),
 )
 
 
