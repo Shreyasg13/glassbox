@@ -1,0 +1,80 @@
+{
+  "id": "2026-09-25:V",
+  "date": "2026-09-25",
+  "symbol": "V",
+  "why": "largest 5-day mover (-0.2%)",
+  "engine_signal": "HOLD",
+  "engine_confidence": 50.0,
+  "price": 367.3800048828125,
+  "decision": "HOLD",
+  "action": "HOLD",
+  "gate": null,
+  "risk": {
+    "score": 25.2,
+    "level": "LOW",
+    "vol": 0.1705,
+    "vol_pct": 39.1,
+    "drawdown": -0.0436,
+    "below_ma200": false
+  },
+  "analyst_risk": {
+    "LOW": 6,
+    "MEDIUM": 1,
+    "HIGH": 0
+  },
+  "votes": {
+    "BUY": 0.0,
+    "SELL": 0.0,
+    "HOLD": 5.45
+  },
+  "ceo": {
+    "call": "HOLD",
+    "vote": "HOLD",
+    "consensus": 1.0,
+    "label": "strong consensus",
+    "margin": 5.45,
+    "engine_trio": "HOLD",
+    "analyst_panel": "HOLD",
+    "trio_panel_agree": true,
+    "dissenters": [],
+    "gate": null,
+    "headline": "HOLD - strong consensus (100% of the vote weight); engine trio and analyst panel agree"
+  },
+  "context": "V \u2014 Visa Inc. (Financials)\nData through the close of 2026-09-25. Last price 367.38.\nQuant engine signal: HOLD (confidence 50%). RSI 48.0; moving-average cross BULLISH (fast 30-day vs slow 200-day); volume 0.76x its average.\nBacktest quality of this engine on V (in-sample, so optimistic): Sharpe 0.61, win rate 29%.\nRecent moves: 1-day -0.2%, 5-day -0.2%, 20-day -3.2%; -4.4% from its 60-day high; 20...[trimmed]",
+  "debate": null,
+  "engine": "langgraph",
+  "agrees_with_engine": true,
+  "agents": [
+    {
+      "agent": "Quantitative Strategist (Engine)",
+      "type": "deterministic",
+      "ok": true,
+      "lean": "HOLD",
+      "summary": "engine HOLD (50%)"
+    },
+    {
+      "agent": "Risk Manager (Engine)",
+      "type": "deterministic",
+      "ok": true,
+      "lean": "HOLD",
+      "summary": "engine HOLD (50%)"
+    },
+    {
+      "agent": "Value Investor (Engine)",
+      "type": "deterministic",
+      "ok": true,
+      "lean": "HOLD",
+      "summary": "engine HOLD (50%)"
+    },
+    "...[more agents trimmed]"
+  ],
+  "answered": 10,
+  "total": 10,
+  "quorum_ok": true,
+  "providers": {
+    "gemini": 7
+  },
+  "error": null,
+  "seconds": 67.9,
+  "created_at": "2026-09-25T20:57:27.987100+00:00"
+}
