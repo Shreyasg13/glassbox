@@ -133,6 +133,55 @@ page_views_table = Table(
     Index("ix_page_views_day", "day"),
 )
 
+# ---- User inbox, assistant history and feedback (app/notifications.py, app/assistant.py, app/feedback.py) ----
+# Real columns (not JSON blobs): the inbox is read per user and the admin summaries GROUP BY.
+notifications_table = Table(
+    "notifications",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("user", String, nullable=False),  # lowercased username
+    Column("dedupe_key", String, nullable=False),  # (user, dedupe_key) is unique: re-running a job never duplicates a notification
+    Column("day", String, nullable=False),  # the trading day it is about (YYYY-MM-DD)
+    Column("kind", String, nullable=False),  # signal | alert | report | email
+    Column("severity", String, nullable=False, default="info"),  # info | watch | attention
+    Column("title", String, nullable=False),
+    Column("body", String, nullable=False, default=""),
+    Column("link", String, nullable=False, default=""),
+    Column("read", Boolean, nullable=False, default=False),
+    Column("created_at", String, nullable=False),
+    Index("ix_notifications_user", "user", "created_at"),
+    Index("uq_notifications_dedupe", "user", "dedupe_key", unique=True),
+)
+
+qa_messages_table = Table(
+    "qa_messages",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("user", String, nullable=False),
+    Column("day", String, nullable=False),  # UTC day it was asked (for the daily allowance)
+    Column("created_at", String, nullable=False),
+    Column("as_of", String, nullable=False, default=""),  # the trading day the question was about
+    Column("question", String, nullable=False),
+    Column("answer", String, nullable=False),
+    Column("used_llm", Boolean, nullable=False, default=False),
+    Column("model", String, nullable=False, default=""),
+    Index("ix_qa_messages_user_day", "user", "day"),
+)
+
+feedback_table = Table(
+    "feedback",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("user", String, nullable=False),
+    Column("created_at", String, nullable=False),
+    Column("target_type", String, nullable=False),  # signal | answer | notification | committee | general
+    Column("target_ref", String, nullable=False, default=""),  # e.g. "AAPL|2026-09-24", a qa message id, a notification id
+    Column("symbol", String, nullable=False, default=""),
+    Column("rating", Integer, nullable=False, default=0),  # -1 unhelpful, 0 none (comment only), 1 helpful
+    Column("comment", String, nullable=False, default=""),
+    Index("ix_feedback_created", "created_at"),
+)
+
 # ---- Paper trading (app/paper.py, app/paper_cycle.py) ----
 # One row per simulated account: its whole equity curve and trade list live in
 # the JSON blob (a few hundred KB at most over a decade), so a daily cycle is

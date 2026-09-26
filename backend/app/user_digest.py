@@ -359,8 +359,11 @@ def run(book=None, sender: Optional[Sender] = None, users: Optional[List[Dict[st
             log.warning("user digests: hit the per-run cap of %d; the rest wait for tomorrow", MAX_PER_RUN)
             break
         try:
-            send_to_user(row, book, cfg, cache, sender, dq)
+            addr = send_to_user(row, book, cfg, cache, sender, dq)
             db.update_user(row["id"], {"digest": dict(p, last_sent=as_of, last_error=None)})
+            from . import notifications
+
+            notifications.note_email_sent(row["username"], addr, as_of)
             sent += 1
         except Exception as exc:  # noqa: BLE001 -- one bad recipient must not stop the rest
             failed += 1

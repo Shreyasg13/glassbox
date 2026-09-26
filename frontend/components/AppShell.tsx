@@ -5,12 +5,15 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 type NavItem = { href: string; label: string; icon: string };
 
 const userLinks: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "◈" },
   { href: "/onboarding", label: "Onboarding", icon: "✦" },
+  { href: "/notifications", label: "Inbox", icon: "✉" },
+  { href: "/ask", label: "Assistant", icon: "◎" },
   { href: "/track-record", label: "Track record", icon: "◔" },
   { href: "/reports", label: "Reports", icon: "▤" },
   { href: "/agents", label: "My Agents", icon: "⚗" },
@@ -120,6 +123,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="h-[6px] w-[6px] animate-pulse rounded-full bg-green" />
             MARKET OPEN
           </div>
+          <NotificationBell />
           <ThemeToggle />
           {/* Always visible regardless of viewport -- the sidebar's own
               sign-out (below) is desktop-only (md:flex), so this is the

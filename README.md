@@ -28,7 +28,13 @@ Live demo: <https://glassbox-portfolio-review.duckdns.org> · License: [MIT](LIC
   DeepSeek, xAI, any OpenAI-compatible gateway, or local Ollama). See [docs/FREE_LLM_ROUTING.md](docs/FREE_LLM_ROUTING.md).
 - **An arena for challengers.** Record another system's daily calls and it is traded and judged under identical rules
   ([docs/ARENA.md](docs/ARENA.md)).
-- **Opt-in email digests**, an admin console with per-user views and a validation/inference dataset export.
+- **An inbox for every user.** Daily stance, alerts on their stocks, paper-trading reports and the digests emailed to them, in one place.
+- **A grounded portfolio assistant.** Pick any past trading day, see what the engine and committee said about your stocks and how it
+  turned out, and ask follow-ups. It answers only from GlassBox's own data, never gives buy/sell advice, and falls back to a plain
+  data summary when no model is available.
+- **A feedback loop.** Users can rate signals and answers and suggest what they want from the committee. Feedback is advisory: the
+  maintainer reviews it, and nothing changes automatically. Anything it inspires must still pass the live evidence gate.
+- **Opt-in email digests**, an admin console with per-user views, a feedback view and a validation/inference dataset export.
 
 ## How it compares with TradingAgents
 

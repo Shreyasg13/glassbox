@@ -11,6 +11,7 @@ import { CapitalPanel } from "@/components/admin/strategy/CapitalPanel";
 import { CeoView } from "@/components/admin/strategy/CeoView";
 import { ResearchPanel } from "@/components/admin/strategy/ResearchPanel";
 import { UsersPanel } from "@/components/admin/strategy/UsersPanel";
+import { FeedbackPanel } from "@/components/admin/strategy/FeedbackPanel";
 
 const TABS = [
   { id: "ceo", label: "CEO view", hint: "today's calls" },
@@ -18,6 +19,7 @@ const TABS = [
   { id: "accuracy", label: "Is it working?", hint: "accuracy & leaderboard" },
   { id: "capital", label: "Capital & tax", hint: "results" },
   { id: "users", label: "Users", hint: "portfolios · validation data" },
+  { id: "feedback", label: "Feedback", hint: "what users say" },
   { id: "research", label: "Research", hint: "correlations · evidence gate" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
@@ -94,6 +96,8 @@ export default function StrategyPage() {
         <AccuracyPanel />
       ) : tab === "users" ? (
         <UsersPanel />
+      ) : tab === "feedback" ? (
+        <FeedbackPanel />
       ) : tab === "research" ? (
         <ResearchPanel />
       ) : q.isPending ? (
