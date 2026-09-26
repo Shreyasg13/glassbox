@@ -14,12 +14,12 @@ data.py/monte_carlo.py/tts.py sidesteps that.
 from __future__ import annotations
 
 import asyncio
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import claims, db, jobs, narrative, orchestration, snapshot_store
+from .. import claims, db, jobs, narrative, orchestration, snapshot_store, verification
 from ..auth import TokenPayload, require_admin
 from ..models import (
     AgentConfig,
@@ -366,3 +366,134 @@ async def get_narrative(run_id: str) -> NarrativeItem:
         error=row.error,
         created_at=row.created_at,
     )
+
+
+# ---- Verification (S3 T4) ----
+
+from sqlalchemy import select
+from ..migrated_tables import verification_results_table
+
+
+class VerificationResultItem(BaseModel):
+    id: str
+    run_id: str
+    claim_id: Optional[str] = None
+    check_type: str
+    status: str  # pass | fail | warn
+    expected: Optional[str] = None
+    observed: Optional[str] = None
+    reason: str
+    created_at: str
+
+
+class VerificationSummary(BaseModel):
+    total: int
+    passed: int
+    failed: int
+    warned: int
+    ok: bool
+    badge: str
+
+
+@router.get("/verification")
+async def get_verification(run_id: str) -> Dict[str, Any]:
+    """All verification results for a committee run_id, plus summary."""
+    with db.engine.connect() as conn:
+        rows = conn.execute(
+            select(verification_results_table)
+            .where(verification_results_table.c.run_id == run_id)
+            .order_by(verification_results_table.c.created_at)
+        ).fetchall()
+
+    results = [
+        VerificationResultItem(
+            id=r.id,
+            run_id=r.run_id,
+            claim_id=r.claim_id,
+            check_type=r.check_type,
+            status=r.status,
+            expected=r.expected,
+            observed=r.observed,
+            reason=r.reason,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+    # Compute summary
+    total = len(results)
+    passed = sum(1 for r in results if r.status == "pass")
+    failed = sum(1 for r in results if r.status == "fail")
+    warned = sum(1 for r in results if r.status == "warn")
+    trace_passes = sum(1 for r in results if r.check_type == "traceability" and r.status == "pass")
+    trace_total = sum(1 for r in results if r.check_type == "traceability")
+    badge = f"{trace_passes}/{trace_total} numbers verified against source"
+
+    return {
+        "run_id": run_id,
+        "results": results,
+        "summary": VerificationSummary(
+            total=total,
+            passed=passed,
+            failed=failed,
+            warned=warned,
+            ok=failed == 0,
+            badge=badge,
+        ),
+    }
+
+
+@router.get("/verification/summary")
+async def get_verification_summary(date: str) -> Dict[str, Any]:
+    """One summary per run of that date."""
+    # First get all run_ids for this date
+    from ..migrated_tables import committee_runs_table
+
+    with db.engine.connect() as conn:
+        run_rows = conn.execute(
+            select(committee_runs_table.c.id)
+            .where(committee_runs_table.c.date == date)
+        ).fetchall()
+
+    run_ids = [r.id for r in run_rows if not r.id.startswith(("ask:", "chal:"))]
+
+    summaries = []
+    for run_id in run_ids:
+        with db.engine.connect() as conn:
+            rows = conn.execute(
+                select(verification_results_table)
+                .where(verification_results_table.c.run_id == run_id)
+                .order_by(verification_results_table.c.created_at)
+            ).fetchall()
+
+        results = [
+            {
+                "check_type": r.check_type,
+                "status": r.status,
+                "claim_id": r.claim_id,
+                "reason": r.reason,
+            }
+            for r in rows
+        ]
+
+        total = len(results)
+        passed = sum(1 for r in results if r["status"] == "pass")
+        failed = sum(1 for r in results if r["status"] == "fail")
+        warned = sum(1 for r in results if r["status"] == "warn")
+        trace_passes = sum(1 for r in results if r["check_type"] == "traceability" and r["status"] == "pass")
+        trace_total = sum(1 for r in results if r["check_type"] == "traceability")
+        badge = f"{trace_passes}/{trace_total} numbers verified against source"
+
+        summaries.append({
+            "run_id": run_id,
+            "summary": VerificationSummary(
+                total=total,
+                passed=passed,
+                failed=failed,
+                warned=warned,
+                ok=failed == 0,
+                badge=badge,
+            ),
+        })
+
+    return {"date": date, "summaries": summaries}

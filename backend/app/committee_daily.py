@@ -42,7 +42,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from . import data_source as ds
-from . import associations, claims, committee_graph, db, flags, free_data, narrative, orchestration, paper, paper_cycle
+from . import associations, claims, committee_graph, db, flags, free_data, narrative, orchestration, paper, paper_cycle, verification
 from . import risk as risk_mod
 from .models import OrchestrationConfig
 from .scripts.seed_agents import ORCHESTRATION_NAME
@@ -512,6 +512,14 @@ async def run_daily(
     # This ensures the narrative LLM call doesn't consume the committee's time budget or hold its lock.
     for doc in saved:
         await attach_claims(doc, book, run_time)
+
+    # Run the verification gate for each saved decision. Exceptions are logged
+    # and never break the committee run. No flag needed (no LLM, no user-visible change).
+    for doc in saved:
+        try:
+            await verification.runner.run_gate(doc["id"], run_time, book)
+        except Exception as exc:  # noqa: BLE001 -- never break the committee run
+            log.warning("verification gate failed for %s: %s", doc["id"], exc)
 
     all_today = db.list_committee_runs_for_date(d)
     reported = _write_report(d, all_today) if saved else False
