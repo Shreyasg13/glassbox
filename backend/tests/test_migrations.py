@@ -29,20 +29,23 @@ def revision(eng):
 def test_upgrade_creates_the_table_and_records_the_revision(engine):
     assert "feature_flags" not in tables(engine)
     assert "source_snapshots" not in tables(engine)
+    assert "ledger_calls" not in tables(engine)
     with engine.begin() as conn:
         migrate.upgrade(conn)
-    assert "feature_flags" in tables(engine) and "source_snapshots" in tables(engine) and revision(engine) == "0002"
+    assert "feature_flags" in tables(engine) and "source_snapshots" in tables(engine) and "ledger_calls" in tables(engine) and revision(engine) == "0003"
     cols = {c["name"] for c in inspect(engine).get_columns("feature_flags")}
     assert cols == {"key", "enabled", "updated_by", "updated_at"}
     snap_cols = {c["name"] for c in inspect(engine).get_columns("source_snapshots")}
     assert snap_cols == {"id", "source", "ticker", "as_of", "fetched_at", "payload_json", "payload_hash"}
+    ledger_cols = {c["name"] for c in inspect(engine).get_columns("ledger_calls")}
+    assert ledger_cols == {"seq", "call_id", "ticker", "call_type", "payload_json", "input_snapshot_ids", "committee_config_id", "recorded_at", "prev_hash", "hash"}
 
 
 def test_upgrading_twice_is_a_no_op(engine):
     for _ in range(2):
         with engine.begin() as conn:
             migrate.upgrade(conn)
-    assert revision(engine) == "0002"
+    assert revision(engine) == "0003"
 
 
 def test_downgrade_removes_only_the_migrated_table_and_leaves_every_older_table_alone(engine):
@@ -52,7 +55,7 @@ def test_downgrade_removes_only_the_migrated_table_and_leaves_every_older_table_
     with engine.begin() as conn:
         migrate.downgrade("base", conn)
     after = tables(engine)
-    assert "feature_flags" not in after and "source_snapshots" not in after and revision(engine) is None
+    assert "feature_flags" not in after and "source_snapshots" not in after and "ledger_calls" not in after and revision(engine) is None
     assert before <= after and {"users", "committee_runs", "paper_accounts"} <= after  # nothing else was dropped
 
 

@@ -514,3 +514,21 @@ export type Snapshot = {
 export type SnapshotDetail = Snapshot & {
   payload: unknown;
 };
+
+// ---- Ledger (admin) ----
+
+export type LedgerRow = {
+  seq: number;
+  call_id: string;
+  ticker: string;
+  call_type: string;
+  recorded_at: string;
+  hash: string;
+};
+
+export type LedgerVerify = {
+  ok: boolean;
+  rows: number;
+  first_bad_seq: number | null;
+  reason: string;
+};

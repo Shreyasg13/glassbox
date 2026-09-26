@@ -14,6 +14,7 @@ import { UsersPanel } from "@/components/admin/strategy/UsersPanel";
 import { FeedbackPanel } from "@/components/admin/strategy/FeedbackPanel";
 import { FlagsPanel } from "@/components/admin/strategy/FlagsPanel";
 import { SnapshotsPanel } from "@/components/admin/strategy/SnapshotsPanel";
+import { LedgerPanel } from "@/components/admin/strategy/LedgerPanel";
 
 const TABS = [
   { id: "ceo", label: "CEO view", hint: "today's calls" },
@@ -25,6 +26,7 @@ const TABS = [
   { id: "flags", label: "Flags", hint: "kill switches" },
   { id: "research", label: "Research", hint: "correlations · evidence gate" },
   { id: "snapshots", label: "Snapshots", hint: "point-in-time fetches" },
+  { id: "ledger", label: "Ledger", hint: "append-only call chain" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -108,6 +110,8 @@ export default function StrategyPage() {
         <ResearchPanel />
       ) : tab === "snapshots" ? (
         <SnapshotsPanel />
+      ) : tab === "ledger" ? (
+        <LedgerPanel />
       ) : q.isPending ? (
         <p className="py-sp6 text-center text-[13px] text-t3">Loading…</p>
       ) : q.isError ? (
