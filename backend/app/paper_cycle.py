@@ -30,7 +30,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
 from . import data_source as ds
-from . import db, paper, paper_profiles
+from . import db, disclaimer, paper, paper_profiles
 
 log = logging.getLogger("glassbox.paper")
 
@@ -235,7 +235,7 @@ def build_report_text(acct: Dict[str, Any], bench: Optional[Dict[str, Any]], boo
     lines = [
         f"{acct['name']} -- daily paper-trading report for {d}",
         f"Profile: {prof.get('archetype', 'n/a')} · {acct.get('risk_level') or 'n/a'} risk · {prof.get('horizon_years', '?')}-year horizon. "
-        "SIMULATED portfolio -- not real money, not investment advice.",
+        f"SIMULATED portfolio -- not real money. {disclaimer.text()}",
         "",
     ]
     chg = _day_change(acct)

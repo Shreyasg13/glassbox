@@ -25,6 +25,7 @@ from email.mime.text import MIMEText
 from typing import Any, Dict, List, Optional
 
 from . import free_data, strategy
+from . import disclaimer
 
 log = logging.getLogger("glassbox.digest")
 
@@ -174,7 +175,7 @@ def render_html(d: Dict[str, Any]) -> str:
 <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;">
 <tr><td style="background:#0f172a;padding:20px 24px;">
   <div style="font:700 18px/1.3 -apple-system,Segoe UI,Arial,sans-serif;color:#ffffff;">GlassBox &middot; Daily Committee Digest</div>
-  <div style="font:13px/1.5 -apple-system,Segoe UI,Arial,sans-serif;color:#94a3b8;margin-top:2px;">{d["date"] or "n/a"} &middot; simulated research, not investment advice</div>
+  <div style="font:13px/1.5 -apple-system,Segoe UI,Arial,sans-serif;color:#94a3b8;margin-top:2px;">{d["date"] or "n/a"} &middot; {disclaimer.text()}</div>
 </td></tr>
 <tr><td style="padding:8px 24px 24px;">{body}</td></tr>
 <tr><td style="padding:16px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;">

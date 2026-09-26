@@ -65,7 +65,7 @@ def test_render_html_is_self_contained_and_covers_every_section():
     d = digest.build_digest(overview(), FREE_STATUS, BOARD_INSUFFICIENT, [run_row()])
     html = digest.render_html(d)
     assert html.startswith("<!doctype html>") and "<style" not in html  # inline styles only: safest across mail clients
-    assert "2026-09-22" in html and "simulated research, not investment advice" in html
+    assert "2026-09-22" in html and "Simulated research, not investment advice." in html
     assert "AAPL" in html and "Signal engine" in html and "sec" in html
     assert "30 scored" in html  # the leaderboard's own gate note, not a fabricated verdict
     assert digest.LIVE_SITE in html

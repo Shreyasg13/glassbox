@@ -9,7 +9,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from .. import assistant, db, feedback, flags, notifications, portfolio_view
+from .. import assistant, db, disclaimer, feedback, flags, notifications, portfolio_view
 from ..auth import TokenPayload, get_current_user, require_admin
 from ..portfolio_analytics import to_csv
 from ..rate_limit import check_user_heavy
@@ -107,7 +107,7 @@ async def ask(body: AskBody, user: TokenPayload = Depends(get_current_user)) -> 
         "id": mid, "answer": result["answer"], "as_of": ctx["sig"]["as_of"], "note": ctx["sig"]["note"], "used_ai": result["used_llm"],
         "sources": [r["symbol"] for r in ctx["sig"]["rows"]],
         "remaining_today": await run_in_threadpool(assistant.remaining_today, user.sub),
-        "disclaimer": "Simulated research, not investment advice.",
+        "disclaimer": disclaimer.text(),
     }
 
 

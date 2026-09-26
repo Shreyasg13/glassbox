@@ -12,6 +12,7 @@ from .routers import admin, auth, committee, data, insights, jobs_ws, me, monte_
 from .routers import analytics as analytics_routes
 from .routers import flags as flags_routes
 from .routers import inbox as inbox_routes
+from .routers import public as public_routes
 from .routers import user_digest as user_digest_routes
 
 app = FastAPI(
@@ -116,6 +117,7 @@ app.include_router(inbox_routes.me_router)
 app.include_router(inbox_routes.admin_router)
 app.include_router(user_digest_routes.me_router)
 app.include_router(user_digest_routes.public_router)
+app.include_router(public_routes.router)
 app.include_router(reports.router)
 app.include_router(insights.router)
 app.include_router(tts.router)

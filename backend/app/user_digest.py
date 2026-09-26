@@ -27,6 +27,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from . import db, digest
 from .auth import SECRET_KEY
+from . import disclaimer
 
 log = logging.getLogger("glassbox.user_digest")
 
@@ -35,7 +36,6 @@ MAX_PER_RUN = 400  # Gmail SMTP allows ~500/day and the admin digest uses one
 CONFIRM_COOLDOWN = timedelta(minutes=10)
 PREVIEW_COOLDOWN = timedelta(minutes=2)
 _EMAIL_RE = re.compile(r"^[^@\s<>\"',;]{1,64}@[^@\s<>\"',;]{1,190}\.[A-Za-z]{2,}$")
-DISCLAIMER = "Simulated research, not investment advice."
 
 
 # ------------------------------------------------------------------- prefs --
@@ -239,12 +239,12 @@ def render_html(d: Dict[str, Any], unsubscribe_url: str) -> str:
 <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;">
 <tr><td style="background:#0f172a;padding:20px 24px;">
   <div style="font:700 18px/1.3 -apple-system,Segoe UI,Arial,sans-serif;color:#ffffff;">GlassBox &middot; Your daily stance</div>
-  <div style="font:13px/1.5 -apple-system,Segoe UI,Arial,sans-serif;color:#94a3b8;margin-top:2px;">{_e(d["as_of"] or "today")} &middot; {DISCLAIMER}</div>
+  <div style="font:13px/1.5 -apple-system,Segoe UI,Arial,sans-serif;color:#94a3b8;margin-top:2px;">{_e(d["as_of"] or "today")} &middot; {_e(disclaimer.text())}</div>
 </td></tr>
 <tr><td style="padding:8px 24px 24px;">{body}</td></tr>
 <tr><td style="padding:16px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font:12px/1.6 -apple-system,Segoe UI,Arial,sans-serif;color:#6b7280;">
   <a href="{digest.LIVE_SITE}/dashboard" style="font-weight:600;color:#0f172a;">Open your dashboard →</a><br>
-  {DISCLAIMER} You get this because you turned on the daily digest. <a href="{_e(unsubscribe_url)}" style="color:#6b7280;">Unsubscribe</a>.
+  {_e(disclaimer.text())} You get this because you turned on the daily digest. <a href="{_e(unsubscribe_url)}" style="color:#6b7280;">Unsubscribe</a>.
 </td></tr>
 </table>
 </td></tr>

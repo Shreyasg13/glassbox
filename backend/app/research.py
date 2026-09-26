@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import associations, db, paper, paper_cycle, strategy
+from . import disclaimer
 
 log = logging.getLogger("glassbox.research")
 
@@ -164,7 +165,7 @@ def build_digest(book: paper.PriceBook, accounts: List[Dict[str, Any]], runs: Li
     board = strategy.agent_leaderboard(book, runs)
     proposals = build_proposals(evidence, board)
 
-    L: List[str] = [f"{DIGEST_TITLE} — week ending {d}", "Simulated research, not investment advice. Nothing in this digest changes anything automatically.", ""]
+    L: List[str] = [f"{DIGEST_TITLE} — week ending {d}", f"{disclaimer.text()} Nothing in this digest changes anything automatically.", ""]
     gaps = book.gaps()
     if gaps:
         L += ["DATA QUALITY WARNING: the price history has hole(s): " + "; ".join(f"{g['from']} -> {g['to']} ({g['days']} calendar days)" for g in gaps[:5]) +
