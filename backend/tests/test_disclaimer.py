@@ -188,3 +188,21 @@ def test_public_disclaimer_endpoint_without_marker(monkeypatch):
         data = resp.json()
         assert data["text"] == "Approved by legal."
         assert data["pending_legal_review"] is False
+
+
+def test_admin_digest_html_escapes_disclaimer(monkeypatch):
+    """A disclaimer containing HTML special chars must be escaped in the admin digest HTML."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "disclaimer.md"
+        path.write_text("<!-- PENDING LEGAL REVIEW -->\nBold <b> and & ampersand.\n", encoding="utf-8")
+        monkeypatch.setenv("GLASSBOX_DISCLAIMER_PATH", str(path))
+        disclaimer.clear_cache()
+
+        ov = {"data_date": "2026-09-22", "latest_review_date": "2026-09-22", "pipeline": {"status": "ok", "stages": {}}, "data_quality": {"ok": True, "gaps": []}, "capital": []}
+        d = digest.build_digest(ov, {}, {"agents": []}, [])
+        html = digest.render_html(d)
+        # The disclaimer text should appear escaped in the HTML
+        assert 'Bold &lt;b&gt; and &amp; ampersand.' in html
+        # And the raw HTML should NOT appear
+        # And the raw HTML should NOT appear (unescaped version should not be present)
+        assert "Bold <b> and & ampersand." not in html

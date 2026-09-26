@@ -235,7 +235,7 @@ def build_report_text(acct: Dict[str, Any], bench: Optional[Dict[str, Any]], boo
     lines = [
         f"{acct['name']} -- daily paper-trading report for {d}",
         f"Profile: {prof.get('archetype', 'n/a')} · {acct.get('risk_level') or 'n/a'} risk · {prof.get('horizon_years', '?')}-year horizon. "
-        f"SIMULATED portfolio -- not real money. {disclaimer.text()}",
+        f"SIMULATED portfolio -- not real money, not investment advice.",
         "",
     ]
     chg = _day_change(acct)

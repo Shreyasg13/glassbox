@@ -25,9 +25,8 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-from . import db, digest
+from . import db, digest, disclaimer
 from .auth import SECRET_KEY
-from . import disclaimer
 
 log = logging.getLogger("glassbox.user_digest")
 

@@ -42,9 +42,8 @@ from datetime import date, datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from . import data_source as ds
-from . import associations, committee_graph, db, free_data, orchestration, paper, paper_cycle
+from . import associations, committee_graph, db, free_data, orchestration, paper, paper_cycle, disclaimer
 from . import risk as risk_mod
-from . import disclaimer
 from .models import OrchestrationConfig
 from .scripts.seed_agents import ORCHESTRATION_NAME
 

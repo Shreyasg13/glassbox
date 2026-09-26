@@ -25,8 +25,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from . import associations, db, paper, paper_cycle, strategy
-from . import disclaimer
+from . import associations, db, paper, paper_cycle, strategy, disclaimer
 
 log = logging.getLogger("glassbox.research")
 
