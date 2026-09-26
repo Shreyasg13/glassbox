@@ -426,6 +426,7 @@ async def run_daily(
     if not await asyncio.to_thread(db.acquire_committee_lock, owner, _lock_ttl_s()):
         raise CommitteeError("a committee review is already running")
     started = time.monotonic()
+    run_time = datetime.now(timezone.utc).isoformat()
     saved: List[Dict[str, Any]] = []
     try:
         for pick in todo:
@@ -434,7 +435,7 @@ async def run_daily(
                 break
             risk_now = risk_mod.risk_at(book, pick["symbol"], d)
             ctx = build_context(pick["symbol"], d, book, live.get(pick["symbol"]), risk=risk_now, ask=False, peers=associations.peer_context(book, pick["symbol"], d),
-                            extra=free_data.context_lines(pick["symbol"], d, book.close[pick["symbol"]][d]))
+                            extra=free_data.context_lines(pick["symbol"], d, book.close[pick["symbol"]][d], run_time=run_time))
             t0 = time.monotonic()
             result: Optional[Dict[str, Any]] = None
             error: Optional[str] = None
@@ -501,7 +502,8 @@ async def run_ask(
         live = live_rows if live_rows is not None else {r["symbol"]: r for r in (await asyncio.to_thread(ds.get_live_signals))["signals"]}
         sig, conf = book.signal_at(sym, d)
         risk_now = risk_mod.risk_at(book, sym, d)
-        ctx = build_context(sym, d, book, live.get(sym), risk=risk_now, ask=False, peers=associations.peer_context(book, sym, d), extra=free_data.context_lines(sym, d, book.close[sym][d]))
+        run_time = datetime.now(timezone.utc).isoformat()
+        ctx = build_context(sym, d, book, live.get(sym), risk=risk_now, ask=False, peers=associations.peer_context(book, sym, d), extra=free_data.context_lines(sym, d, book.close[sym][d], run_time=run_time))
         question = " ".join((doc.get("question") or "").split())[:ASK_MAX_QUESTION]
         if question:
             ctx += f"\n\nA specific question from the committee chair -- answer it in your rationale: {question}"

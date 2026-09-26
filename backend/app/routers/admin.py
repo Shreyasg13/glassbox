@@ -14,12 +14,12 @@ data.py/monte_carlo.py/tts.py sidesteps that.
 from __future__ import annotations
 
 import asyncio
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import db, jobs, orchestration
+from .. import db, jobs, orchestration, snapshot_store
 from ..auth import TokenPayload, require_admin
 from ..models import (
     AgentConfig,
@@ -253,3 +253,32 @@ async def audit_log(limit: int = 50, offset: int = 0):
 async def llm_calls(limit: int = 50, offset: int = 0):
     items, total = db.list_llm_calls_page(limit=limit, offset=offset)
     return {"items": items, "total": total}
+
+
+# ---- Snapshots (S3 T10) ----
+
+
+class SnapshotListItem(BaseModel):
+    id: str
+    source: str
+    ticker: str
+    as_of: str
+    fetched_at: str
+    payload_hash: str
+
+
+@router.get("/snapshots")
+async def list_snapshots(source: Optional[str] = None, ticker: Optional[str] = None, limit: int = 50) -> List[SnapshotListItem]:
+    """Metadata only (no payload) for the admin inspector."""
+    limit = max(1, min(limit, 500))
+    items = snapshot_store.list(source=source, ticker=ticker, limit=limit)
+    return [SnapshotListItem(**item) for item in items]
+
+
+@router.get("/snapshots/{snap_id}")
+async def get_snapshot(snap_id: str):
+    """Full row including payload, for the admin detail view."""
+    item = snapshot_store.get_by_id(snap_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    return item

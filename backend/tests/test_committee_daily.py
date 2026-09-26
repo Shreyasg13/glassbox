@@ -211,6 +211,11 @@ class FakeDB:
         mp.setattr(d, "create_report_narrative", lambda n: self.narratives.append(n) or n)
         mp.setattr(d, "log_audit", lambda *a, **k: self.audit.append(a))
 
+        # Mock snapshot_store to return None (fallback to cache) since test DB has no snapshots table
+        import app.snapshot_store as ss
+        mp.setattr(ss, "get", lambda *a, **k: None)
+        mp.setattr(ss, "put", lambda *a, **k: "mock-snap-id")
+
 
 @pytest.fixture
 def fake(monkeypatch):
