@@ -43,7 +43,7 @@ So the free LLM prose that exists today is the `agents[].summary` text of the se
 | # | Channel | Who can read it | Code | Contains LLM prose? |
 |---|---|---|---|---|
 | 1 | Report narratives API: **list** | admin | `routers/reports.py` `GET /api/reports/narratives` | depends on report |
-| 2 | Report narratives API: **fetch by id** | **anyone with the id, NO login required** | `routers/reports.py` `GET /api/reports/narratives/{id}` | depends on report |
+| 2 | Report narratives API: **fetch by id** | anyone holding the id (public by design; ids are random UUIDs) | `routers/reports.py` `GET /api/reports/narratives/{id}` | depends on report |
 | 3 | `/reports` and `/reports/[id]` pages | public | `frontend/app/(app)/reports/` | depends on report |
 | 4 | Daily committee report | via 1-3 | `committee_daily._write_report` | deterministic headlines; analyst text may be quoted |
 | 5 | Per-profile paper-trading reports | via 1-3 and the inbox | `paper_cycle._write_reports` | deterministic; optional LLM "analyst note" when `PAPER_LLM_NARRATIVES=1` |
@@ -63,10 +63,9 @@ Channels 12 (assistant), 10, 11 and 8 were built or found after the architecture
 
 ## 4. Things that surprised me
 
-1. **`GET /api/reports/narratives/{id}` has no auth.** Anyone who knows or guesses an id reads the report. The plan says a quarantined
-   report must 404 to users; today there is no quarantine and no access check at all.
+1. **Report fetch-by-id is public by design** (the code says "No auth required per contract" and `AppShell` marks `/reports` "intentionally public"). Ids are random UUIDs, so they cannot be guessed and the list endpoint needs a login. What is missing is an **approved-only check**: once quarantine exists, a quarantined report must still return 404 by id. That is T5/T6 work, not a pre-fix.
 2. **`POST /api/tts` speaks arbitrary text.** The plan says speech must use gated text only, but the server cannot tell gated text from
-   anything else, because the browser sends the text. This needs a server-side change (speak by content id), not just a flag.
+   anything else, because the browser sends the text. It is already rate-limited and budget-capped, so the risk is misuse of voice credits, not data. Making speech gate-only needs a server-side change (speak by content id), not just a flag.
 3. **The committee never passes structured numbers.** T3 is bigger than "change the final node": the numbers reach analysts only inside a
    prose context, so `source_snapshot_id` and `source_path` do not exist anywhere yet and T10 must come first.
 4. **`research.py` is the evidence gate, not a research module.** The diagram's two `research.py` boxes are one file here.

@@ -31,7 +31,7 @@ and what needs a decision from the owner first. Facts come from [current_flow.md
 | D1 | Which model does which work if OmniRoute fallback is on? | Strong model only for T3, T4, T5, T11, auth and role changes, deploys and anything touching the server. A fallback model may do docs, test scaffolding and admin UI tabs. Never expose secrets to a gateway |
 | D2 | Migrations: adopt Alembic (baseline the current schema, then add revisions with downgrades) or keep additive `create_all` with hand-written rollback scripts? | Adopt Alembic in T1's PR, stamping the current schema; never autogenerate a drop |
 | D3 | The assistant (channel 12) and "run my report" (channel 8) produce free LLM prose that cannot carry claim placeholders | Add flags `output.assistant` and `output.user_reports`; keep them as they are until T5, then either gate them or switch them to facts-only. You decide whether the assistant stays on during S3 |
-| D4 | Fix three exposures NOW, before S3: (a) `GET /api/reports/narratives/{id}` needs no login, (b) `/api/tts` speaks any text, (c) marketing claims about the A6 badge and discrepancy dashboard | Yes, as three small "pre" PRs (P1-P3 below). They are independent of the ledger and are honesty and security issues today |
+| D4 | Fix ONE thing before S3: the website already markets an "A6 Auditor badge" and a "Discrepancy Rate dashboard" that do not exist | Yes: reword to "coming" until they exist (P1). Report fetch-by-id is public by design and needs no pre-fix. Speech (`/api/tts`) is rate-limited and budget-capped; making it gate-only is part of T5 |
 | D5 | Add Playwright for T7's UI test? | Yes (free; adds CI browser-install time) |
 | D6 | A paid LLM key for T3 retries and T15's shadow runs (budget ceiling $500 a month)? | Yes, a paid Gemini key. Rough load: ablation runs 1+3+5+7 = 16 analyst calls per stock against 7 for production, about 240 calls a day on 15 stocks: cents per day on a flash-lite model, but far beyond the free tier |
 | D7 | Disclaimer wording (T9) | You or counsel writes it; I will only load it from `config/disclaimer.md` marked PENDING LEGAL REVIEW |
@@ -41,7 +41,7 @@ and what needs a decision from the owner first. Facts come from [current_flow.md
 ## 4. Order of work (each line = one branch `s3/<id>-<slug>` = one PR)
 
 ```
-P1 P2 P3   pre-work fixes (D4)                 small each
+P1         website claims reworded (D4)         small
 T1         flags + require_role + Alembic       M
 T2         baseline discrepancy audit            M
 T10        point-in-time source store           L
@@ -64,10 +64,10 @@ Calendar reality: the exit criteria include **4 published weekly reports in a ro
 T13 is live, whatever the build speed. The ablation needs 200+ scored calls per config, which at 15 stocks a day takes weeks more.
 
 ### Pre-work (before T1)
-- **P1** `GET /api/reports/narratives/{id}`: require login; return 404 for anything not approved once quarantine exists.
-- **P2** `/api/tts`: stop accepting arbitrary text; speak only text the server already holds (by id). Flag `output.speech` default off.
-- **P3** Website claims: reword the "A6 Auditor badge" and "Discrepancy Rate" lines to "coming" until they exist, and confirm the marketing
-  `DiscrepancyBand` numbers are labelled illustrative.
+- **P1** Website claims: reword the "A6 Auditor badge" and "Discrepancy Rate" lines to "coming" until they exist, and confirm the marketing
+  `DiscrepancyBand` numbers are labelled illustrative. (An earlier draft also listed "require login for report fetch" and "stop `/api/tts` speaking
+  arbitrary text"; both were dropped: reports are public by design with unguessable ids, and speech is already capped. Their real fixes are
+  the approved-only 404 in T5/T6 and speak-by-id in T5.)
 
 ### Task notes (only where the repo changes the plan)
 - **T1** Introduces `feature_flags`, `flag(key)`, the audit-log entries, `require_role`, and (per D2) Alembic. Flags gate: `output.email`
@@ -99,5 +99,5 @@ T13 is live, whatever the build speed. The ablation needs 200+ scored calls per 
 
 ## 6. Ready to start
 
-Next actions, in order, once you answer D1-D4: P1, P2, P3 (small), then T1. I will not begin T1 until D2 is answered, because it changes
+Next actions, in order, once you answer D1-D4: P1 (small), then T1. I will not begin T1 until D2 is answered, because it changes
 how every later table is created. Nothing in this PR changes behaviour: it adds documents only.
