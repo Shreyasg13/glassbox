@@ -38,6 +38,15 @@ and what needs a decision from the owner first. Facts come from [current_flow.md
 | D8 | Quarantine granularity | One quarantine item per (run, ticker), so one bad ticker never blocks the other 14 |
 | D9 | Freshness windows for the staleness check (T4) | Proposal: prices 1 trading day, fundamentals 120 days, macro 35 days, insider trades 14 days. You confirm |
 
+### Decisions taken so far (on the owner's "go ahead"; each is reversible in review)
+
+| ID | Taken | Where |
+|---|---|---|
+| D2 | **Alembic adopted, for S3 tables only.** New tables live in `app/migrated_tables.py` (a separate `MetaData`), so `create_all` never creates them behind Alembic's back and autogenerate is fenced so it can never propose dropping an older table. Migrations run once at container start, before the workers; a failed migration is logged loudly but does not stop the site (readers fall back to safe defaults). The older tables are still created by `db.init_schema()` | T1 |
+| D4 | Only the website-claims fix (P1) was made a pre-fix | PR #20 |
+| D1 | Recommendation kept: the strong model does T3, T4, T5, T11 and anything touching auth or the server | process |
+| D3, D6, D7 | **Not decided.** Not needed until T3/T5/T9. The assistant and "run my report" now have kill switches (`output.assistant`, `output.user_reports`), both on | T1 |
+
 ## 4. Order of work (each line = one branch `s3/<id>-<slug>` = one PR)
 
 ```

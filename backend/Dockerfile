@@ -35,4 +35,4 @@ EXPOSE 8000
 # visitor's IP instead of Caddy's -- without it every visitor shares ONE
 # rate-limit bucket (see app/rate_limit.py). Do NOT publish port 8000 to the
 # host while this is set.
-CMD ["sh", "-c", "gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-2} -b 0.0.0.0:8000 --forwarded-allow-ips='*' --access-logfile -"]
+CMD ["sh", "-c", "python -m app.migrate || echo 'WARNING: database migration failed; starting anyway'; gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-2} -b 0.0.0.0:8000 --forwarded-allow-ips='*' --access-logfile -"]

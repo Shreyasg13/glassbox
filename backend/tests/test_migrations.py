@@ -1,0 +1,88 @@
+"""Alembic migrations: apply, roll back, never touch the older tables, and autogenerate can't propose dropping them."""
+from __future__ import annotations
+
+import pytest
+from alembic.autogenerate import compare_metadata
+from alembic.runtime.migration import MigrationContext
+from sqlalchemy import create_engine, inspect
+
+from app import db, migrate
+from app.migrated_tables import include_object, migrated_metadata
+
+
+@pytest.fixture
+def engine(tmp_path):
+    eng = create_engine(f"sqlite:///{tmp_path / 'm.db'}", connect_args={"check_same_thread": False})
+    db.metadata.create_all(eng)  # the older tables, exactly as init_schema creates them in production
+    return eng
+
+
+def tables(eng):
+    return set(inspect(eng).get_table_names())
+
+
+def revision(eng):
+    with eng.connect() as c:
+        return MigrationContext.configure(c).get_current_revision()
+
+
+def test_upgrade_creates_the_table_and_records_the_revision(engine):
+    assert "feature_flags" not in tables(engine)
+    with engine.begin() as conn:
+        migrate.upgrade(conn)
+    assert "feature_flags" in tables(engine) and revision(engine) == "0001"
+    cols = {c["name"] for c in inspect(engine).get_columns("feature_flags")}
+    assert cols == {"key", "enabled", "updated_by", "updated_at"}
+
+
+def test_upgrading_twice_is_a_no_op(engine):
+    for _ in range(2):
+        with engine.begin() as conn:
+            migrate.upgrade(conn)
+    assert revision(engine) == "0001"
+
+
+def test_downgrade_removes_only_the_migrated_table_and_leaves_every_older_table_alone(engine):
+    before = tables(engine)
+    with engine.begin() as conn:
+        migrate.upgrade(conn)
+    with engine.begin() as conn:
+        migrate.downgrade("base", conn)
+    after = tables(engine)
+    assert "feature_flags" not in after and revision(engine) is None
+    assert before <= after and {"users", "committee_runs", "paper_accounts"} <= after  # nothing else was dropped
+
+
+def test_data_survives_a_round_trip_only_until_the_downgrade(engine):
+    with engine.begin() as conn:
+        migrate.upgrade(conn)
+    with engine.begin() as conn:
+        conn.execute(migrated_metadata.tables["feature_flags"].insert().values(key="output.email", enabled=False, updated_by="a", updated_at="t"))
+    with engine.begin() as conn:
+        migrate.downgrade("base", conn)
+        migrate.upgrade(conn)
+    with engine.connect() as c:
+        assert c.execute(migrated_metadata.tables["feature_flags"].select()).fetchall() == []  # a rollback discards the flag rows, by design
+
+
+def test_autogenerate_never_proposes_dropping_an_older_table(engine):
+    """The dangerous failure mode: autogenerate sees `users` etc. in the database but not in the migrated metadata and drops them."""
+    with engine.begin() as conn:
+        migrate.upgrade(conn)
+    with engine.connect() as conn:
+        ctx = MigrationContext.configure(conn, opts={"include_object": include_object, "compare_type": True})
+        assert compare_metadata(ctx, migrated_metadata) == []
+        unfenced = MigrationContext.configure(conn, opts={"compare_type": True})
+        assert any(op[0] == "remove_table" for op in compare_metadata(unfenced, migrated_metadata))  # proves the fence is what protects us
+
+
+def test_the_migrated_tables_are_not_created_by_create_all():
+    assert "feature_flags" not in db.metadata.tables  # otherwise create_all and Alembic would fight over it
+
+
+def test_a_failing_migration_reports_failure_without_raising(monkeypatch, capsys):
+    def boom(*a, **k):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(migrate, "upgrade", boom)
+    assert migrate.main([]) == 1  # loud (non-zero, logged) but the container still starts: see the Dockerfile

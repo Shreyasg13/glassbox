@@ -22,7 +22,7 @@ import respx
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app import auth, data_source as ds, rate_limit, tts
+from app import flags, auth, data_source as ds, rate_limit, tts
 from app.main import app
 from app.routers import me, ws
 
@@ -364,6 +364,7 @@ def test_tts_is_503_when_no_provider_is_configured(client):
 
 @respx.mock
 def test_tts_serves_repeat_requests_from_cache_with_one_provider_call(client, monkeypatch):
+    monkeypatch.setitem(flags.FLAGS, "output.speech", (True, ""))  # speech is off by default now (S3 T1); these tests are about caching and limits
     monkeypatch.setenv("ELEVENLABS_API_KEY", "fake-el-key")
     route = respx.post(EL_URL).mock(return_value=httpx.Response(200, content=b"ID3fake-mp3"))
     first = client.post("/api/tts", json=GOOD_BODY)
@@ -377,6 +378,7 @@ def test_tts_serves_repeat_requests_from_cache_with_one_provider_call(client, mo
 
 @respx.mock
 def test_tts_cache_hits_do_not_consume_the_rate_limit(client, monkeypatch):
+    monkeypatch.setitem(flags.FLAGS, "output.speech", (True, ""))  # speech is off by default now (S3 T1); these tests are about caching and limits
     monkeypatch.setenv("ELEVENLABS_API_KEY", "fake-el-key")
     monkeypatch.setattr(rate_limit._tts_minute_limiter, "max_calls", 1)
     respx.post(EL_URL).mock(return_value=httpx.Response(200, content=b"ID3fake-mp3"))

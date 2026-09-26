@@ -279,6 +279,11 @@ def run(
     poll_s: float = POLL_S,
 ) -> Dict[str, Any]:
     """Run one pipeline pass. Returns {status, target, exit_code, stages, ...}. Never raises for a stage failure."""
+    from . import flags
+
+    if not flags.flag("pipeline.daily"):
+        log.warning("pipeline.daily is switched off: skipping this run")
+        return {"status": "disabled", "target": None, "exit_code": 0, "message": "the pipeline.daily flag is off", "stages": {}, "sync": None, "partial": False}
     started = now_fn()
     plan = plan_target(started, wait=wait)
     target = plan["target"]

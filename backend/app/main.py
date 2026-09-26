@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .logging_config import request_id_var, setup_logging
 from .routers import admin, auth, committee, data, insights, jobs_ws, me, monte_carlo, oauth, paper, reports, strategy, tts, ws
 from .routers import analytics as analytics_routes
+from .routers import flags as flags_routes
 from .routers import inbox as inbox_routes
 from .routers import user_digest as user_digest_routes
 
@@ -110,6 +111,7 @@ app.include_router(strategy.me_router)
 app.include_router(me.router)
 app.include_router(analytics_routes.public_router)
 app.include_router(analytics_routes.admin_router)
+app.include_router(flags_routes.router)
 app.include_router(inbox_routes.me_router)
 app.include_router(inbox_routes.admin_router)
 app.include_router(user_digest_routes.me_router)

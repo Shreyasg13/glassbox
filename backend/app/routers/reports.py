@@ -17,14 +17,14 @@ from __future__ import annotations
 import asyncio
 import uuid
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from .. import data_source as ds
-from .. import db
+from .. import db, flags
 from .. import jobs
-from ..auth import TokenPayload, require_admin
+from ..auth import TokenPayload, get_current_user_optional, require_admin
 from .. import llm_router
 from ..models import DailyReportNarrative, JobAccepted, ReportGenerateRequest
 
@@ -118,7 +118,9 @@ async def list_narratives():
 
 
 @router.get("/narratives/{narrative_id}", response_model=DailyReportNarrative)
-async def get_narrative(narrative_id: str):
+async def get_narrative(narrative_id: str, user: Optional[TokenPayload] = Depends(get_current_user_optional)):
+    if not flags.flag("output.reports") and not (user and user.role == "admin"):  # kill switch: 404, admins can still open it
+        raise HTTPException(status_code=404, detail="Narrative not found")
     narrative = db.get_report_narrative(narrative_id)
     if narrative is None:
         raise HTTPException(status_code=404, detail="Narrative not found")

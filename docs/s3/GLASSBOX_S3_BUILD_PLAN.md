@@ -321,7 +321,7 @@ ADMIN   GET  /admin/flags      POST /admin/flags/{key}
 ## 7. Status board
 
 - [x] T0 Repo discovery
-- [ ] T1 Feature flags and kill switches
+- [x] T1 Feature flags and kill switches
 - [ ] T2 Baseline discrepancy script
 - [ ] T3 Structured claim output
 - [ ] T4 A6 verification gate
@@ -374,3 +374,4 @@ ADMIN   GET  /admin/flags      POST /admin/flags/{key}
 | Date | Task | Summary | PR/commit |
 |---|---|---|---|
 | 2026-09-26 | T0 | Repo map filled, current flow traced, output channels listed, surprises recorded, real committee output saved, execution plan written | PR `s3/T0-discovery` |
+| 2026-09-26 | T1 | `feature_flags` table (Alembic 0001), `flags.flag()`, kill switches on email, reports, speech (default off), assistant, user reports and the daily job; admin Flags tab and API; `require_role`; every-route-declares-a-role test with a shrinking allowlist of 26 legacy public routes; Alembic adopted for S3 tables only | PR `s3/T1-flags` |
