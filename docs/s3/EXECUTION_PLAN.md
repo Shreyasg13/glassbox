@@ -81,7 +81,8 @@ T13 is live, whatever the build speed. The ablation needs 200+ scored calls per 
 ### Task notes (only where the repo changes the plan)
 - **T1** Introduces `feature_flags`, `flag(key)`, the audit-log entries, `require_role`, and (per D2) Alembic. Flags gate: `output.email`
   (`digest.run` and `user_digest.run`), `output.reports`, `output.speech`, `output.assistant`, `output.user_reports`, `pipeline.daily`.
-- **T2** Audit the 77 stored runs with no LLM calls. Two measurements: (1) numbers in each `context` versus the source data as of that day
+- **T2 (DONE, PR `s3/T2-baseline`)** Result: `docs/s3/baseline.md`. Context fidelity 98.9% (only 2 of 1,050 checks beyond rounding, both on the 2026-09-21 data-repair day); AI-prose unsupported numbers 0.2% since the first day, 100% on the first day (stored context differed from what analysts quoted). Implication: the numeric-traceability part of A6 is nearly met already, so its value is proof, staleness detection and covering free-form channels.
+  Original plan: audit the 77 stored runs with no LLM calls. Two measurements: (1) numbers in each `context` versus the source data as of that day
   (price files, `free_data` caches); (2) "orphan numbers", digits in analyst free text that appear nowhere in the context the analyst was
   given. Output: CSV plus `docs/s3/baseline.md`. This is the honest "before" number, and it needs no new data.
 - **T3** Add claims and a `narrative` with `{{claim:id}}` placeholders; leave votes, lean and `ceo_brief` untouched (A8). Retry once via
