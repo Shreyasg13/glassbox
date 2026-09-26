@@ -131,24 +131,62 @@ def test_get_by_id_returns_full_row_with_payload():
 
 
 def test_context_lines_byte_identical_with_and_without_run_time(tmp_path, monkeypatch):
-    """context_lines output is byte-identical with and without run_time when snapshot and cache hold the same data."""
+    """context_lines output is byte-identical with and without run_time when snapshot and cache hold the same data.
+    Covers fundamentals, filings, insiders, and macro."""
     monkeypatch.setenv("FREE_DATA_DIR", str(tmp_path / "free_data"))
     monkeypatch.setenv("SEC_USER_AGENT", "GlassBox test ops@example.com")
     import importlib
     importlib.reload(free_data)
 
-    # Write cache
-    cache = {"cik": 1, "fetched_at": "2026-09-15T10:00:00+00:00", "concepts": {"revenue": {"tag": "Revenues", "unit": "USD", "series": [{"end": "2025-12-31", "start": "2025-01-01", "val": 100.0, "filed": "2026-02-01"}]}}}
-    free_data._write("fundamentals/AAPL.json", cache)
+    # --- Fundamentals cache + identical snapshot ---
+    fund_cache = {
+        "cik": 1,
+        "fetched_at": "2026-09-15T10:00:00+00:00",
+        "concepts": {
+            "revenue": {"tag": "Revenues", "unit": "USD", "series": [{"end": "2025-12-31", "start": "2025-01-01", "val": 100.0, "filed": "2026-02-01"}]}
+        }
+    }
+    free_data._write("fundamentals/AAPL.json", fund_cache)
+    snapshot_store.put("sec_facts", "AAPL", "2025-12-31", fund_cache, fetched_at="2026-09-15T10:00:00+00:00")
 
-    # Write identical snapshot
-    snapshot_store.put("sec_facts", "AAPL", "2025-12-31", cache, fetched_at="2026-09-15T10:00:00+00:00")
+    # --- Filings cache + identical snapshot ---
+    filings_cache = {
+        "cik": 1,
+        "fetched_at": "2026-09-15T10:00:00+00:00",
+        "filings": [
+            {"form": "10-K", "filed": "2025-02-01", "items": "7, 7A, 8", "text": "Annual report", "flag": True}
+        ]
+    }
+    free_data._write("filings/AAPL.json", filings_cache)
+    snapshot_store.put("sec_filings", "AAPL", "2025-02-01", filings_cache, fetched_at="2026-09-15T10:00:00+00:00")
+
+    # --- Insiders cache + identical snapshot ---
+    insiders_cache = {
+        "cik": 1,
+        "fetched_at": "2026-09-15T10:00:00+00:00",
+        "transactions": [
+            {"date": "2025-12-15", "type": "P", "shares": 1000, "price": 150.0, "name": "Test Insider", "role": "Officer"}
+        ],
+        "seen": []
+    }
+    free_data._write("insiders/AAPL.json", insiders_cache)
+    snapshot_store.put("sec_insiders", "AAPL", "2025-12-15", insiders_cache, fetched_at="2026-09-15T10:00:00+00:00")
+
+    # --- Macro cache + identical snapshots ---
+    macro_cache = {
+        "treasury": [{"date": "2026-09-10", "y10": 4.0}],
+        "bls": {"unemployment": [{"month": "2026-08", "value": 4.5}]},
+        "fetched_at": "2026-09-15T10:00:00+00:00"
+    }
+    free_data._write("macro.json", macro_cache)
+    snapshot_store.put("treasury", "", "2026-09-10", macro_cache["treasury"], fetched_at="2026-09-15T10:00:00+00:00")
+    snapshot_store.put("bls", "unemployment", "2026-08", macro_cache["bls"]["unemployment"], fetched_at="2026-09-15T10:00:00+00:00")
 
     # Call with and without run_time
     lines_without = free_data.context_lines("AAPL", "2026-06-01", price=40.0)
     lines_with = free_data.context_lines("AAPL", "2026-06-01", price=40.0, run_time="2026-09-15T12:00:00+00:00")
 
-    assert lines_without == lines_with
+    assert lines_without == lines_with, f"context_lines differs with/without run_time:\nwithout: {lines_without}\nwith: {lines_with}"
 
 
 def test_committee_path_uses_earlier_snapshot_when_later_exists(tmp_path, monkeypatch):
@@ -285,14 +323,39 @@ def test_migration_upgrade_downgrade(tmp_path):
 
 
 def test_admin_routes_require_admin_role(tmp_path, monkeypatch):
-    """Admin routes return 403 for viewer token and 200 for admin."""
-    # This test verifies the route dependencies; full integration test would need TestClient
-    # We check that the router has the correct dependencies
-    from app.routers.admin import router
-    # The router has require_admin dependency which checks for admin role
-    deps = [d.dependency for d in router.dependencies]
-    from app.auth import require_admin as require_admin_func
-    assert require_admin_func in deps or any("require_admin" in str(d) for d in deps)
+    """Admin routes return 403 for viewer token and 200 for admin on GET /api/admin/snapshots and GET /api/admin/snapshots/{id}."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.auth import TokenPayload, get_current_user
+    from app.routers import admin as admin_routes
+
+    app = FastAPI()
+    app.include_router(admin_routes.router)
+
+    viewer = TokenPayload(sub="viewer", role="viewer")
+    admin = TokenPayload(sub="admin", role="admin")
+
+    def override_viewer():
+        return viewer
+
+    def override_admin():
+        return admin
+
+    # Viewer gets 403
+    app.dependency_overrides[get_current_user] = override_viewer
+    c_viewer = TestClient(app)
+    assert c_viewer.get("/api/admin/snapshots").status_code == 403
+
+    # Admin gets 200
+    app.dependency_overrides[get_current_user] = override_admin
+    c_admin = TestClient(app)
+    r = c_admin.get("/api/admin/snapshots")
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+    # Admin gets 404 for unknown id
+    r = c_admin.get("/api/admin/snapshots/00000000-0000-0000-0000-000000000000")
+    assert r.status_code == 404
 
 
 def test_snapshot_put_invalid_source_raises():
@@ -359,3 +422,35 @@ def test_macro_as_of_with_run_time_uses_snapshots(tmp_path, monkeypatch):
     m = free_data.macro_as_of("2026-09-15", run_time="2026-09-10T12:00:00+00:00")
     assert m["y10"] == 3.0
     assert m["unemployment"] == 5.0
+
+
+def test_macro_as_of_partial_bls_snapshots_fallback_to_cache(tmp_path, monkeypatch):
+    """When only some BLS series have snapshots, missing ones fall back to cache."""
+    monkeypatch.setenv("FREE_DATA_DIR", str(tmp_path / "free_data"))
+    import importlib
+    importlib.reload(free_data)
+
+    # Cache has both unemployment and cpi (with 13 months for YoY calculation)
+    cpi_rows = [{"month": f"2025-{m:02d}", "value": 3.0 + m * 0.01} for m in range(1, 14)]
+    unemp_rows = [{"month": f"2025-{m:02d}", "value": 4.5 + m * 0.01} for m in range(1, 14)]
+    free_data._write("macro.json", {
+        "treasury": [{"date": "2026-09-10", "y10": 3.0}],
+        "bls": {
+            "unemployment": unemp_rows,
+            "cpi": cpi_rows
+        }
+    })
+
+    # Snapshot only for unemployment (not cpi) - newer value
+    bls_unemp_snap = [{"month": "2026-08", "value": 4.5}]
+    snapshot_store.put("bls", "unemployment", "2026-08", bls_unemp_snap, fetched_at="2026-09-11T10:00:00+00:00")
+
+    # Query with run_time after snapshot -> unemployment from snapshot, cpi from cache
+    m = free_data.macro_as_of("2026-09-15", run_time="2026-09-11T12:00:00+00:00")
+    assert m["unemployment"] == 4.5  # from snapshot
+    assert "cpi_yoy" in m  # from cache (year-over-year calculation)
+
+    # The macro line should include both
+    line = free_data.macro_line(m)
+    assert "unemployment 4.5%" in line
+    assert "consumer prices" in line

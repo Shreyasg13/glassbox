@@ -509,10 +509,11 @@ def macro_as_of(as_of: str, run_time: Optional[str] = None) -> Optional[Dict[str
 
         if treasury_snap or bls_cache:
             # Use snapshots where available, fall back to cache for others
+            # Merge BLS per-series so a missing one falls back to cache instead of disappearing
             macro_cache = _read("macro.json") or {}
             cache = {
                 "treasury": treasury_snap if treasury_snap else macro_cache.get("treasury", []),
-                "bls": bls_cache if bls_cache else macro_cache.get("bls", {}),
+                "bls": {**macro_cache.get("bls", {}), **bls_cache},
             }
             return macro_from_cache(cache, as_of)
 

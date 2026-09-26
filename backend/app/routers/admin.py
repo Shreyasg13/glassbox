@@ -270,6 +270,7 @@ class SnapshotListItem(BaseModel):
 @router.get("/snapshots")
 async def list_snapshots(source: Optional[str] = None, ticker: Optional[str] = None, limit: int = 50) -> List[SnapshotListItem]:
     """Metadata only (no payload) for the admin inspector."""
+    limit = max(1, min(limit, 500))
     items = snapshot_store.list(source=source, ticker=ticker, limit=limit)
     return [SnapshotListItem(**item) for item in items]
 
