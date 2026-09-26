@@ -9,6 +9,7 @@ committee context used.
 """
 from __future__ import annotations
 
+import ast
 import json
 import logging
 import re
@@ -20,6 +21,59 @@ from . import db, free_data, risk, snapshot_store
 from .migrated_tables import claims_table
 
 log = logging.getLogger("glassbox.claims")
+
+
+# Fixed table of allowed derived formulas.
+# Metric -> (formula text, required input names in text_span).
+# The formula text is what goes into text_span (after "derived: ").
+# Input names must be JSON pointers (starting with /) EXCEPT "price" for PE.
+# Use abs(x) for absolute value (not |x|).
+FORMULAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
+    "revenue_growth": (
+        "(revenue - revenue_prior) / revenue_prior",
+        ("revenue", "revenue_prior"),
+    ),
+    "net_margin": (
+        "net_income / revenue",
+        ("net_income", "revenue"),
+    ),
+    "operating_margin": (
+        "operating_income / revenue",
+        ("operating_income", "revenue"),
+    ),
+    "roe": (
+        "net_income / equity",
+        ("net_income", "equity"),
+    ),
+    "fcf_margin": (
+        "(op_cash_flow - abs(capex)) / revenue",
+        ("op_cash_flow", "capex", "revenue"),
+    ),
+    "debt_to_equity": (
+        "long_term_debt / equity",
+        ("long_term_debt", "equity"),
+    ),
+    "liabilities_to_equity": (
+        "liabilities / equity",
+        ("liabilities", "equity"),
+    ),
+    "pe": (
+        "price / eps",
+        ("price", "eps"),
+    ),
+    "curve_10y_2y": (
+        "y10 - y2",
+        ("y10", "y2"),
+    ),
+    "y10_change_3m": (
+        "y10_now - y10_3m_ago",
+        ("y10_now", "y10_3m_ago"),
+    ),
+    "cpi_yoy": (
+        "(cpi_now / cpi_year_ago) - 1",
+        ("cpi_now", "cpi_year_ago"),
+    ),
+}
 
 
 def _iso(dt_or_str: Optional[str | datetime] = None) -> str:
@@ -236,12 +290,15 @@ def _build_fundamentals_pointers(
     return pointers
 
 
-def _build_derived_text_span(formula: str, pointers: Dict[str, Optional[str]], used_concepts: List[str]) -> str:
-    """Build a text_span for a derived value with formula and all input pointers."""
+def _build_derived_text_span(metric: str, pointers: Dict[str, Optional[str]]) -> str:
+    """Build a text_span for a derived value using the FORMULAS table."""
+    if metric not in FORMULAS:
+        raise ValueError(f"Unknown derived metric: {metric}")
+    formula, required_inputs = FORMULAS[metric]
     parts = [f"derived: {formula}"]
-    for c in used_concepts:
-        if pointers.get(c):
-            parts.append(f" | {c}={pointers[c]}")
+    for inp in required_inputs:
+        if pointers.get(inp):
+            parts.append(f" | {inp}={pointers[inp]}")
     return "".join(parts)
 
 
@@ -303,11 +360,7 @@ def build_claims(
                     source="sec_facts",
                     source_snapshot_id=snap_id,
                     source_path=pointers.get("revenue"),
-                    text_span=_build_derived_text_span(
-                        "(revenue - revenue_prior) / revenue_prior",
-                        pointers,
-                        ["revenue", "revenue_prior"],
-                    ),
+                    text_span=_build_derived_text_span("revenue_growth", pointers),
                 )
             )
 
@@ -324,11 +377,7 @@ def build_claims(
                     source="sec_facts",
                     source_snapshot_id=snap_id,
                     source_path=pointers.get("net_income"),
-                    text_span=_build_derived_text_span(
-                        "net_income / revenue",
-                        pointers,
-                        ["net_income", "revenue"],
-                    ),
+                    text_span=_build_derived_text_span("net_margin", pointers),
                 )
             )
 
@@ -345,11 +394,7 @@ def build_claims(
                     source="sec_facts",
                     source_snapshot_id=snap_id,
                     source_path=pointers.get("operating_income"),
-                    text_span=_build_derived_text_span(
-                        "operating_income / revenue",
-                        pointers,
-                        ["operating_income", "revenue"],
-                    ),
+                    text_span=_build_derived_text_span("operating_margin", pointers),
                 )
             )
 
@@ -366,11 +411,7 @@ def build_claims(
                     source="sec_facts",
                     source_snapshot_id=snap_id,
                     source_path=pointers.get("equity"),
-                    text_span=_build_derived_text_span(
-                        "net_income / equity",
-                        pointers,
-                        ["net_income", "equity"],
-                    ),
+                    text_span=_build_derived_text_span("roe", pointers),
                 )
             )
 
@@ -387,11 +428,7 @@ def build_claims(
                     source="sec_facts",
                     source_snapshot_id=snap_id,
                     source_path=pointers.get("op_cash_flow"),
-                    text_span=_build_derived_text_span(
-                        "(op_cash_flow - |capex|) / revenue",
-                        pointers,
-                        ["op_cash_flow", "capex", "revenue"],
-                    ),
+                    text_span=_build_derived_text_span("fcf_margin", pointers),
                 )
             )
 
@@ -408,11 +445,7 @@ def build_claims(
                     source="sec_facts",
                     source_snapshot_id=snap_id,
                     source_path=pointers.get("long_term_debt"),
-                    text_span=_build_derived_text_span(
-                        "long_term_debt / equity",
-                        pointers,
-                        ["long_term_debt", "equity"],
-                    ),
+                    text_span=_build_derived_text_span("debt_to_equity", pointers),
                 )
             )
 
@@ -429,11 +462,7 @@ def build_claims(
                     source="sec_facts",
                     source_snapshot_id=snap_id,
                     source_path=pointers.get("liabilities"),
-                    text_span=_build_derived_text_span(
-                        "liabilities / equity",
-                        pointers,
-                        ["liabilities", "equity"],
-                    ),
+                    text_span=_build_derived_text_span("liabilities_to_equity", pointers),
                 )
             )
 
@@ -454,15 +483,11 @@ def build_claims(
                 )
             )
 
-        # pe (derived: price / eps)
+        # pe (derived: price / eps) - price comes from pricebook, include as price=pricebook:<date>
         if "pe" in fund and fund["pe"] is not None:
-            # Include price as a known value in text_span since it comes from pricebook, not sec_facts
-            pe_formula = f"price / eps"
-            pe_parts = [f"derived: {pe_formula}"]
-            pe_parts.append(f" | price={close}")
-            if pointers.get("eps"):
-                pe_parts.append(f" | eps={pointers['eps']}")
-            pe_text_span = "".join(pe_parts)
+            pe_pointers = dict(pointers)
+            # Add price as a special pointer marker
+            pe_pointers["price"] = f"pricebook:{d}"
             claims.append(
                 _make_claim(
                     run_id=run_id,
@@ -474,7 +499,7 @@ def build_claims(
                     source="sec_facts",
                     source_snapshot_id=snap_id,
                     source_path=pointers.get("eps"),
-                    text_span=pe_text_span,
+                    text_span=_build_derived_text_span("pe", pe_pointers),
                 )
             )
 
@@ -533,9 +558,10 @@ def build_claims(
                 )
             )
         if "curve_10y_2y" in macro and treasury_idx is not None:
-            y10_ptr = f"/{treasury_idx}/y10"
-            y2_ptr = f"/{treasury_idx}/y2"
-            text_span = f"derived: y10 - y2 | y10={y10_ptr} | y2={y2_ptr}"
+            macro_pointers = {
+                "y10": f"/{treasury_idx}/y10",
+                "y2": f"/{treasury_idx}/y2",
+            }
             claims.append(
                 _make_claim(
                     run_id=run_id,
@@ -546,17 +572,18 @@ def build_claims(
                     period=treasury_date or d,
                     source="treasury",
                     source_snapshot_id=treasury_snap[0] if treasury_snap else None,
-                    source_path=y10_ptr,
-                    text_span=text_span,
+                    source_path=f"/{treasury_idx}/y10",
+                    text_span=_build_derived_text_span("curve_10y_2y", macro_pointers),
                 )
             )
         if "y10_change_3m" in macro and treasury_idx is not None:
             # This is derived from current and 3m-ago y10
             treasury_3m_idx = _find_treasury_index_3m_ago(treasury_payload, treasury_idx)
             if treasury_3m_idx is not None:
-                y10_now_ptr = f"/{treasury_idx}/y10"
-                y10_3m_ptr = f"/{treasury_3m_idx}/y10"
-                text_span = f"derived: y10_now - y10_3m_ago | y10_now={y10_now_ptr} | y10_3m_ago={y10_3m_ptr}"
+                macro_pointers = {
+                    "y10_now": f"/{treasury_idx}/y10",
+                    "y10_3m_ago": f"/{treasury_3m_idx}/y10",
+                }
                 claims.append(
                     _make_claim(
                         run_id=run_id,
@@ -567,8 +594,8 @@ def build_claims(
                         period=treasury_date or d,
                         source="treasury",
                         source_snapshot_id=treasury_snap[0] if treasury_snap else None,
-                        source_path=y10_now_ptr,
-                        text_span=text_span,
+                        source_path=f"/{treasury_idx}/y10",
+                        text_span=_build_derived_text_span("y10_change_3m", macro_pointers),
                     )
                 )
 
@@ -603,9 +630,10 @@ def build_claims(
             if cpi_idx is not None:
                 cpi_year_ago_idx = _find_bls_index_year_ago(bls_payload, cpi_idx)
                 if cpi_year_ago_idx is not None:
-                    cpi_now_ptr = f"/{cpi_idx}/value"
-                    cpi_year_ago_ptr = f"/{cpi_year_ago_idx}/value"
-                    text_span = f"derived: (cpi_now / cpi_year_ago) - 1 | cpi_now={cpi_now_ptr} | cpi_year_ago={cpi_year_ago_ptr}"
+                    macro_pointers = {
+                        "cpi_now": f"/{cpi_idx}/value",
+                        "cpi_year_ago": f"/{cpi_year_ago_idx}/value",
+                    }
                     claims.append(
                         _make_claim(
                             run_id=run_id,
@@ -616,8 +644,8 @@ def build_claims(
                             period=cpi_month or d,
                             source="bls",
                             source_snapshot_id=bls_snap[0] if bls_snap else None,
-                            source_path=cpi_now_ptr,
-                            text_span=text_span,
+                            source_path=f"/{cpi_idx}/value",
+                            text_span=_build_derived_text_span("cpi_yoy", macro_pointers),
                         )
                     )
 
@@ -689,15 +717,17 @@ def build_claims(
     return claims
 
 
-def check_claim(claim: Dict[str, Any], payload: Any) -> bool:
+def check_claim(claim: Dict[str, Any], payload: Any, prices: Optional[Dict[str, float]] = None) -> bool:
     """Verify that a claim's value matches its source.
 
     For direct claims (source_path resolves to the exact value): returns True if
     resolve_pointer(payload, source_path) == value (within 1e-9 relative tolerance).
 
-    For derived claims (text_span starts with 'derived:'): parses the formula and
-    input pointers, resolves each, evaluates the formula, and checks equality
-    within 1e-9 relative tolerance.
+    For derived claims (text_span starts with 'derived:'): looks up the formula in
+    the FORMULAS table, verifies the formula text and input names match exactly,
+    resolves each input pointer from the payload (or prices for PE), evaluates
+    the formula with a safe AST-based evaluator, and checks equality within
+    1e-9 relative tolerance.
 
     Returns False if source is not a snapshot source (risk, pricebook) or if
     source_path is None for a snapshot source.
@@ -718,7 +748,7 @@ def check_claim(claim: Dict[str, Any], payload: Any) -> bool:
     try:
         if text_span and text_span.startswith("derived:"):
             # Parse derived claim
-            return _check_derived_claim(claim, payload)
+            return _check_derived_claim(claim, payload, prices)
         else:
             # Direct claim: source_path should resolve to the value
             resolved = resolve_pointer(payload, source_path)
@@ -745,14 +775,19 @@ def check_claim(claim: Dict[str, Any], payload: Any) -> bool:
         return False
 
 
-def _check_derived_claim(claim: Dict[str, Any], payload: Any) -> bool:
-    """Verify a derived claim by parsing formula and resolving input pointers."""
+def _check_derived_claim(claim: Dict[str, Any], payload: Any, prices: Optional[Dict[str, float]] = None) -> bool:
+    """Verify a derived claim using the FORMULAS table and safe AST evaluation."""
     text_span = claim.get("text_span", "")
     value = claim.get("value")
+    metric = claim.get("metric")
 
-    # Parse text_span: "derived: <formula> | a=/ptr1 | b=/ptr2 ... | c=123.45 ..."
-    # The formula may contain | for absolute value, so split on " | " (space-pipe-space)
-    # which is the delimiter between formula and pointer/value list.
+    # Look up the metric in FORMULAS table
+    if metric not in FORMULAS:
+        log.warning("check_claim: unknown derived metric %s", metric)
+        return False
+    expected_formula, required_inputs = FORMULAS[metric]
+
+    # Parse text_span: "derived: <formula> | a=/ptr1 | b=/ptr2 ... | c=pricebook:..."
     if " | " not in text_span:
         return False
     formula_part, rest_part = text_span.split(" | ", 1)
@@ -761,67 +796,66 @@ def _check_derived_claim(claim: Dict[str, Any], payload: Any) -> bool:
         return False
     formula = formula_part[len("derived:") :].strip()
 
-    # Parse input pointers and direct values from the rest
+    # Verify formula text matches the table exactly
+    if formula != expected_formula:
+        log.warning("check_claim: formula mismatch for %s: got %r, expected %r", metric, formula, expected_formula)
+        return False
+
+    # Parse input pointers from the rest
+    input_names = []
     input_values = {}
-    # Split by " | "
     for part in rest_part.split(" | "):
         part = part.strip()
-        if "=" in part:
-            name, val_or_ptr = part.split("=", 1)
-            name = name.strip()
-            val_or_ptr = val_or_ptr.strip()
-            # If it starts with /, it's a JSON pointer; otherwise it's a direct numeric value
-            if val_or_ptr.startswith("/"):
-                try:
-                    resolved = resolve_pointer(payload, val_or_ptr)
-                    if isinstance(resolved, dict):
-                        # For treasury row, we need to extract the specific field
-                        # The pointer should already be specific (e.g., /0/y10)
-                        pass
-                    elif isinstance(resolved, (int, float)):
-                        input_values[name] = float(resolved)
-                    else:
-                        log.warning("check_claim: resolved non-numeric for %s: %s", name, type(resolved))
-                        return False
-                except (KeyError, IndexError, ValueError) as exc:
-                    log.warning("check_claim: failed to resolve %s for %s: %s", val_or_ptr, claim.get("id"), exc)
-                    return False
-            else:
-                # Direct numeric value (e.g., price=150.0)
-                try:
-                    input_values[name] = float(val_or_ptr)
-                except ValueError:
-                    log.warning("check_claim: invalid direct value for %s: %s", name, val_or_ptr)
-                    return False
+        if "=" not in part:
+            continue
+        name, val_or_ptr = part.split("=", 1)
+        name = name.strip()
+        val_or_ptr = val_or_ptr.strip()
+        input_names.append(name)
 
-    # Evaluate formula
+    # Verify input names match exactly the required inputs (order doesn't matter)
+    if set(input_names) != set(required_inputs):
+        log.warning("check_claim: input names mismatch for %s: got %s, expected %s", metric, input_names, required_inputs)
+        return False
+
+    # Resolve each input
+    for part in rest_part.split(" | "):
+        part = part.strip()
+        if "=" not in part:
+            continue
+        name, val_or_ptr = part.split("=", 1)
+        name = name.strip()
+        val_or_ptr = val_or_ptr.strip()
+
+        if val_or_ptr.startswith("/"):
+            # JSON pointer - resolve from payload
+            try:
+                resolved = resolve_pointer(payload, val_or_ptr)
+                if not isinstance(resolved, (int, float)):
+                    log.warning("check_claim: resolved non-numeric for %s: %s", name, type(resolved))
+                    return False
+                input_values[name] = float(resolved)
+            except (KeyError, IndexError, ValueError) as exc:
+                log.warning("check_claim: failed to resolve %s for %s: %s", val_or_ptr, claim.get("id"), exc)
+                return False
+        elif val_or_ptr.startswith("pricebook:"):
+            # Special case for PE: price from pricebook
+            if prices is None:
+                log.warning("check_claim: prices dict required for PE metric but not provided")
+                return False
+            price_date = val_or_ptr[len("pricebook:"):]
+            if price_date not in prices:
+                log.warning("check_claim: price for date %s not in prices dict", price_date)
+                return False
+            input_values[name] = float(prices[price_date])
+        else:
+            # Direct numeric value - NOT ALLOWED (security: no constants from claim)
+            log.warning("check_claim: direct numeric value not allowed for %s: %s", name, val_or_ptr)
+            return False
+
+    # Evaluate formula using safe AST evaluator
     try:
-        # Simple formula evaluation - replace variable names with values
-        # Supported formulas:
-        # - "(revenue_latest - revenue_prior) / revenue_prior"
-        # - "net_income / revenue"
-        # - "operating_income / revenue"
-        # - "net_income / equity"
-        # - "(op_cash_flow - |capex|) / revenue"
-        # - "long_term_debt / equity"
-        # - "liabilities / equity"
-        # - "price / eps"
-        # - "y10 - y2"
-        # - "y10_now - y10_3m_ago"
-        # - "(cpi_now / cpi_year_ago) - 1"
-        eval_env = {k: v for k, v in input_values.items()}
-        # Handle absolute value notation |x| by replacing |var| with abs(var)
-        import re
-        formula_eval = formula
-        # Replace |variable| with abs(variable)
-        formula_eval = re.sub(r'\|(\w+)\|', r'abs(\1)', formula_eval)
-        # Replace variable names with their values (longest first to avoid partial matches)
-        for var_name in sorted(eval_env.keys(), key=len, reverse=True):
-            formula_eval = formula_eval.replace(var_name, str(eval_env[var_name]))
-        # Evaluate with abs function available
-        import math
-        result = eval(formula_eval, {"abs": abs, "math": math}, eval_env)
-        computed = float(result)
+        computed = _safe_eval_formula(formula, input_values)
     except Exception as exc:
         log.warning("check_claim: formula eval failed for %s: %s", claim.get("id"), exc)
         return False
@@ -833,3 +867,69 @@ def _check_derived_claim(claim: Dict[str, Any], payload: Any) -> bool:
         return abs(computed) < 1e-9
     rel_diff = abs(computed - value) / abs(value)
     return rel_diff < 1e-9
+
+
+def _safe_eval_formula(formula: str, variables: Dict[str, float]) -> float:
+    """Safely evaluate a formula using AST parsing.
+
+    Allowed AST nodes:
+    - Expression (root)
+    - BinOp with Add, Sub, Mult, Div
+    - UnaryOp with USub (negation)
+    - Name (must be in variables)
+    - Constant (only int/float, but only the literal 1 is allowed for "- 1" patterns)
+    - Call to abs() with exactly one argument
+
+    Anything else raises ValueError.
+    """
+    tree = ast.parse(formula, mode="eval")
+
+    def eval_node(node: ast.AST) -> float:
+        if isinstance(node, ast.Expression):
+            return eval_node(node.body)
+
+        if isinstance(node, ast.BinOp):
+            left = eval_node(node.left)
+            right = eval_node(node.right)
+            if isinstance(node.op, ast.Add):
+                return left + right
+            elif isinstance(node.op, ast.Sub):
+                return left - right
+            elif isinstance(node.op, ast.Mult):
+                return left * right
+            elif isinstance(node.op, ast.Div):
+                return left / right
+            else:
+                raise ValueError(f"Unsupported binary operator: {type(node.op).__name__}")
+
+        if isinstance(node, ast.UnaryOp):
+            operand = eval_node(node.operand)
+            if isinstance(node.op, ast.USub):
+                return -operand
+            else:
+                raise ValueError(f"Unsupported unary operator: {type(node.op).__name__}")
+
+        if isinstance(node, ast.Name):
+            if node.id not in variables:
+                raise ValueError(f"Unknown variable: {node.id}")
+            return variables[node.id]
+
+        if isinstance(node, ast.Constant):
+            # Only allow the literal 1 (for "- 1" in cpi_yoy formula)
+            if node.value == 1 and isinstance(node.value, (int, float)):
+                return float(node.value)
+            raise ValueError(f"Constants other than 1 are not allowed: {node.value}")
+
+        if isinstance(node, ast.Call):
+            # Only allow abs() with one argument
+            if isinstance(node.func, ast.Name) and node.func.id == "abs":
+                if len(node.args) != 1:
+                    raise ValueError("abs() requires exactly one argument")
+                if node.keywords:
+                    raise ValueError("abs() does not accept keyword arguments")
+                return abs(eval_node(node.args[0]))
+            raise ValueError(f"Function calls other than abs() are not allowed: {node.func}")
+
+        raise ValueError(f"Unsupported AST node: {type(node).__name__}")
+
+    return eval_node(tree)

@@ -211,12 +211,16 @@ def test_claims_from_snapshot_resolve(tmp_path, monkeypatch):
     assert snap is not None
     snap_id, payload = snap
 
+    # PE claim needs prices dict for the pricebook price
+    close_price = book.close["AAPL"][d]
+    prices = {d: close_price}
+
     for c in sec_claims:
         assert c["source_snapshot_id"] == snap_id
         # Every snapshot-source claim MUST have a source_path
         assert c["source_path"] is not None, f"source_path is None for snapshot-source claim {c['metric']}"
-        # And check_claim must return True
-        ok = claims.check_claim(c, payload)
+        # And check_claim must return True (PE needs prices dict)
+        ok = claims.check_claim(c, payload, prices=prices if c["metric"] == "pe" else None)
         assert ok, f"check_claim failed for {c['metric']} (id={c['id']}, path={c['source_path']}, text_span={c['text_span']})"
 
 
@@ -395,6 +399,222 @@ def test_migration_upgrade_downgrade(tmp_path):
     assert "ledger_calls" not in remaining
     assert "claims" not in remaining
     assert "committee_narratives" not in remaining
+
+
+def test_check_claim_rejects_self_referential_formula():
+    """(a) value=X, text_span='derived: c | c=X' -> False (no constants from claim)."""
+    claim = {
+        "id": "test-claim",
+        "metric": "revenue_growth",
+        "value": 0.1,
+        "source": "sec_facts",
+        "source_path": "/concepts/revenue/series/0/val",
+        "text_span": "derived: c | c=0.1",
+    }
+    payload = {"concepts": {"revenue": {"series": [{"val": 100.0}]}}}
+    # Should fail because formula doesn't match FORMULAS table and uses direct constant
+    assert claims.check_claim(claim, payload) is False
+
+
+def test_check_claim_rejects_malicious_formula():
+    """(b) text_span containing __import__('os') -> False and no import happens."""
+    claim = {
+        "id": "test-claim",
+        "metric": "revenue_growth",
+        "value": 0.1,
+        "source": "sec_facts",
+        "source_path": "/concepts/revenue/series/0/val",
+        "text_span": "derived: __import__('os') | x=/concepts/revenue/series/0/val",
+    }
+    payload = {"concepts": {"revenue": {"series": [{"val": 100.0}]}}}
+    # Should fail - formula doesn't match, and no import should happen
+    assert claims.check_claim(claim, payload) is False
+
+
+def test_check_claim_rejects_formula_mismatch():
+    """(c) formula text differing from the table -> False."""
+    claim = {
+        "id": "test-claim",
+        "metric": "revenue_growth",
+        "value": 0.1,
+        "source": "sec_facts",
+        "source_path": "/concepts/revenue/series/0/val",
+        "text_span": "derived: (revenue - revenue_prior) / revenue_prior + 0.0 | revenue=/concepts/revenue/series/1/val | revenue_prior=/concepts/revenue/series/0/val",
+    }
+    payload = {
+        "concepts": {
+            "revenue": {"series": [{"val": 100.0}, {"val": 110.0}]}
+        }
+    }
+    # Formula has extra "+ 0.0" - doesn't match table exactly
+    assert claims.check_claim(claim, payload) is False
+
+
+def test_check_claim_all_existing_derived_pass(tmp_path, monkeypatch):
+    """(d) Every existing derived claim still passes check_claim."""
+    monkeypatch.setenv("FREE_DATA_DIR", str(tmp_path / "free_data"))
+    monkeypatch.setenv("SEC_USER_AGENT", "GlassBox test ops@example.com")
+    import importlib
+    importlib.reload(free_data)
+    importlib.reload(snapshot_store)
+
+    # Create a comprehensive fundamentals snapshot
+    fund_cache = {
+        "cik": 320193,
+        "fetched_at": "2026-09-15T10:00:00+00:00",
+        "concepts": {
+            "revenue": {
+                "tag": "Revenues", "unit": "USD",
+                "series": [
+                    {"end": "2023-12-31", "start": "2023-01-01", "val": 100.0, "filed": "2024-02-01"},
+                    {"end": "2024-12-31", "start": "2024-01-01", "val": 110.0, "filed": "2025-02-01"},
+                ],
+            },
+            "net_income": {
+                "tag": "NetIncomeLoss", "unit": "USD",
+                "series": [
+                    {"end": "2023-12-31", "start": "2023-01-01", "val": 20.0, "filed": "2024-02-01"},
+                    {"end": "2024-12-31", "start": "2024-01-01", "val": 25.0, "filed": "2025-02-01"},
+                ],
+            },
+            "equity": {
+                "tag": "StockholdersEquity", "unit": "USD",
+                "series": [
+                    {"end": "2023-12-31", "val": 50.0, "filed": "2024-02-01"},
+                    {"end": "2024-12-31", "val": 55.0, "filed": "2025-02-01"},
+                ],
+            },
+            "operating_income": {
+                "tag": "OperatingIncomeLoss", "unit": "USD",
+                "series": [
+                    {"end": "2023-12-31", "start": "2023-01-01", "val": 22.0, "filed": "2024-02-01"},
+                    {"end": "2024-12-31", "start": "2024-01-01", "val": 28.0, "filed": "2025-02-01"},
+                ],
+            },
+            "op_cash_flow": {
+                "tag": "NetCashProvidedByUsedInOperatingActivities", "unit": "USD",
+                "series": [
+                    {"end": "2023-12-31", "start": "2023-01-01", "val": 30.0, "filed": "2024-02-01"},
+                    {"end": "2024-12-31", "start": "2024-01-01", "val": 35.0, "filed": "2025-02-01"},
+                ],
+            },
+            "capex": {
+                "tag": "PaymentsToAcquirePropertyPlantAndEquipment", "unit": "USD",
+                "series": [
+                    {"end": "2023-12-31", "start": "2023-01-01", "val": 5.0, "filed": "2024-02-01"},
+                    {"end": "2024-12-31", "start": "2024-01-01", "val": 6.0, "filed": "2025-02-01"},
+                ],
+            },
+            "long_term_debt": {
+                "tag": "LongTermDebtNoncurrent", "unit": "USD",
+                "series": [
+                    {"end": "2023-12-31", "val": 10.0, "filed": "2024-02-01"},
+                    {"end": "2024-12-31", "val": 12.0, "filed": "2025-02-01"},
+                ],
+            },
+            "liabilities": {
+                "tag": "Liabilities", "unit": "USD",
+                "series": [
+                    {"end": "2023-12-31", "val": 40.0, "filed": "2024-02-01"},
+                    {"end": "2024-12-31", "val": 45.0, "filed": "2025-02-01"},
+                ],
+            },
+            "eps": {
+                "tag": "EarningsPerShareDiluted", "unit": "USD/shares",
+                "series": [
+                    {"end": "2023-12-31", "start": "2023-01-01", "val": 2.0, "filed": "2024-02-01"},
+                    {"end": "2024-12-31", "start": "2024-01-01", "val": 2.5, "filed": "2025-02-01"},
+                ],
+            },
+        },
+    }
+    snapshot_store.put("sec_facts", "AAPL", "2024-12-31", fund_cache, fetched_at="2026-09-15T10:00:00+00:00")
+
+    # Treasury snapshot for macro derived claims
+    treasury_snap = [{"date": "2025-03-10", "y10": 4.5, "y2": 3.8, "y3m": 5.0}]
+    snapshot_store.put("treasury", "", "2025-03-10", treasury_snap, fetched_at="2026-09-11T10:00:00+00:00")
+
+    # CPI snapshot for cpi_yoy (need 13 months)
+    cpi_rows = [{"month": f"2023-{m:02d}", "value": 300.0 + m} for m in range(1, 13)] + \
+               [{"month": f"2024-{m:02d}", "value": 310.0 + m} for m in range(1, 13)]
+    snapshot_store.put("bls", "cpi", "2024-12", cpi_rows, fetched_at="2026-09-11T10:00:00+00:00")
+
+    # Also need treasury data for 3m ago for y10_change_3m
+    treasury_3m_ago = [{"date": "2024-12-10", "y10": 4.2, "y2": 3.5, "y3m": 4.7}]
+    snapshot_store.put("treasury", "", "2024-12-10", treasury_3m_ago, fetched_at="2026-09-11T09:00:00+00:00")
+
+    book, d = make_book()
+    run_id = "2024-04-23:AAPL"
+    run_time = "2026-09-15T12:00:00+00:00"
+    claim_list = claims.build_claims(run_id, "AAPL", d, book, run_time)
+
+    # Get payloads
+    sec_snap = snapshot_store.get_with_id("sec_facts", "AAPL", run_time)
+    treasury_snap_id, treasury_payload = snapshot_store.get_with_id("treasury", "", run_time)
+    bls_cpi_id, bls_cpi_payload = snapshot_store.get_with_id("bls", "cpi", run_time)
+
+    sec_payload = sec_snap[1] if sec_snap else None
+    close_price = book.close["AAPL"][d]
+    prices = {d: close_price}
+
+    # Verify all derived claims pass
+    derived_claims = [c for c in claim_list if (c.get("text_span") or "").startswith("derived:")]
+    assert len(derived_claims) > 0, "No derived claims created"
+
+    for c in derived_claims:
+        if c["source"] == "sec_facts":
+            ok = claims.check_claim(c, sec_payload, prices=prices if c["metric"] == "pe" else None)
+        elif c["source"] == "treasury":
+            ok = claims.check_claim(c, treasury_payload)
+        elif c["source"] == "bls":
+            ok = claims.check_claim(c, bls_cpi_payload)
+        else:
+            continue
+        assert ok, f"check_claim failed for {c['metric']} (text_span={c['text_span']})"
+
+
+def test_check_claim_pe_with_and_without_prices(tmp_path, monkeypatch):
+    """(e) PE passes with prices={date: close} and fails without."""
+    monkeypatch.setenv("FREE_DATA_DIR", str(tmp_path / "free_data"))
+    monkeypatch.setenv("SEC_USER_AGENT", "GlassBox test ops@example.com")
+    import importlib
+    importlib.reload(free_data)
+    importlib.reload(snapshot_store)
+
+    fund_cache = {
+        "cik": 320193,
+        "fetched_at": "2026-09-15T10:00:00+00:00",
+        "concepts": {
+            "eps": {
+                "tag": "EarningsPerShareDiluted", "unit": "USD/shares",
+                "series": [{"end": "2024-12-31", "start": "2024-01-01", "val": 2.5, "filed": "2025-02-01"}],
+            },
+        },
+    }
+    snapshot_store.put("sec_facts", "AAPL", "2024-12-31", fund_cache, fetched_at="2026-09-15T10:00:00+00:00")
+
+    book, d = make_book()
+    run_id = "2024-04-23:AAPL"
+    run_time = "2026-09-15T12:00:00+00:00"
+    claim_list = claims.build_claims(run_id, "AAPL", d, book, run_time)
+
+    pe_claims = [c for c in claim_list if c["metric"] == "pe"]
+    assert len(pe_claims) == 1
+    pe_claim = pe_claims[0]
+
+    snap = snapshot_store.get_with_id("sec_facts", "AAPL", run_time)
+    payload = snap[1] if snap else None
+
+    close_price = book.close["AAPL"][d]
+    prices = {d: close_price}
+
+    # Should pass with prices
+    ok_with = claims.check_claim(pe_claim, payload, prices=prices)
+    assert ok_with, "PE check_claim should pass with prices dict"
+
+    # Should fail without prices
+    ok_without = claims.check_claim(pe_claim, payload, prices=None)
+    assert not ok_without, "PE check_claim should fail without prices dict"
 
 
 # Import select for the test
