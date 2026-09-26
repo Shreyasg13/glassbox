@@ -16,6 +16,7 @@ exit (T5) will switch the gate on. Committee decision logic is unchanged (tests 
   exist (P1, #20).
 - The research disclaimer reads the same everywhere: "Simulated research, not investment advice." The committee report and the
   admin digest header now use this wording (they had slightly different sentences) (T9, #23).
+- The pricing section is now a single free "research preview" card: no paid plans, payments or trials (the Standard $20 and Advisor $150 cards were marketing only) (#29).
 - Nothing else changes for users in this release.
 
 ### Added
