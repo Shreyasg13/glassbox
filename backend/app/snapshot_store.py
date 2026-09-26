@@ -188,3 +188,31 @@ def get_by_id(snap_id: str) -> Optional[Dict[str, Any]]:
         "payload": json.loads(row.payload_json),
         "payload_hash": row.payload_hash,
     }
+
+
+def get_with_id(source: str, ticker: str, run_time: str) -> Optional[Tuple[str, Dict[str, Any]]]:
+    """Newest snapshot with fetched_at <= run_time for the given source/ticker, returning (id, payload).
+
+    Same point-in-time guarantee as get(): never returns data fetched after run_time.
+    """
+    if source not in VALID_SOURCES:
+        raise ValueError(f"unknown source {source!r}; must be one of {sorted(VALID_SOURCES)}")
+
+    ticker = (ticker or "").upper()
+    run_time = _iso(run_time)
+
+    with db.engine.connect() as conn:
+        row = conn.execute(
+            select(source_snapshots_table.c.id, source_snapshots_table.c.payload_json).where(
+                source_snapshots_table.c.source == source,
+                source_snapshots_table.c.ticker == ticker,
+                source_snapshots_table.c.fetched_at <= run_time,
+            )
+            .order_by(source_snapshots_table.c.fetched_at.desc())
+            .limit(1)
+        ).fetchone()
+
+    if row is None:
+        return None
+
+    return (row.id, json.loads(row.payload_json))
