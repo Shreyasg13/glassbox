@@ -24,7 +24,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy import func, insert, select
 
-from . import db
+from . import db, disclaimer
 
 DAILY_QUESTIONS = 15
 # Everyone's answered questions share the same model quota as the daily committee run, so there is a site-wide daily cap
@@ -169,7 +169,7 @@ def fallback_answer(facts: Dict[str, Any]) -> str:
         lines.append(bit)
     if not any(s["committee_action"] for s in facts["stocks"]):
         lines.append("The committee did not review these stocks that day.")
-    lines.append("Simulated research, not investment advice. Try again in a little while for a fuller explanation.")
+    lines.append(f"{disclaimer.text()} Try again in a little while for a fuller explanation.")
     return "\n".join(lines)
 
 

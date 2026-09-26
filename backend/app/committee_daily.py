@@ -42,7 +42,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from . import data_source as ds
-from . import associations, claims, committee_graph, db, flags, free_data, narrative, orchestration, paper, paper_cycle, verification
+from . import associations, claims, committee_graph, db, disclaimer, flags, free_data, narrative, orchestration, paper, paper_cycle, verification
 from . import risk as risk_mod
 from .models import OrchestrationConfig
 from .scripts.seed_agents import ORCHESTRATION_NAME
@@ -330,7 +330,7 @@ def build_report(d: str, docs: List[Dict[str, Any]]) -> str:
     lines = [
         f"Investment Committee — daily review for {d}",
         f"{len(docs)} symbol(s) reviewed. Committee = 3 quant-engine agents + 7 AI analysts, confidence-weighted vote. "
-        "Research output from a simulated system — not investment advice.",
+        f"{disclaimer.text()}",
         "",
     ]
     for r in docs:

@@ -5,6 +5,7 @@ GET /api/digest/confirm
 GET /api/historical-reports
 GET /api/live-signals
 GET /api/portfolio-stats
+GET /api/public/disclaimer
 GET /api/track1/agents
 GET /api/track1/data
 GET /api/track2/agents
