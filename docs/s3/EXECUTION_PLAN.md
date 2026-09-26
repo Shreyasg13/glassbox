@@ -111,3 +111,14 @@ T13 is live, whatever the build speed. The ablation needs 200+ scored calls per 
 
 Next actions, in order, once you answer D1-D4: P1 (small), then T1. I will not begin T1 until D2 is answered, because it changes
 how every later table is created. Nothing in this PR changes behaviour: it adds documents only.
+
+## 6. Additions from the 2026-09-26 strategy review (see VISION.md)
+- **T12** also reports, per horizon: rank IC (Spearman of score vs forward return) with its t-stat, Brier score and a
+  calibration curve for the committee's stated confidence, top-vs-bottom decile spread, and alpha after regressing on the
+  Fama–French factors (Kenneth French data library, free). Optional (owner decision): record third-party scores
+  (e.g. Zacks, TipRanks) as a snapshot source and score them with the same forward-only rules.
+- **T13** publishes the ledger head hash in every weekly report (an external anchor: deleting the newest ledger rows becomes
+  detectable).
+- **T15** reports deflated Sharpe ratio and probability of backtest overfitting across configurations.
+- **Deploy**: production is Neon Postgres. Postgres-only paths (ledger trigger function and table lock, upserts, Alembic on PG)
+  are tested on a Neon branch before each deploy; backups are Neon branches, not SQLite file copies.

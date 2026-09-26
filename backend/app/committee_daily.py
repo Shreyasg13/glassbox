@@ -42,7 +42,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from . import data_source as ds
-from . import associations, committee_graph, db, free_data, orchestration, paper, paper_cycle, disclaimer
+from . import associations, claims, committee_graph, db, disclaimer, flags, free_data, narrative, orchestration, paper, paper_cycle, verification
 from . import risk as risk_mod
 from .models import OrchestrationConfig
 from .scripts.seed_agents import ORCHESTRATION_NAME
@@ -378,6 +378,63 @@ def _write_report(d: str, docs: List[Dict[str, Any]]) -> bool:
 Runner = Callable[..., Awaitable[Dict[str, Any]]]
 
 
+async def attach_claims(doc: Dict[str, Any], book: Any, run_time: str) -> None:
+    """Attach structured claims and (if flag on) narrative to a saved committee decision.
+
+    Claims (no LLM) are always stored. Narrative (LLM) only runs if pipeline.claims flag is on.
+    Any exception is logged and never breaks the committee run.
+    """
+    run_id = doc["id"]
+    sym = doc["symbol"]
+    d = doc["date"]
+    try:
+        # Build and store claims (deterministic, no LLM)
+        claim_list = claims.build_claims(run_id, sym, d, book, run_time)
+        log.info("attached %d claims to %s", len(claim_list), run_id)
+
+        # Narrative (LLM) only if flag is on
+        if flags.flag("pipeline.claims"):
+            nar_result = await narrative.write_narrative(run_id, doc, claim_list)
+            # Store narrative row
+            from .migrated_tables import committee_narratives_table
+            with db.engine.begin() as conn:
+                conn.execute(
+                    committee_narratives_table.insert().values(
+                        run_id=run_id,
+                        narrative=nar_result["narrative"],
+                        status=nar_result["status"],
+                        attempts=nar_result["attempts"],
+                        provider_requested=nar_result["provider_requested"],
+                        model_requested=nar_result["model_requested"],
+                        provider_answered=nar_result["provider_answered"],
+                        model_answered=nar_result["model_answered"],
+                        error=nar_result["error"],
+                        created_at=nar_result.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+            log.info("narrative for %s: status=%s, attempts=%d", run_id, nar_result["status"], nar_result["attempts"])
+        else:
+            # Store a skipped narrative row so the admin UI knows it wasn't attempted
+            from .migrated_tables import committee_narratives_table
+            with db.engine.begin() as conn:
+                conn.execute(
+                    committee_narratives_table.insert().values(
+                        run_id=run_id,
+                        narrative=None,
+                        status="skipped",
+                        attempts=0,
+                        provider_requested=None,
+                        model_requested=None,
+                        provider_answered=None,
+                        model_answered=None,
+                        error=None,
+                        created_at=datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+    except Exception as exc:  # noqa: BLE001 -- never break the committee run
+        log.warning("attach_claims failed for %s: %s", run_id, exc)
+
+
 async def run_daily(
     *,
     symbols: Optional[List[str]] = None,
@@ -426,6 +483,7 @@ async def run_daily(
     if not await asyncio.to_thread(db.acquire_committee_lock, owner, _lock_ttl_s()):
         raise CommitteeError("a committee review is already running")
     started = time.monotonic()
+    run_time = datetime.now(timezone.utc).isoformat()
     saved: List[Dict[str, Any]] = []
     try:
         for pick in todo:
@@ -434,7 +492,7 @@ async def run_daily(
                 break
             risk_now = risk_mod.risk_at(book, pick["symbol"], d)
             ctx = build_context(pick["symbol"], d, book, live.get(pick["symbol"]), risk=risk_now, ask=False, peers=associations.peer_context(book, pick["symbol"], d),
-                            extra=free_data.context_lines(pick["symbol"], d, book.close[pick["symbol"]][d]))
+                            extra=free_data.context_lines(pick["symbol"], d, book.close[pick["symbol"]][d], run_time=run_time))
             t0 = time.monotonic()
             result: Optional[Dict[str, Any]] = None
             error: Optional[str] = None
@@ -449,6 +507,19 @@ async def run_daily(
             log.info("committee %s %s -> %s (%d/%d answered, engine %s)", d, pick["symbol"], doc["decision"], doc["answered"], doc["total"], pick["engine_signal"])
     finally:
         await asyncio.to_thread(db.release_committee_lock, owner)
+
+    # Attach claims (and narrative if flag is on) AFTER the committee lock is released.
+    # This ensures the narrative LLM call doesn't consume the committee's time budget or hold its lock.
+    for doc in saved:
+        await attach_claims(doc, book, run_time)
+
+    # Run the verification gate for each saved decision. Exceptions are logged
+    # and never break the committee run. No flag needed (no LLM, no user-visible change).
+    for doc in saved:
+        try:
+            await verification.runner.run_gate(doc["id"], run_time, book)
+        except Exception as exc:  # noqa: BLE001 -- never break the committee run
+            log.warning("verification gate failed for %s: %s", doc["id"], exc)
 
     all_today = db.list_committee_runs_for_date(d)
     reported = _write_report(d, all_today) if saved else False
@@ -501,7 +572,8 @@ async def run_ask(
         live = live_rows if live_rows is not None else {r["symbol"]: r for r in (await asyncio.to_thread(ds.get_live_signals))["signals"]}
         sig, conf = book.signal_at(sym, d)
         risk_now = risk_mod.risk_at(book, sym, d)
-        ctx = build_context(sym, d, book, live.get(sym), risk=risk_now, ask=False, peers=associations.peer_context(book, sym, d), extra=free_data.context_lines(sym, d, book.close[sym][d]))
+        run_time = datetime.now(timezone.utc).isoformat()
+        ctx = build_context(sym, d, book, live.get(sym), risk=risk_now, ask=False, peers=associations.peer_context(book, sym, d), extra=free_data.context_lines(sym, d, book.close[sym][d], run_time=run_time))
         question = " ".join((doc.get("question") or "").split())[:ASK_MAX_QUESTION]
         if question:
             ctx += f"\n\nA specific question from the committee chair -- answer it in your rationale: {question}"

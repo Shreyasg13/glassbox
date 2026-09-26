@@ -499,3 +499,36 @@ export type DataSources = {
   status: Record<string, { ok: boolean; detail: string; count: number; at: string }>;
   rows: { symbol: string; fundamentals: FreeFundamentals | null; events: FreeEvent[] }[];
 };
+
+// ---- Snapshot store (admin) ----
+
+export type Snapshot = {
+  id: string;
+  source: string;
+  ticker: string;
+  as_of: string;
+  fetched_at: string;
+  payload_hash: string;
+};
+
+export type SnapshotDetail = Snapshot & {
+  payload: unknown;
+};
+
+// ---- Ledger (admin) ----
+
+export type LedgerRow = {
+  seq: number;
+  call_id: string;
+  ticker: string;
+  call_type: string;
+  recorded_at: string;
+  hash: string;
+};
+
+export type LedgerVerify = {
+  ok: boolean;
+  rows: number;
+  first_bad_seq: number | null;
+  reason: string;
+};

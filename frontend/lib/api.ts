@@ -1,6 +1,8 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/ws/signals";
 
+import type { LedgerRow, LedgerVerify } from "@/lib/types";
+
 export function apiUrl(path: string): string {
   return `${API_URL}${path}`;
 }
@@ -54,4 +56,19 @@ export async function apiFetch<T>(
 
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+// ---- Ledger API ----
+
+export async function fetchLedger(
+  token: string | undefined,
+  fromSeq: number = 1,
+  limit: number = 100
+): Promise<LedgerRow[]> {
+  const params = new URLSearchParams({ from_seq: String(fromSeq), limit: String(limit) });
+  return apiFetch<LedgerRow[]>(`/api/admin/ledger?${params}`, { token });
+}
+
+export async function verifyLedger(token: string | undefined): Promise<LedgerVerify> {
+  return apiFetch<LedgerVerify>(`/api/admin/ledger/verify`, { token, method: "POST" });
 }

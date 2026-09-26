@@ -11,7 +11,7 @@ Rules for adding a table here:
 """
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Column, MetaData, String, Table
+from sqlalchemy import Boolean, Column, Float, Index, Integer, MetaData, String, Table, Text, UniqueConstraint
 
 migrated_metadata = MetaData()
 
@@ -22,6 +22,83 @@ feature_flags_table = Table(
     Column("enabled", Boolean, nullable=False),
     Column("updated_by", String, nullable=False, default=""),
     Column("updated_at", String, nullable=False, default=""),
+)
+
+source_snapshots_table = Table(
+    "source_snapshots",
+    migrated_metadata,
+    Column("id", String, primary_key=True),
+    Column("source", String, nullable=False),
+    Column("ticker", String, nullable=False, default=""),
+    Column("as_of", String, nullable=False),
+    Column("fetched_at", String, nullable=False),
+    Column("payload_json", Text, nullable=False),
+    Column("payload_hash", String(64), nullable=False),
+    Index("ix_source_snapshots_source_ticker_fetched", "source", "ticker", "fetched_at"),
+    UniqueConstraint("source", "ticker", "payload_hash", name="uq_source_snapshots_source_ticker_hash"),
+)
+
+ledger_calls_table = Table(
+    "ledger_calls",
+    migrated_metadata,
+    Column("seq", Integer, primary_key=True, autoincrement=False),
+    Column("call_id", String, nullable=False, unique=True),
+    Column("ticker", String, nullable=False),
+    Column("call_type", String, nullable=False),
+    Column("payload_json", Text, nullable=False),
+    Column("input_snapshot_ids", Text, nullable=False, default="[]"),
+    Column("committee_config_id", String, nullable=True),
+    Column("recorded_at", String, nullable=False),
+    Column("prev_hash", String(64), nullable=False),
+    Column("hash", String(64), nullable=False),
+)
+
+claims_table = Table(
+    "claims",
+    migrated_metadata,
+    Column("id", String, primary_key=True),
+    Column("run_id", String, nullable=False),
+    Column("ticker", String, nullable=False),
+    Column("metric", String, nullable=False),
+    Column("value", Float, nullable=False),
+    Column("unit", String, nullable=False),
+    Column("period", String, nullable=False),
+    Column("source", String, nullable=False),
+    Column("source_snapshot_id", String, nullable=True),
+    Column("source_path", String, nullable=True),
+    Column("text_span", String, nullable=True),
+    Column("created_at", String, nullable=False),
+    Index("ix_claims_run_id", "run_id"),
+)
+
+committee_narratives_table = Table(
+    "committee_narratives",
+    migrated_metadata,
+    Column("run_id", String, primary_key=True),
+    Column("narrative", Text, nullable=True),
+    Column("status", String, nullable=False),  # ok | pending_review | skipped
+    Column("attempts", Integer, nullable=False, default=0),
+    Column("provider_requested", String, nullable=True),
+    Column("model_requested", String, nullable=True),
+    Column("provider_answered", String, nullable=True),
+    Column("model_answered", String, nullable=True),
+    Column("error", Text, nullable=True),
+    Column("created_at", String, nullable=False),
+)
+
+verification_results_table = Table(
+    "verification_results",
+    migrated_metadata,
+    Column("id", String, primary_key=True),
+    Column("run_id", String, nullable=False),
+    Column("claim_id", String, nullable=True),
+    Column("check_type", String, nullable=False),
+    Column("status", String, nullable=False),  # pass | fail | warn
+    Column("expected", String, nullable=True),
+    Column("observed", String, nullable=True),
+    Column("reason", String, nullable=False),
+    Column("created_at", String, nullable=False),
+    Index("ix_verification_results_run_id", "run_id"),
 )
 
 

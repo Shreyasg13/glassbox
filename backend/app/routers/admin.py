@@ -14,12 +14,13 @@ data.py/monte_carlo.py/tts.py sidesteps that.
 from __future__ import annotations
 
 import asyncio
-from typing import List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import db, jobs, orchestration
+from .. import claims, db, jobs, narrative, orchestration, snapshot_store, verification
+from ..verification import gate
 from ..auth import TokenPayload, require_admin
 from ..models import (
     AgentConfig,
@@ -253,3 +254,179 @@ async def audit_log(limit: int = 50, offset: int = 0):
 async def llm_calls(limit: int = 50, offset: int = 0):
     items, total = db.list_llm_calls_page(limit=limit, offset=offset)
     return {"items": items, "total": total}
+
+
+# ---- Snapshots (S3 T10) ----
+
+
+class SnapshotListItem(BaseModel):
+    id: str
+    source: str
+    ticker: str
+    as_of: str
+    fetched_at: str
+    payload_hash: str
+
+
+@router.get("/snapshots")
+async def list_snapshots(source: Optional[str] = None, ticker: Optional[str] = None, limit: int = 50) -> List[SnapshotListItem]:
+    """Metadata only (no payload) for the admin inspector."""
+    limit = max(1, min(limit, 500))
+    items = snapshot_store.list(source=source, ticker=ticker, limit=limit)
+    return [SnapshotListItem(**item) for item in items]
+
+
+@router.get("/snapshots/{snap_id}")
+async def get_snapshot(snap_id: str):
+    """Full row including payload, for the admin detail view."""
+    item = snapshot_store.get_by_id(snap_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    return item
+
+
+# ---- Claims (S3 T3) ----
+
+from sqlalchemy import select
+from ..migrated_tables import claims_table, committee_narratives_table
+
+
+class ClaimItem(BaseModel):
+    id: str
+    run_id: str
+    ticker: str
+    metric: str
+    value: float
+    unit: str
+    period: str
+    source: str
+    source_snapshot_id: Optional[str] = None
+    source_path: Optional[str] = None
+    text_span: Optional[str] = None
+    created_at: str
+
+
+@router.get("/claims")
+async def list_claims(run_id: str, limit: int = 200) -> List[ClaimItem]:
+    """All claims for a committee run_id."""
+    limit = max(1, min(limit, 1000))
+    with db.engine.connect() as conn:
+        rows = conn.execute(
+            select(claims_table).where(claims_table.c.run_id == run_id).order_by(claims_table.c.created_at).limit(limit)
+        ).fetchall()
+    return [
+        ClaimItem(
+            id=r.id,
+            run_id=r.run_id,
+            ticker=r.ticker,
+            metric=r.metric,
+            value=r.value,
+            unit=r.unit,
+            period=r.period,
+            source=r.source,
+            source_snapshot_id=r.source_snapshot_id,
+            source_path=r.source_path,
+            text_span=r.text_span,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+
+class NarrativeItem(BaseModel):
+    run_id: str
+    narrative: Optional[str] = None
+    status: str
+    attempts: int
+    provider_requested: Optional[str] = None
+    model_requested: Optional[str] = None
+    provider_answered: Optional[str] = None
+    model_answered: Optional[str] = None
+    error: Optional[str] = None
+    created_at: str
+
+
+@router.get("/narratives/{run_id}")
+async def get_narrative(run_id: str) -> NarrativeItem:
+    """Narrative for a committee run_id."""
+    with db.engine.connect() as conn:
+        row = conn.execute(
+            select(committee_narratives_table).where(committee_narratives_table.c.run_id == run_id)
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Narrative not found")
+    return NarrativeItem(
+        run_id=row.run_id,
+        narrative=row.narrative,
+        status=row.status,
+        attempts=row.attempts,
+        provider_requested=row.provider_requested,
+        model_requested=row.model_requested,
+        provider_answered=row.provider_answered,
+        model_answered=row.model_answered,
+        error=row.error,
+        created_at=row.created_at,
+    )
+
+
+# ---- Verification (S3 T4) ----
+
+from sqlalchemy import select
+from ..migrated_tables import verification_results_table
+
+
+class VerificationResultItem(BaseModel):
+    id: str
+    run_id: str
+    claim_id: Optional[str] = None
+    check_type: str
+    status: str  # pass | fail | warn
+    expected: Optional[str] = None
+    observed: Optional[str] = None
+    reason: str
+    created_at: str
+
+
+class VerificationSummary(BaseModel):
+    total: int
+    passed: int
+    failed: int
+    warned: int
+    ok: bool
+    badge: str
+
+
+def _verification_rows(run_id: str) -> List[Any]:
+    with db.engine.connect() as conn:
+        return conn.execute(
+            select(verification_results_table)
+            .where(verification_results_table.c.run_id == run_id)
+            .order_by(verification_results_table.c.created_at)
+        ).fetchall()
+
+
+def _summary(rows: List[Any]) -> Dict[str, Any]:
+    """The gate's own summarize(), so the admin API can never count differently from the gate (badge = fully verified claims)."""
+    return gate.summarize([gate.Result(check_type=r.check_type, status=r.status, claim_id=r.claim_id,
+                                       expected=r.expected, observed=r.observed, reason=r.reason) for r in rows])
+
+
+@router.get("/verification")
+async def get_verification(run_id: str) -> Dict[str, Any]:
+    """All verification results for a committee run_id, plus summary."""
+    rows = _verification_rows(run_id)
+    results = [
+        VerificationResultItem(
+            id=r.id, run_id=r.run_id, claim_id=r.claim_id, check_type=r.check_type, status=r.status,
+            expected=r.expected, observed=r.observed, reason=r.reason, created_at=r.created_at,
+        )
+        for r in rows
+    ]
+    return {"run_id": run_id, "results": results, "summary": _summary(rows)}
+
+
+@router.get("/verification/summary")
+async def get_verification_summary(date: str) -> Dict[str, Any]:
+    """One summary per committee run of that date (Ask and challenger runs excluded)."""
+    run_ids = [r["id"] for r in db.list_committee_runs_for_date(date) if not str(r["id"]).startswith(("ask:", "chal:"))]
+    return {"date": date, "summaries": [{"run_id": rid, "summary": _summary(_verification_rows(rid))} for rid in run_ids]}
