@@ -11,6 +11,7 @@ Flow per symbol (see app/price_store.py for why):
      8-month hole that was then booked as one enormous daily return).
   3. Keep only FINAL bars (after 16:15 New York time) that pass sanity checks; report the rest.
   4. Upsert into price_bars (new or corrected bars only), then rebuild the parquet file from the database.
+  5. Write a `prices` snapshot per symbol per sync with the new bars as payload (S3 T10).
 
 Schema note: the parquet files hold raw OHLCV plus RSI, MA_10/20/30/50/100/200, Volatility and Volume_MA -- the columns
 app/data_source.py reads. Volatility and Volume_MA have no recoverable original formula; they are the 20-day rolling
@@ -21,14 +22,15 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import yfinance as yf
 
 from app import db, price_store
+from app import snapshot_store
 from app.data_source import STOCK_INFO, TRADING_STORAGE_PATH
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -48,7 +50,9 @@ def find_gaps(index: pd.Index, max_days: int = MAX_GAP_DAYS) -> list[tuple[str, 
 
 
 def update_symbol(symbol: str, data_dir: Path, now: Optional[datetime] = None) -> tuple[bool, str, Dict[str, Any]]:
-    """Returns (ok, message, info) with info = {new, rejected, not_final, latest}."""
+    """Returns (ok, message, info) with info = {new, rejected, not_final, latest}.
+    Records a price snapshot internally if new/corrected bars were upserted.
+    """
     info: Dict[str, Any] = {"new": 0, "changed": 0, "rejected": [], "not_final": 0, "latest": None}
     seeded = price_store.seed_if_empty(symbol, data_dir)
     before = db.price_bars_summary().get(symbol)
@@ -79,6 +83,16 @@ def update_symbol(symbol: str, data_dir: Path, now: Optional[datetime] = None) -
         log.warning("[%s] price history still has %d gap(s): %s", symbol, len(remaining), "; ".join(f"{a}->{b} ({n}d)" for a, b, n in remaining[:5]))
     info.update({"new": after["count"] - before["count"], "changed": len(changed), "rejected": rejected, "not_final": not_final, "latest": after["last"]})
     msg = f"rows {before['count']}->{after['count']}, latest={after['last']}" + (f", imported {seeded} bars from parquet" if seeded else "") + (f", {len(rejected)} rejected" if rejected else "") + (f", {not_final} provisional bar(s) ignored" if not_final else "")
+
+    # Write price snapshot for this symbol with the new/corrected bars
+    if changed:
+        try:
+            fetched_at = (now or datetime.now(timezone.utc)).isoformat()
+            as_of = max(r["d"] for r in changed)
+            snapshot_store.put("prices", symbol, as_of, changed, fetched_at=fetched_at)
+        except Exception as exc:  # noqa: BLE001 -- snapshot write must never break the sync
+            log.warning("snapshot_store.put failed for prices/%s: %s", symbol, exc)
+
     return True, msg, info
 
 

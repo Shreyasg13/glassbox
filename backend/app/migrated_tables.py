@@ -11,7 +11,7 @@ Rules for adding a table here:
 """
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Column, MetaData, String, Table
+from sqlalchemy import Boolean, Column, Index, MetaData, String, Table, Text, UniqueConstraint
 
 migrated_metadata = MetaData()
 
@@ -22,6 +22,20 @@ feature_flags_table = Table(
     Column("enabled", Boolean, nullable=False),
     Column("updated_by", String, nullable=False, default=""),
     Column("updated_at", String, nullable=False, default=""),
+)
+
+source_snapshots_table = Table(
+    "source_snapshots",
+    migrated_metadata,
+    Column("id", String, primary_key=True),
+    Column("source", String, nullable=False),
+    Column("ticker", String, nullable=False, default=""),
+    Column("as_of", String, nullable=False),
+    Column("fetched_at", String, nullable=False),
+    Column("payload_json", Text, nullable=False),
+    Column("payload_hash", String(64), nullable=False),
+    Index("ix_source_snapshots_source_ticker_fetched", "source", "ticker", "fetched_at"),
+    UniqueConstraint("source", "ticker", "payload_hash", name="uq_source_snapshots_source_ticker_hash"),
 )
 
 

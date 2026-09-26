@@ -499,3 +499,18 @@ export type DataSources = {
   status: Record<string, { ok: boolean; detail: string; count: number; at: string }>;
   rows: { symbol: string; fundamentals: FreeFundamentals | null; events: FreeEvent[] }[];
 };
+
+// ---- Snapshot store (admin) ----
+
+export type Snapshot = {
+  id: string;
+  source: string;
+  ticker: string;
+  as_of: string;
+  fetched_at: string;
+  payload_hash: string;
+};
+
+export type SnapshotDetail = Snapshot & {
+  payload: unknown;
+};

@@ -23,6 +23,10 @@ Design rules:
   * Missing is fine. Funds (SPY, QQQ, GLD ...) have no company filings, banks report different line items,
     a source can be down or unconfigured: every function returns None / [] for what it cannot say and the
     prompt simply omits that line. Status per source is recorded so the admin can see what is and is not live.
+  * SNAPSHOT STORE (S3 T10). Every fetch is also recorded in the append-only source_snapshots table with
+    its fetched_at timestamp. The committee read path (context_lines with run_time) reads from the snapshot
+    store so it can never see data fetched after the run began. When no snapshot exists yet, it falls back
+    to the JSON cache (today's behaviour) and logs once.
 """
 from __future__ import annotations
 
@@ -41,8 +45,12 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import httpx
 
 from .data_source import TRADING_STORAGE_PATH
+from . import snapshot_store
 
 log = logging.getLogger("glassbox.free_data")
+
+# Track which snapshot sources have logged a fallback warning (once per process)
+_SNAPSHOT_FALLBACK_LOGGED: set[str] = set()
 
 SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 SEC_FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
@@ -119,6 +127,14 @@ def _write(name: str, obj: Any) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(obj, separators=(",", ":")), encoding="utf8")
     os.replace(tmp, path)
+
+
+def _write_snapshot(source: str, ticker: str, as_of: str, payload: Any) -> None:
+    """Write a snapshot record. Failure is logged but never breaks the refresh."""
+    try:
+        snapshot_store.put(source, ticker, as_of, payload)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("snapshot_store.put failed for %s/%s: %s", source, ticker, exc)
 
 
 def _now() -> datetime:
@@ -454,28 +470,71 @@ def macro_line(m: Optional[Dict[str, Any]]) -> Optional[str]:
 # ------------------------------------------------------------------- cache readers --
 
 
-def fundamentals_as_of(sym: str, as_of: str, price: Optional[float] = None) -> Optional[Dict[str, Any]]:
+def fundamentals_as_of(sym: str, as_of: str, price: Optional[float] = None, run_time: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    if run_time:
+        snap = snapshot_store.get("sec_facts", sym, run_time)
+        if snap and snap.get("concepts"):
+            return fundamentals_from_concepts(snap["concepts"], as_of, price)
+        # Fallback to cache, log once per process
+        key = f"fundamentals/{sym}"
+        if key not in _SNAPSHOT_FALLBACK_LOGGED:
+            log.info("snapshot_store fallback to cache for %s (no snapshot before %s)", key, run_time)
+            _SNAPSHOT_FALLBACK_LOGGED.add(key)
     c = _read(f"fundamentals/{sym}.json")
     return fundamentals_from_concepts(c["concepts"], as_of, price) if c and c.get("concepts") else None
 
 
-def events_as_of(sym: str, as_of: str, days: int = 30) -> List[Dict[str, Any]]:
+def events_as_of(sym: str, as_of: str, days: int = 30, run_time: Optional[str] = None) -> List[Dict[str, Any]]:
+    if run_time:
+        snap = snapshot_store.get("sec_filings", sym, run_time)
+        if snap and snap.get("filings"):
+            return events_from_filings(snap["filings"], as_of, days)
+        key = f"filings/{sym}"
+        if key not in _SNAPSHOT_FALLBACK_LOGGED:
+            log.info("snapshot_store fallback to cache for %s (no snapshot before %s)", key, run_time)
+            _SNAPSHOT_FALLBACK_LOGGED.add(key)
     c = _read(f"filings/{sym}.json")
     return events_from_filings(c["filings"], as_of, days) if c and c.get("filings") else []
 
 
-def macro_as_of(as_of: str) -> Optional[Dict[str, Any]]:
+def macro_as_of(as_of: str, run_time: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    if run_time:
+        # Check each macro source independently for snapshots
+        treasury_snap = snapshot_store.get("treasury", "", run_time)
+        bls_cache = {}
+        for name in BLS_SERIES:
+            snap = snapshot_store.get("bls", name, run_time)
+            if snap:
+                bls_cache[name] = snap
+
+        if treasury_snap or bls_cache:
+            # Use snapshots where available, fall back to cache for others
+            macro_cache = _read("macro.json") or {}
+            cache = {
+                "treasury": treasury_snap if treasury_snap else macro_cache.get("treasury", []),
+                "bls": bls_cache if bls_cache else macro_cache.get("bls", {}),
+            }
+            return macro_from_cache(cache, as_of)
+
+        key = "macro"
+        if key not in _SNAPSHOT_FALLBACK_LOGGED:
+            log.info("snapshot_store fallback to cache for %s (no snapshot before %s)", key, run_time)
+            _SNAPSHOT_FALLBACK_LOGGED.add(key)
     return macro_from_cache(_read("macro.json"), as_of)
 
 
-def context_lines(sym: str, as_of: str, price: Optional[float] = None) -> List[str]:
-    """Extra prompt lines for one symbol on one date, from the cache only. Never raises, never touches the network."""
+def context_lines(sym: str, as_of: str, price: Optional[float] = None, run_time: Optional[str] = None) -> List[str]:
+    """Extra prompt lines for one symbol on one date, from the cache only. Never raises, never touches the network.
+
+    When `run_time` is given, reads from the snapshot store (point-in-time guarantee: no data fetched after run_time).
+    When omitted, reads from the JSON cache (legacy behavior).
+    """
     lines: List[Optional[str]] = []
     try:
-        lines.append(fundamentals_line(fundamentals_as_of(sym, as_of, price)))
-        lines.append(events_line(events_as_of(sym, as_of)))
-        lines.append(insider_line(insider_events_as_of(sym, as_of)))
-        lines.append(macro_line(macro_as_of(as_of)))
+        lines.append(fundamentals_line(fundamentals_as_of(sym, as_of, price, run_time)))
+        lines.append(events_line(events_as_of(sym, as_of, run_time=run_time)))
+        lines.append(insider_line(insider_events_as_of(sym, as_of, run_time=run_time)))
+        lines.append(macro_line(macro_as_of(as_of, run_time)))
     except Exception:  # noqa: BLE001 -- extra context must never break a review
         log.warning("free-data context unavailable for %s", sym)
     return [ln for ln in lines if ln]
@@ -508,9 +567,11 @@ def refresh_macro(http: Optional[Fetcher] = None, today: Optional[date] = None) 
     today = today or _now().date()
     status = read_status()
     cache = _read("macro.json") or {"treasury": [], "bls": {}}
+    fetched_at = _now().isoformat()
     try:
         cache["treasury"] = _refresh_treasury(http, status, today)
         _set_status(status, "treasury", True, f"through {cache['treasury'][-1]['date']}", len(cache["treasury"]))
+        _write_snapshot("treasury", "", today.isoformat(), cache["treasury"])
     except Exception as exc:  # noqa: BLE001 -- each source fails on its own
         _set_status(status, "treasury", False, f"{type(exc).__name__}: {exc}"[:200])
     for name, series in BLS_SERIES.items():
@@ -520,9 +581,10 @@ def refresh_macro(http: Optional[Fetcher] = None, today: Optional[date] = None) 
                 raise ValueError("no rows parsed")
             cache.setdefault("bls", {})[name] = rows
             _set_status(status, f"bls_{name}", True, f"through {rows[-1]['month']}", len(rows))
+            _write_snapshot("bls", name, rows[-1]["month"], rows)
         except Exception as exc:  # noqa: BLE001
             _set_status(status, f"bls_{name}", False, f"{type(exc).__name__}: {exc}"[:200])
-    cache["fetched_at"] = _now().isoformat()
+    cache["fetched_at"] = fetched_at
     _write("macro.json", cache)
     _write("status.json", status)
     return status
@@ -561,7 +623,14 @@ def refresh_sec(symbols: List[str], sec: Optional[Fetcher] = None, force: bool =
             cached = _read(f"fundamentals/{s}.json")
             if force or not _fresh(cached, FUNDAMENTALS_TTL_DAYS):
                 concepts = extract_concepts(sec.json(SEC_FACTS_URL.format(cik=cik)))
-                _write(f"fundamentals/{s}.json", {"cik": cik, "fetched_at": _now().isoformat(), "concepts": concepts})
+                fetched_at = _now().isoformat()
+                _write(f"fundamentals/{s}.json", {"cik": cik, "fetched_at": fetched_at, "concepts": concepts})
+                # Use the latest fiscal year end from revenue concepts as as_of, or fallback to date part of fetched_at
+                as_of = fetched_at[:10]
+                rev = concepts.get("revenue")
+                if rev and rev.get("series"):
+                    as_of = rev["series"][-1]["end"]
+                _write_snapshot("sec_facts", s, as_of, {"cik": cik, "concepts": concepts})
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 no_facts.append(s)  # a real filer with no XBRL facts (e.g. a fund/trust) -- not an error
@@ -572,7 +641,10 @@ def refresh_sec(symbols: List[str], sec: Optional[Fetcher] = None, force: bool =
             failed.append(f"{s}: {type(exc).__name__}")
             continue
         try:
-            _write(f"filings/{s}.json", {"cik": cik, "fetched_at": _now().isoformat(), "filings": extract_filings(sec.json(SEC_SUBMISSIONS_URL.format(cik=cik)))})
+            fetched_at = _now().isoformat()
+            filings_data = extract_filings(sec.json(SEC_SUBMISSIONS_URL.format(cik=cik)))
+            _write(f"filings/{s}.json", {"cik": cik, "fetched_at": fetched_at, "filings": filings_data})
+            _write_snapshot("sec_filings", s, filings_data[0]["filed"] if filings_data else fetched_at[:10], {"cik": cik, "filings": filings_data})
             ok += 1
         except Exception as exc:  # noqa: BLE001
             failed.append(f"{s}: {type(exc).__name__}")
@@ -685,6 +757,7 @@ def refresh_insiders(symbols: List[str], sec: Optional[Fetcher] = None, force: b
         cache["seen"] = cache["seen"][-500:]
         cache["fetched_at"] = _now().isoformat()
         _write(f"insiders/{s}.json", cache)
+        _write_snapshot("sec_insiders", s, cache["transactions"][0]["date"] if cache["transactions"] else cache["fetched_at"][:10], cache)
         ok += 1
     detail = f"{ok} companies checked" + (f"; no CIK for {', '.join(no_cik)}" if no_cik else "") + (f"; FAILED {', '.join(failed)}" if failed else "")
     _set_status(status, "insiders", not failed and ok > 0, detail, ok)
@@ -692,9 +765,18 @@ def refresh_insiders(symbols: List[str], sec: Optional[Fetcher] = None, force: b
     return status
 
 
-def insider_events_as_of(sym: str, as_of: str, lookback_days: int = INSIDER_LOOKBACK_DAYS) -> List[Dict[str, Any]]:
+def insider_events_as_of(sym: str, as_of: str, lookback_days: int = INSIDER_LOOKBACK_DAYS, run_time: Optional[str] = None) -> List[Dict[str, Any]]:
     """Open-market Form 4 transactions filed on or before `as_of`, within the lookback window -- point
     in time, like every other free_data read."""
+    if run_time:
+        snap = snapshot_store.get("sec_insiders", sym, run_time)
+        if snap and snap.get("transactions"):
+            cutoff = (date.fromisoformat(as_of) - timedelta(days=lookback_days)).isoformat()
+            return sorted((t for t in snap["transactions"] if cutoff <= t["date"] <= as_of), key=lambda t: t["date"], reverse=True)
+        key = f"insiders/{sym}"
+        if key not in _SNAPSHOT_FALLBACK_LOGGED:
+            log.info("snapshot_store fallback to cache for %s (no snapshot before %s)", key, run_time)
+            _SNAPSHOT_FALLBACK_LOGGED.add(key)
     cache = _read(f"insiders/{sym}.json")
     if not cache:
         return []
